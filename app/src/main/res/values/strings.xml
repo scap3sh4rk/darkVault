@@ -1,0 +1,16 @@
+<resources>
+    <string name="app_name">darkVault</string>
+    <string name="setup_title">Create Your Vault</string>
+    <string name="setup_subtitle">Your password never leaves this device</string>
+    <string name="unlock_title">Unlock Vault</string>
+    <string name="password_hint">Master password</string>
+    <string name="confirm_password_hint">Confirm password</string>
+    <string name="create_vault">Create Vault</string>
+    <string name="unlock">Unlock</string>
+    <string name="connect_drive">Connect Google Drive</string>
+    <string name="upload_file">Upload File</string>
+    <string name="no_files">No files in your vault yet</string>
+    <string name="decrypt_and_save">Decrypt and Save</string>
+    <string name="delete_file">Delete File</string>
+    <string name="sign_out">Sign Out from Drive</string>
+</resources>
