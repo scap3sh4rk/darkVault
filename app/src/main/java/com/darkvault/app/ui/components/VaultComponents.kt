@@ -23,7 +23,7 @@ import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Download
 import androidx.compose.material.icons.outlined.FolderOpen
 import androidx.compose.material.icons.outlined.Image
-import androidx.compose.material.icons.outlined.InsertDriveFile
+import androidx.compose.material.icons.automirrored.outlined.InsertDriveFile
 import androidx.compose.material.icons.outlined.LockOpen
 import androidx.compose.material.icons.outlined.MusicNote
 import androidx.compose.material.icons.outlined.PictureAsPdf
@@ -350,7 +350,7 @@ private fun fileTypeIcon(name: String): ImageVector {
         "mp4", "mkv", "avi", "mov", "webm" -> Icons.Outlined.VideoFile
         "mp3", "aac", "flac", "wav", "ogg", "m4a" -> Icons.Outlined.MusicNote
         "pdf" -> Icons.Outlined.PictureAsPdf
-        else -> Icons.Outlined.InsertDriveFile
+        else -> Icons.AutoMirrored.Outlined.InsertDriveFile
     }
 }
 
