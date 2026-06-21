@@ -490,18 +490,21 @@ class DriveApiClient(
         StorageInfo(vaultUsed, totalUsed, limit)
     }
 
+    // ── vault.key management ───────────────────────────────────────────────
+
     /**
-     * Downloads and returns the JSON contents of vault.key from [vaultFolderId],
-     * or null if the file does not exist or an error occurs.
+     * Downloads vault.key content along with its Drive file ID and last-modified
+     * timestamp. Used to detect concurrent modifications before updating in-place.
+     * Returns null when vault.key does not yet exist or on network error.
      */
-    suspend fun downloadVaultKey(vaultFolderId: String): String? = withContext(Dispatchers.IO) {
+    suspend fun downloadVaultKeyFull(vaultFolderId: String): VaultKeyFull? = withContext(Dispatchers.IO) {
         val t = token()
         val q = java.net.URLEncoder.encode(
             "name='vault.key' and '$vaultFolderId' in parents and trashed=false", "UTF-8"
         )
         val searchResp = http.newCall(
             Request.Builder()
-                .url("https://www.googleapis.com/drive/v3/files?q=$q&fields=files(id)")
+                .url("https://www.googleapis.com/drive/v3/files?q=$q&fields=files(id,modifiedTime)")
                 .addHeader("Authorization", "Bearer $t")
                 .build()
         ).execute()
@@ -509,7 +512,9 @@ class DriveApiClient(
         val files = gson.fromJson(searchResp.body!!.string(), JsonObject::class.java)
             .getAsJsonArray("files") ?: return@withContext null
         if (files.size() == 0) return@withContext null
-        val fileId = files[0].asJsonObject.get("id").asString
+        val obj = files[0].asJsonObject
+        val fileId = obj.get("id").asString
+        val modifiedTime = obj.get("modifiedTime")?.asString ?: ""
 
         val dlResp = http.newCall(
             Request.Builder()
@@ -518,40 +523,56 @@ class DriveApiClient(
                 .build()
         ).execute()
         if (!dlResp.isSuccessful) return@withContext null
-        dlResp.body?.string()
+        VaultKeyFull(dlResp.body?.string() ?: return@withContext null, fileId, modifiedTime)
     }
 
+    /** Convenience wrapper that discards file ID and modified time. */
+    suspend fun downloadVaultKey(vaultFolderId: String): String? =
+        downloadVaultKeyFull(vaultFolderId)?.json
+
     /**
-     * Uploads (creates or replaces) vault.key in [vaultFolderId] with [content] as the body.
+     * Updates vault.key content in-place via PATCH (no delete–create gap).
+     * Checks modifiedTime before writing to detect concurrent updates.
+     * Returns false if another device modified vault.key since [expectedModifiedTime];
+     * the caller should re-download and retry.
      */
-    suspend fun uploadVaultKey(content: String, vaultFolderId: String) = withContext(Dispatchers.IO) {
+    suspend fun updateVaultKeyInPlace(
+        content: String,
+        fileId: String,
+        expectedModifiedTime: String
+    ): Boolean = withContext(Dispatchers.IO) {
         val t = token()
-        // Delete any existing vault.key first
-        val q = java.net.URLEncoder.encode(
-            "name='vault.key' and '$vaultFolderId' in parents and trashed=false", "UTF-8"
-        )
-        val searchResp = http.newCall(
+        // Conflict check: has vault.key been modified since we read it?
+        val checkResp = http.newCall(
             Request.Builder()
-                .url("https://www.googleapis.com/drive/v3/files?q=$q&fields=files(id)")
+                .url("https://www.googleapis.com/drive/v3/files/$fileId?fields=modifiedTime")
                 .addHeader("Authorization", "Bearer $t")
                 .build()
         ).execute()
-        if (searchResp.isSuccessful) {
-            val files = gson.fromJson(searchResp.body!!.string(), JsonObject::class.java)
-                .getAsJsonArray("files")
-            files?.forEach { el ->
-                val fid = el.asJsonObject.get("id").asString
-                http.newCall(
-                    Request.Builder()
-                        .url("https://www.googleapis.com/drive/v3/files/$fid")
-                        .addHeader("Authorization", "Bearer $t")
-                        .delete()
-                        .build()
-                ).execute()
-            }
+        if (checkResp.isSuccessful) {
+            val current = gson.fromJson(checkResp.body!!.string(), JsonObject::class.java)
+                .get("modifiedTime")?.asString
+            if (current != null && current != expectedModifiedTime) return@withContext false
         }
 
-        // Upload new vault.key via multipart
+        val resp = http.newCall(
+            Request.Builder()
+                .url("https://www.googleapis.com/upload/drive/v3/files/$fileId?uploadType=media")
+                .addHeader("Authorization", "Bearer $t")
+                .method("PATCH", content.toByteArray(Charsets.UTF_8)
+                    .toRequestBody("text/plain; charset=UTF-8".toMediaType()))
+                .build()
+        ).execute()
+        if (!resp.isSuccessful) error("Failed to update vault.key in-place: ${resp.code}")
+        true
+    }
+
+    /**
+     * Creates vault.key for the first time (initial DEK upload).
+     * For subsequent updates prefer [updateVaultKeyInPlace].
+     */
+    suspend fun uploadVaultKey(content: String, vaultFolderId: String) = withContext(Dispatchers.IO) {
+        val t = token()
         val meta = """{"name":"vault.key","parents":["$vaultFolderId"]}"""
         val boundary = "vault_key_boundary"
         val body = "--$boundary\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n$meta\r\n" +
@@ -567,3 +588,10 @@ class DriveApiClient(
         if (!resp.isSuccessful) error("Failed to upload vault.key: ${resp.code}")
     }
 }
+
+/** Carries vault.key content alongside the Drive metadata needed for conflict-safe updates. */
+data class VaultKeyFull(
+    val json: String,
+    val fileId: String,
+    val modifiedTime: String
+)

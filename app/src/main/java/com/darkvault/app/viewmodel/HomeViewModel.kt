@@ -564,6 +564,21 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
 
     fun clearOperationState() { _operationState.value = OperationState.Idle }
 
+    /** Resets all Drive-related state when signing out or switching accounts. */
+    fun clearDriveState() {
+        cachedAccount = null
+        cachedFolderId = null
+        _rawItems.value = emptyList()
+        _uiState.value = HomeUiState.NotSignedIn
+        _folderStack.value = emptyList()
+        _storageInfo.value = null
+        _lastSyncedMs.value = 0L
+        selectedIds.value = emptySet()
+        searchQuery.value = ""
+        filterType.value = FilterType.ALL
+        _operationState.value = OperationState.Idle
+    }
+
     private suspend fun ensureFolder(client: DriveApiClient): String {
         val saved = cachedFolderId ?: prefs.vaultFolderId.first()
         val folderId = client.ensureVaultFolder(saved)
