@@ -99,13 +99,35 @@ All via Drive REST API v3 with OkHttp + Bearer token from `GoogleAuthUtil.getTok
 - File type icons: material symbols by extension
 - Empty state: illustrated with vector drawable
 
+## Implemented Features (v2)
+- **Folder navigation**: Browse sub-folders inside `darkVault/` with breadcrumb trail
+- **Background uploads**: `UploadForegroundService` with progress notifications; cancel support
+- **Duplicate detection**: Checks `appProperties.originalName` before uploading
+- **Resumable uploads**: Drive resumable upload protocol (chunked, survives interruption)
+- **Storage quota**: Shows vault usage + Drive free space via Drive `about` API
+- **Image preview**: In-memory decrypt + `BitmapFactory` decode, never writes plaintext to disk
+- **Search / filter / sort**: Real-time search, `FilterType` chips, `SortOrder` dropdown
+- **Batch operations**: Multi-select mode for bulk delete
+- **Biometric unlock (persistent)**: Android Keystore key + `BiometricPrompt.CryptoObject` pattern; persists across process restarts
+- **Settings screen**: Biometric toggle (enroll/revoke), auto-lock timer, image/video preview toggles
+- **Auto-lock timer**: Locks vault after N minutes in background (via `onPause`/`onResume`)
+- **appProperties truncation**: All values capped at 100 chars to stay within Drive's 124-byte limit
+
+## Known Architectural Debt (plan before adding user data)
+- **Envelope encryption / re-keying**: Current format derives the data key directly from password+salt per file (no DEK/KEK split). Password change = re-encrypt all files. Fix: wrap a random per-vault DEK with the PBKDF2 KEK. This is a breaking format change.
+- **Recovery key**: Forgetting master password = permanent data loss. Fix requires envelope encryption first, then offer a recovery key (high-entropy, shown once at setup) that can also decrypt the DEK.
+- **Chunked streaming AEAD**: Single-shot AES-GCM loads whole file into RAM; will OOM on video files. Fix: stream in fixed-size chunks, each with own nonce. Breaking format change.
+- **Integrity manifest**: No signed index of vault contents; tampering/corruption on Drive goes undetected.
+- **Conflict resolution**: No `updatedAt` version field; last-write-wins is undefined when two devices write concurrently.
+- **Rate limiting**: No backoff/retry on Drive API 403/429 responses.
+
 ## Ideas & Future Notes
 - Offline mode: track upload queue in Room, retry on next launch
-- Biometric unlock: `BiometricPrompt` as alternative to password on supported devices
 - File versioning: keep previous `.vault` file as `<name>.vault.bak` on Drive
-- Thumbnail preview for images: decrypt in memory only, never write plaintext to disk for previews
+- Video thumbnail preview: write to temp file, use `MediaMetadataRetriever`, delete immediately
 - Shared/widget: quick upload from share sheet intent
 - Wear OS companion: unlock via watch
+- Export / local backup: pull an unencrypted or re-encrypted local archive without going through Drive
 
 ---
 *Update this file whenever a major decision is made or a new feature is scoped.*

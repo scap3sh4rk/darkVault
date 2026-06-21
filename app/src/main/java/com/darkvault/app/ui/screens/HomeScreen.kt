@@ -1,32 +1,49 @@
 package com.darkvault.app.ui.screens
 
 import android.app.Activity
-import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.background
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.Add
+import androidx.compose.material.icons.outlined.Close
+import androidx.compose.material.icons.outlined.CreateNewFolder
+import androidx.compose.material.icons.outlined.DeleteSweep
+import androidx.compose.material.icons.outlined.InsertDriveFile
 import androidx.compose.material.icons.outlined.Refresh
+import androidx.compose.material.icons.outlined.Search
+import androidx.compose.material.icons.outlined.SelectAll
+import androidx.compose.material.icons.outlined.Settings
+import androidx.compose.material.icons.outlined.Sort
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -45,16 +62,23 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.darkvault.app.model.SortOrder
 import com.darkvault.app.model.VaultFile
 import com.darkvault.app.ui.components.CyberButton
 import com.darkvault.app.ui.components.EmptyVaultState
+import com.darkvault.app.ui.components.FilterChipRow
+import com.darkvault.app.ui.components.StorageInfoCard
 import com.darkvault.app.ui.components.UploadProgressCard
 import com.darkvault.app.ui.components.VaultFileCard
+import com.darkvault.app.ui.components.VaultFolderCard
 import com.darkvault.app.ui.theme.CyanPrimary
 import com.darkvault.app.ui.theme.VaultBackground
+import com.darkvault.app.ui.theme.VaultOutline
 import com.darkvault.app.viewmodel.AuthViewModel
 import com.darkvault.app.viewmodel.HomeUiState
 import com.darkvault.app.viewmodel.HomeViewModel
@@ -70,7 +94,8 @@ import kotlinx.coroutines.launch
 @Composable
 fun HomeScreen(
     authViewModel: AuthViewModel,
-    homeViewModel: HomeViewModel = viewModel()
+    homeViewModel: HomeViewModel = viewModel(),
+    onNavigateToSettings: () -> Unit
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -78,10 +103,27 @@ fun HomeScreen(
 
     val password by authViewModel.masterPassword.collectAsState()
     val uiState by homeViewModel.uiState.collectAsState()
+    val displayItems by homeViewModel.displayItems.collectAsState()
     val opState by homeViewModel.operationState.collectAsState()
+    val storageInfo by homeViewModel.storageInfo.collectAsState()
+    val folderStack by homeViewModel.folderStack.collectAsState()
+    val activeUpload by homeViewModel.activeUpload.collectAsState()
+    val searchQuery by homeViewModel.searchQuery.collectAsState()
+    val filterType by homeViewModel.filterType.collectAsState()
+    val sortOrder by homeViewModel.sortOrder.collectAsState()
+    val selectedIds by homeViewModel.selectedIds.collectAsState()
+
+    val isSelectionMode = selectedIds.isNotEmpty()
 
     var currentAccount by remember { mutableStateOf(GoogleSignIn.getLastSignedInAccount(context)) }
     var fileToDelete by remember { mutableStateOf<VaultFile?>(null) }
+    var showUploadMenu by remember { mutableStateOf(false) }
+    var showSortMenu by remember { mutableStateOf(false) }
+    var showSearch by remember { mutableStateOf(false) }
+    var showDeleteSelected by remember { mutableStateOf(false) }
+
+    // Preview state
+    var previewFile by remember { mutableStateOf<VaultFile?>(null) }
 
     val gso = remember {
         GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
@@ -91,9 +133,7 @@ fun HomeScreen(
     }
     val googleClient = remember { GoogleSignIn.getClient(context, gso) }
 
-    val signInLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.StartActivityForResult()
-    ) { result ->
+    val signInLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
         if (result.resultCode == Activity.RESULT_OK) {
             GoogleSignIn.getSignedInAccountFromIntent(result.data)
                 .addOnSuccessListener { account ->
@@ -106,19 +146,22 @@ fun HomeScreen(
         }
     }
 
-    val filePicker = rememberLauncherForActivityResult(
-        ActivityResultContracts.OpenDocument()
-    ) { uri ->
-        val acc = currentAccount
-        val pwd = password
+    val filePicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
+        val acc = currentAccount; val pwd = password
+        if (uris.isNotEmpty() && acc != null && pwd != null) {
+            homeViewModel.uploadFiles(uris, pwd, acc, context.contentResolver)
+        }
+    }
+
+    val folderPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
+        val acc = currentAccount; val pwd = password
         if (uri != null && acc != null && pwd != null) {
-            homeViewModel.uploadFile(uri, pwd, acc, context.contentResolver)
+            homeViewModel.uploadFolder(uri, pwd, acc, context.contentResolver)
         }
     }
 
     LaunchedEffect(currentAccount) {
         currentAccount?.let { homeViewModel.loadFiles(it) }
-            ?: run { homeViewModel.let { /* stays NotSignedIn */ } }
     }
 
     LaunchedEffect(opState) {
@@ -137,123 +180,254 @@ fun HomeScreen(
 
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = {
-                    Text(
-                        "darkVault",
-                        style = MaterialTheme.typography.titleLarge,
-                        color = CyanPrimary
-                    )
-                },
-                actions = {
-                    if (currentAccount != null) {
-                        IconButton(onClick = {
-                            currentAccount?.let { homeViewModel.loadFiles(it) }
-                        }) {
-                            Icon(Icons.Outlined.Refresh, "Refresh", tint = CyanPrimary)
+            Column {
+                TopAppBar(
+                    navigationIcon = {
+                        if (homeViewModel.canGoBack) {
+                            IconButton(onClick = { homeViewModel.navigateUp() }) {
+                                Icon(Icons.AutoMirrored.Outlined.ArrowBack, "Up", tint = CyanPrimary)
+                            }
                         }
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = VaultBackground
+                    },
+                    title = {
+                        if (isSelectionMode) {
+                            Text("${selectedIds.size} selected", style = MaterialTheme.typography.titleLarge, color = CyanPrimary)
+                        } else {
+                            Column {
+                                Text("darkVault", style = MaterialTheme.typography.titleLarge, color = CyanPrimary)
+                                if (folderStack.size > 1) {
+                                    // Breadcrumb
+                                    LazyRow(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                        items(folderStack) { entry ->
+                                            val isLast = entry == folderStack.last()
+                                            TextButton(
+                                                onClick = { if (!isLast) homeViewModel.navigateTo(entry) },
+                                                contentPadding = PaddingValues(start = 4.dp, end = 4.dp, top = 0.dp, bottom = 0.dp)
+                                            ) {
+                                                Text(
+                                                    entry.name,
+                                                    style = MaterialTheme.typography.labelSmall,
+                                                    color = if (isLast) CyanPrimary else MaterialTheme.colorScheme.onSurfaceVariant
+                                                )
+                                            }
+                                            if (!isLast) {
+                                                Text(" / ", style = MaterialTheme.typography.labelSmall, color = VaultOutline)
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    actions = {
+                        if (isSelectionMode) {
+                            IconButton(onClick = { homeViewModel.selectAll() }) {
+                                Icon(Icons.Outlined.SelectAll, "Select all", tint = CyanPrimary)
+                            }
+                            IconButton(onClick = { showDeleteSelected = true }) {
+                                Icon(Icons.Outlined.DeleteSweep, "Delete selected", tint = MaterialTheme.colorScheme.error)
+                            }
+                            IconButton(onClick = { homeViewModel.clearSelection() }) {
+                                Icon(Icons.Outlined.Close, "Cancel selection", tint = CyanPrimary)
+                            }
+                        } else {
+                            if (currentAccount != null) {
+                                IconButton(onClick = { showSearch = !showSearch }) {
+                                    Icon(if (showSearch) Icons.Outlined.Close else Icons.Outlined.Search, "Search", tint = CyanPrimary)
+                                }
+                                Box {
+                                    IconButton(onClick = { showSortMenu = true }) {
+                                        Icon(Icons.Outlined.Sort, "Sort", tint = CyanPrimary)
+                                    }
+                                    DropdownMenu(expanded = showSortMenu, onDismissRequest = { showSortMenu = false }) {
+                                        SortOrder.entries.forEach { order ->
+                                            DropdownMenuItem(
+                                                text = {
+                                                    Text(
+                                                        order.label,
+                                                        color = if (sortOrder == order) CyanPrimary else MaterialTheme.colorScheme.onSurface
+                                                    )
+                                                },
+                                                onClick = {
+                                                    homeViewModel.sortOrder.value = order
+                                                    showSortMenu = false
+                                                }
+                                            )
+                                        }
+                                    }
+                                }
+                                IconButton(onClick = { currentAccount?.let { homeViewModel.loadFiles(it) } }) {
+                                    Icon(Icons.Outlined.Refresh, "Refresh", tint = CyanPrimary)
+                                }
+                            }
+                            IconButton(onClick = onNavigateToSettings) {
+                                Icon(Icons.Outlined.Settings, "Settings", tint = CyanPrimary)
+                            }
+                        }
+                    },
+                    colors = TopAppBarDefaults.topAppBarColors(containerColor = VaultBackground)
                 )
-            )
+
+                // Search bar
+                AnimatedVisibility(visible = showSearch, enter = expandVertically(), exit = shrinkVertically()) {
+                    OutlinedTextField(
+                        value = searchQuery,
+                        onValueChange = { homeViewModel.searchQuery.value = it },
+                        placeholder = { Text("Search files…") },
+                        singleLine = true,
+                        leadingIcon = { Icon(Icons.Outlined.Search, null, tint = VaultOutline) },
+                        trailingIcon = {
+                            if (searchQuery.isNotEmpty()) {
+                                IconButton(onClick = { homeViewModel.searchQuery.value = "" }) {
+                                    Icon(Icons.Outlined.Close, "Clear", tint = VaultOutline)
+                                }
+                            }
+                        },
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = CyanPrimary,
+                            unfocusedBorderColor = VaultOutline,
+                            cursorColor = CyanPrimary,
+                            focusedLeadingIconColor = CyanPrimary
+                        ),
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp)
+                    )
+                }
+            }
         },
         floatingActionButton = {
-            if (currentAccount != null) {
-                FloatingActionButton(
-                    onClick = { filePicker.launch(arrayOf("*/*")) },
-                    containerColor = CyanPrimary,
-                    contentColor = MaterialTheme.colorScheme.onPrimary
-                ) {
-                    Icon(Icons.Outlined.Add, "Upload file")
+            if (currentAccount != null && !isSelectionMode) {
+                Box {
+                    FloatingActionButton(
+                        onClick = { showUploadMenu = true },
+                        containerColor = CyanPrimary,
+                        contentColor = MaterialTheme.colorScheme.onPrimary
+                    ) {
+                        Icon(Icons.Outlined.Add, "Upload")
+                    }
+                    DropdownMenu(expanded = showUploadMenu, onDismissRequest = { showUploadMenu = false }) {
+                        DropdownMenuItem(
+                            text = { Text("Upload files") },
+                            leadingIcon = { Icon(Icons.Outlined.InsertDriveFile, null) },
+                            onClick = { showUploadMenu = false; filePicker.launch(arrayOf("*/*")) }
+                        )
+                        DropdownMenuItem(
+                            text = { Text("Upload folder") },
+                            leadingIcon = { Icon(Icons.Outlined.CreateNewFolder, null) },
+                            onClick = { showUploadMenu = false; folderPicker.launch(null) }
+                        )
+                    }
                 }
             }
         },
         snackbarHost = { SnackbarHost(snackbarHostState) },
         containerColor = VaultBackground
     ) { innerPadding ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(innerPadding)
-        ) {
-            when (val s = opState) {
-                is OperationState.InProgress -> {
-                    UploadProgressCard(
-                        fileName = s.fileName,
-                        message = s.stage,
-                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
-                    )
+        Column(modifier = Modifier.fillMaxSize().padding(innerPadding)) {
+
+            // Active upload card (from background service)
+            activeUpload?.let { upload ->
+                UploadProgressCard(
+                    fileName = upload.fileName,
+                    stage = upload.stage,
+                    progress = upload.progress,
+                    uploaded = upload.uploaded,
+                    total = upload.total,
+                    onCancel = { homeViewModel.cancelAllUploads() },
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+                )
+            }
+
+            // In-progress operation (download/decrypt)
+            if (activeUpload == null) {
+                when (val s = opState) {
+                    is OperationState.InProgress -> {
+                        UploadProgressCard(
+                            fileName = s.fileName,
+                            stage = s.stage,
+                            progress = s.progress,
+                            uploaded = 0L,
+                            total = 0L,
+                            onCancel = { homeViewModel.clearOperationState() },
+                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+                        )
+                    }
+                    else -> Unit
                 }
-                else -> Unit
             }
 
             if (currentAccount == null) {
                 ConnectDriveSection(
                     onSignIn = { signInLauncher.launch(googleClient.signInIntent) },
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(24.dp)
+                    modifier = Modifier.fillMaxSize().padding(24.dp)
                 )
             } else {
-                when (val s = uiState) {
+                // Filter chips
+                FilterChipRow(
+                    selected = filterType,
+                    onSelect = { homeViewModel.filterType.value = it },
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
+                )
+
+                when (uiState) {
                     is HomeUiState.Loading -> {
-                        Box(
-                            contentAlignment = Alignment.Center,
-                            modifier = Modifier.fillMaxSize()
-                        ) {
-                            CircularProgressIndicator(
-                                color = CyanPrimary,
-                                strokeCap = StrokeCap.Round,
-                                modifier = Modifier.size(40.dp)
-                            )
+                        Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
+                            CircularProgressIndicator(color = CyanPrimary, strokeCap = StrokeCap.Round, modifier = Modifier.size(40.dp))
                         }
                     }
-                    is HomeUiState.Success -> {
-                        if (s.files.isEmpty()) {
-                            EmptyVaultState(modifier = Modifier.fillMaxSize())
+                    is HomeUiState.Success, is HomeUiState.Error -> {
+                        if (displayItems.isEmpty() && uiState is HomeUiState.Success) {
+                            EmptyVaultState(modifier = Modifier.weight(1f).fillMaxWidth())
+                        } else if (uiState is HomeUiState.Error) {
+                            Box(contentAlignment = Alignment.Center, modifier = Modifier.weight(1f).padding(24.dp)) {
+                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                    Text((uiState as HomeUiState.Error).message, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.error)
+                                    Spacer(Modifier.height(16.dp))
+                                    CyberButton("Retry", onClick = { currentAccount?.let { homeViewModel.loadFiles(it) } })
+                                }
+                            }
                         } else {
                             LazyColumn(
-                                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
-                                verticalArrangement = Arrangement.spacedBy(8.dp)
+                                contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 120.dp),
+                                verticalArrangement = Arrangement.spacedBy(8.dp),
+                                modifier = Modifier.weight(1f)
                             ) {
-                                items(s.files, key = { it.id }) { file ->
-                                    VaultFileCard(
-                                        file = file,
-                                        onDownload = {
-                                            val pwd = password
-                                            val acc = currentAccount
-                                            if (pwd != null && acc != null) {
-                                                homeViewModel.downloadAndDecrypt(file, pwd, acc)
-                                            } else {
-                                                scope.launch {
-                                                    snackbarHostState.showSnackbar("Vault is locked")
-                                                }
-                                            }
-                                        },
-                                        onDelete = { fileToDelete = file }
-                                    )
+                                items(displayItems, key = { it.id }) { item ->
+                                    if (item.isFolder) {
+                                        VaultFolderCard(
+                                            folder = item,
+                                            onOpen = { homeViewModel.openFolder(item) },
+                                            onDelete = { fileToDelete = item },
+                                            isSelected = item.id in selectedIds,
+                                            onToggleSelect = if (isSelectionMode) ({ homeViewModel.toggleSelection(item.id) }) else null
+                                        )
+                                    } else {
+                                        val canPreview = HomeViewModel.isImageMime(item.originalMimeType)
+                                        val onPreviewAction: (() -> Unit)? = if (canPreview) ({ previewFile = item }) else null
+                                        VaultFileCard(
+                                            file = item,
+                                            onDownload = {
+                                                val pwd = password; val acc = currentAccount
+                                                if (pwd != null && acc != null) homeViewModel.downloadAndDecrypt(item, pwd, acc)
+                                                else scope.launch { snackbarHostState.showSnackbar("Vault is locked") }
+                                            },
+                                            onDelete = { fileToDelete = item },
+                                            onPreview = onPreviewAction,
+                                            isSelected = item.id in selectedIds,
+                                            onToggleSelect = if (isSelectionMode) ({ homeViewModel.toggleSelection(item.id) }) else null
+                                        )
+                                    }
                                 }
                             }
                         }
-                    }
-                    is HomeUiState.Error -> {
-                        Box(
-                            contentAlignment = Alignment.Center,
-                            modifier = Modifier.fillMaxSize().padding(24.dp)
-                        ) {
-                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                Text(
-                                    s.message,
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = MaterialTheme.colorScheme.error
-                                )
-                                Spacer(Modifier.height(16.dp))
-                                CyberButton("Retry", onClick = {
-                                    currentAccount?.let { homeViewModel.loadFiles(it) }
-                                })
-                            }
+
+                        // Storage info at bottom
+                        storageInfo?.let { info ->
+                            StorageInfoCard(
+                                usedByVault = info.usedByVaultBytes,
+                                driveTotalUsed = info.driveTotalUsedBytes,
+                                driveLimit = info.driveLimitBytes,
+                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+                            )
                         }
                     }
                     else -> Unit
@@ -262,33 +436,56 @@ fun HomeScreen(
         }
     }
 
+    // ── Delete single file dialog ──────────────────────────────────────────
+
     fileToDelete?.let { file ->
         AlertDialog(
             onDismissRequest = { fileToDelete = null },
-            title = { Text("Delete file?") },
-            text = {
-                Text(
-                    "\"${file.originalName}\" will be permanently deleted from your Drive vault.",
-                    style = MaterialTheme.typography.bodyMedium
-                )
-            },
+            title = { Text("Delete \"${file.originalName}\"?") },
+            text = { Text("This will permanently remove it from your Drive vault.", style = MaterialTheme.typography.bodyMedium) },
             confirmButton = {
-                TextButton(
-                    onClick = {
-                        currentAccount?.let { homeViewModel.deleteFile(file, it) }
-                        fileToDelete = null
-                    }
-                ) {
-                    Text("Delete", color = MaterialTheme.colorScheme.error)
-                }
+                TextButton(onClick = {
+                    currentAccount?.let { homeViewModel.deleteFile(file, it) }
+                    fileToDelete = null
+                }) { Text("Delete", color = MaterialTheme.colorScheme.error) }
             },
-            dismissButton = {
-                TextButton(onClick = { fileToDelete = null }) { Text("Cancel") }
-            },
+            dismissButton = { TextButton(onClick = { fileToDelete = null }) { Text("Cancel") } },
             containerColor = MaterialTheme.colorScheme.surfaceVariant
         )
     }
+
+    // ── Delete selected dialog ─────────────────────────────────────────────
+
+    if (showDeleteSelected) {
+        AlertDialog(
+            onDismissRequest = { showDeleteSelected = false },
+            title = { Text("Delete ${selectedIds.size} item(s)?") },
+            text = { Text("This will permanently remove them from your Drive vault.", style = MaterialTheme.typography.bodyMedium) },
+            confirmButton = {
+                TextButton(onClick = {
+                    currentAccount?.let { homeViewModel.deleteSelected(it) }
+                    showDeleteSelected = false
+                }) { Text("Delete", color = MaterialTheme.colorScheme.error) }
+            },
+            dismissButton = { TextButton(onClick = { showDeleteSelected = false }) { Text("Cancel") } },
+            containerColor = MaterialTheme.colorScheme.surfaceVariant
+        )
+    }
+
+    // ── Image preview dialog ───────────────────────────────────────────────
+
+    previewFile?.let { file ->
+        ImagePreviewDialog(
+            file = file,
+            homeViewModel = homeViewModel,
+            password = password,
+            account = currentAccount,
+            onDismiss = { previewFile = null }
+        )
+    }
 }
+
+// ── Connect Drive section ──────────────────────────────────────────────────────
 
 @Composable
 private fun ConnectDriveSection(onSignIn: () -> Unit, modifier: Modifier = Modifier) {
@@ -297,11 +494,7 @@ private fun ConnectDriveSection(onSignIn: () -> Unit, modifier: Modifier = Modif
         verticalArrangement = Arrangement.Center,
         modifier = modifier
     ) {
-        Text(
-            "Connect Google Drive",
-            style = MaterialTheme.typography.headlineSmall,
-            color = MaterialTheme.colorScheme.onBackground
-        )
+        Text("Connect Google Drive", style = MaterialTheme.typography.headlineSmall, color = MaterialTheme.colorScheme.onBackground)
         Spacer(Modifier.height(12.dp))
         Text(
             "darkVault stores encrypted files in your Drive.\nOnly you can decrypt them.",
@@ -309,10 +502,69 @@ private fun ConnectDriveSection(onSignIn: () -> Unit, modifier: Modifier = Modif
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
         Spacer(Modifier.height(32.dp))
-        CyberButton(
-            text = "Connect Google Drive",
-            onClick = onSignIn,
-            modifier = Modifier.fillMaxWidth()
-        )
+        CyberButton("Connect Google Drive", onClick = onSignIn, modifier = Modifier.fillMaxWidth())
     }
+}
+
+// ── Image preview dialog ───────────────────────────────────────────────────────
+
+@Composable
+private fun ImagePreviewDialog(
+    file: VaultFile,
+    homeViewModel: HomeViewModel,
+    password: String?,
+    account: GoogleSignInAccount?,
+    onDismiss: () -> Unit
+) {
+    var imageBytes by remember { mutableStateOf<ByteArray?>(null) }
+    var loading by remember { mutableStateOf(true) }
+    var error by remember { mutableStateOf<String?>(null) }
+
+    LaunchedEffect(file.id) {
+        if (password == null || account == null) {
+            error = "Vault is locked"; loading = false; return@LaunchedEffect
+        }
+        val bytes = homeViewModel.decryptToMemory(file, password, account)
+        if (bytes != null) imageBytes = bytes else error = "Preview failed"
+        loading = false
+    }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Text(
+                file.originalName,
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.onSurface,
+                maxLines = 1
+            )
+        },
+        text = {
+            Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxWidth().height(300.dp)) {
+                when {
+                    loading -> CircularProgressIndicator(color = CyanPrimary, strokeCap = StrokeCap.Round)
+                    error != null -> Text(error!!, color = MaterialTheme.colorScheme.error)
+                    imageBytes != null -> {
+                        val bmp = remember(imageBytes) {
+                            try {
+                                android.graphics.BitmapFactory.decodeByteArray(imageBytes, 0, imageBytes!!.size)
+                            } catch (_: Exception) { null }
+                        }
+                        if (bmp != null) {
+                            androidx.compose.foundation.Image(
+                                bitmap = bmp.asImageBitmap(),
+                                contentDescription = file.originalName,
+                                contentScale = ContentScale.Fit,
+                                modifier = Modifier.fillMaxSize()
+                            )
+                        } else {
+                            Text("Cannot decode image", color = MaterialTheme.colorScheme.error)
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = { TextButton(onClick = onDismiss) { Text("Close") } },
+        containerColor = MaterialTheme.colorScheme.surfaceVariant
+    )
 }
