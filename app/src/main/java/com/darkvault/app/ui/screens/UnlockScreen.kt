@@ -3,6 +3,7 @@ package com.darkvault.app.ui.screens
 import androidx.biometric.BiometricManager.Authenticators.BIOMETRIC_STRONG
 import androidx.biometric.BiometricPrompt
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -14,6 +15,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Fingerprint
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -24,6 +27,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -37,7 +41,12 @@ import com.darkvault.app.data.PreferencesManager
 import com.darkvault.app.ui.components.CyberButton
 import com.darkvault.app.ui.components.VaultLogo
 import com.darkvault.app.ui.components.VaultTextField
+import com.darkvault.app.ui.theme.CyanPrimary
+import com.darkvault.app.ui.theme.VaultSurfaceVariant
 import com.darkvault.app.viewmodel.AuthViewModel
+import com.google.android.gms.auth.api.signin.GoogleSignIn
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
 
 @Composable
 fun UnlockScreen(viewModel: AuthViewModel, onUnlocked: () -> Unit) {
@@ -49,8 +58,27 @@ fun UnlockScreen(viewModel: AuthViewModel, onUnlocked: () -> Unit) {
     val activity = context as FragmentActivity
     val prefs = remember { PreferencesManager(context) }
 
+    val scope = rememberCoroutineScope()
+
     var password by remember { mutableStateOf("") }
     var biometricError by remember { mutableStateOf<String?>(null) }
+
+    // Recovery key dialog state
+    var showRecoveryDialog by remember { mutableStateOf(false) }
+    var recoveryKey by remember { mutableStateOf("") }
+    var recoveryNewPwd by remember { mutableStateOf("") }
+    var recoveryConfirmPwd by remember { mutableStateOf("") }
+    var recoveryError by remember { mutableStateOf<String?>(null) }
+    var recoveryLoading by remember { mutableStateOf(false) }
+
+    fun resetRecoveryDialog() {
+        showRecoveryDialog = false
+        recoveryKey = ""
+        recoveryNewPwd = ""
+        recoveryConfirmPwd = ""
+        recoveryError = null
+        recoveryLoading = false
+    }
 
     val biometricAvailable = remember { BiometricHelper.isAvailable(context) && BiometricKeyManager.keyExists() }
     val showBiometric = biometricEnabled && biometricAvailable
@@ -175,6 +203,96 @@ fun UnlockScreen(viewModel: AuthViewModel, onUnlocked: () -> Unit) {
             }
         }
 
+        Spacer(modifier = Modifier.height(24.dp))
+
+        TextButton(onClick = { showRecoveryDialog = true }) {
+            Text("Forgot password? Use recovery key", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
+        }
+
         Spacer(modifier = Modifier.weight(0.6f))
+    }
+
+    // Recovery key dialog
+    if (showRecoveryDialog) {
+        AlertDialog(
+            onDismissRequest = { resetRecoveryDialog() },
+            containerColor = VaultSurfaceVariant,
+            title = { Text("Recover with Recovery Key", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Text(
+                        "Enter the recovery key shown when you first set up darkVault, then choose a new master password.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    VaultTextField(
+                        value = recoveryKey,
+                        onValueChange = { recoveryKey = it; recoveryError = null },
+                        label = "Recovery key (XXXX-XXXX-... format)",
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    VaultTextField(
+                        value = recoveryNewPwd,
+                        onValueChange = { recoveryNewPwd = it; recoveryError = null },
+                        label = "New master password",
+                        isPassword = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    VaultTextField(
+                        value = recoveryConfirmPwd,
+                        onValueChange = { recoveryConfirmPwd = it; recoveryError = null },
+                        label = "Confirm new password",
+                        isPassword = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    recoveryError?.let {
+                        Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    enabled = !recoveryLoading,
+                    onClick = {
+                        when {
+                            recoveryKey.isBlank() -> { recoveryError = "Enter your recovery key"; return@TextButton }
+                            recoveryNewPwd.length < 8 -> { recoveryError = "Password must be at least 8 characters"; return@TextButton }
+                            recoveryNewPwd != recoveryConfirmPwd -> { recoveryError = "Passwords do not match"; return@TextButton }
+                        }
+                        val account = GoogleSignIn.getLastSignedInAccount(context)
+                        if (account == null) {
+                            recoveryError = "Not signed in to Google. Sign in via the Home screen first."
+                            return@TextButton
+                        }
+                        recoveryLoading = true
+                        scope.launch {
+                            val folderId = prefs.vaultKeyFolderId.first()
+                            if (folderId == null) {
+                                recoveryError = "No vault folder found. Make sure you've connected Drive before."
+                                recoveryLoading = false
+                                return@launch
+                            }
+                            val result = viewModel.recoverWithRecoveryKey(recoveryKey.trim(), recoveryNewPwd, account, folderId)
+                            recoveryLoading = false
+                            when (result) {
+                                is AuthViewModel.PasswordChangeResult.Success -> {
+                                    resetRecoveryDialog()
+                                    onUnlocked()
+                                }
+                                is AuthViewModel.PasswordChangeResult.Error -> {
+                                    recoveryError = result.message
+                                }
+                            }
+                        }
+                    }
+                ) {
+                    if (recoveryLoading) CircularProgressIndicator(modifier = Modifier.size(16.dp), color = CyanPrimary, strokeWidth = 2.dp)
+                    else Text("Recover", color = CyanPrimary)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { resetRecoveryDialog() }) { Text("Cancel") }
+            }
+        )
     }
 }

@@ -37,8 +37,10 @@ import androidx.compose.material.icons.outlined.InsertDriveFile
 import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.SelectAll
+import androidx.compose.material.icons.outlined.AccountCircle
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.Sort
+import androidx.compose.material.icons.outlined.SwitchAccount
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -91,6 +93,7 @@ import com.darkvault.app.ui.theme.CyanPrimary
 import com.darkvault.app.ui.theme.VaultBackground
 import com.darkvault.app.ui.theme.VaultOutline
 import com.darkvault.app.ui.theme.VaultSurfaceVariant
+import com.darkvault.app.VaultSession
 import com.darkvault.app.viewmodel.AuthViewModel
 import com.darkvault.app.viewmodel.HomeUiState
 import com.darkvault.app.viewmodel.HomeViewModel
@@ -126,6 +129,7 @@ fun HomeScreen(
     val selectedIds by homeViewModel.selectedIds.collectAsState()
     val recentItems by homeViewModel.recentItems.collectAsState() // Task 4
     val lastSynced by homeViewModel.lastSyncedMs.collectAsState() // Task 7
+    val recoveryKeyToShow by authViewModel.recoveryKey.collectAsState()
 
     val isSelectionMode = selectedIds.isNotEmpty()
 
@@ -136,6 +140,7 @@ fun HomeScreen(
     var showSortMenu by remember { mutableStateOf(false) }
     var showSearch by remember { mutableStateOf(false) }
     var showDeleteSelected by remember { mutableStateOf(false) }
+    var showAccountMenu by remember { mutableStateOf(false) }
 
     // Preview state
     var previewFile by remember { mutableStateOf<VaultFile?>(null) }
@@ -152,12 +157,33 @@ fun HomeScreen(
         if (result.resultCode == Activity.RESULT_OK) {
             GoogleSignIn.getSignedInAccountFromIntent(result.data)
                 .addOnSuccessListener { account ->
+                    // Clear stale DEK so LaunchedEffect reloads it from the new account's vault.key
+                    VaultSession.clearDek()
                     currentAccount = account
                     homeViewModel.loadFiles(account)
                 }
                 .addOnFailureListener { e ->
                     scope.launch { snackbarHostState.showSnackbar("Sign-in failed: ${e.message}") }
                 }
+        }
+    }
+
+    fun disconnectDrive() {
+        currentAccount = null
+        VaultSession.signedInAccount = null
+        VaultSession.clearDek()
+        homeViewModel.clearDriveState()
+        googleClient.signOut()
+    }
+
+    fun switchAccount() {
+        // Clear local Drive state immediately, then sign out and open the account picker
+        currentAccount = null
+        VaultSession.signedInAccount = null
+        VaultSession.clearDek()
+        homeViewModel.clearDriveState()
+        googleClient.signOut().addOnCompleteListener {
+            signInLauncher.launch(googleClient.signInIntent)
         }
     }
 
@@ -179,6 +205,17 @@ fun HomeScreen(
         currentAccount?.let { homeViewModel.loadFiles(it) }
     }
 
+    // Wire DEK loading to sign-in: once the vault root folder is known and we're signed in,
+    // load (or create for first-time) the DEK from vault.key. Skip if DEK already in session.
+    LaunchedEffect(currentAccount, folderStack) {
+        val acc = currentAccount ?: return@LaunchedEffect
+        val rootId = folderStack.firstOrNull()?.id ?: return@LaunchedEffect
+        val pwd = password ?: return@LaunchedEffect
+        if (VaultSession.dek == null) {
+            authViewModel.loadOrCreateDek(pwd, rootId, acc)
+        }
+    }
+
     LaunchedEffect(opState) {
         when (val s = opState) {
             is OperationState.Done -> {
@@ -191,6 +228,38 @@ fun HomeScreen(
             }
             else -> Unit
         }
+    }
+
+    // Recovery key first-time display
+    recoveryKeyToShow?.let { key ->
+        AlertDialog(
+            onDismissRequest = { /* force user to acknowledge */ },
+            containerColor = VaultSurfaceVariant,
+            title = { Text("Save Your Recovery Key", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Text(
+                        "This key can recover your vault if you forget your master password. It will never be shown again — write it down and store it safely.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Text(
+                        key,
+                        style = MaterialTheme.typography.bodyMedium.copy(
+                            fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
+                            letterSpacing = androidx.compose.ui.unit.TextUnit(1.5f, androidx.compose.ui.unit.TextUnitType.Sp)
+                        ),
+                        color = CyanPrimary,
+                        modifier = androidx.compose.ui.Modifier.fillMaxWidth()
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { authViewModel.clearRecoveryKey() }) {
+                    Text("I have saved it", color = CyanPrimary)
+                }
+            }
+        )
     }
 
     Scaffold(
@@ -288,6 +357,47 @@ fun HomeScreen(
                                 }
                                 IconButton(onClick = { currentAccount?.let { homeViewModel.loadFiles(it) } }) {
                                     Icon(Icons.Outlined.Refresh, "Refresh", tint = CyanPrimary)
+                                }
+                                // Account menu
+                                Box {
+                                    IconButton(onClick = { showAccountMenu = true }) {
+                                        Icon(Icons.Outlined.AccountCircle, "Account", tint = CyanPrimary)
+                                    }
+                                    DropdownMenu(
+                                        expanded = showAccountMenu,
+                                        onDismissRequest = { showAccountMenu = false }
+                                    ) {
+                                        // Account email header (non-interactive)
+                                        currentAccount?.email?.let { email ->
+                                            DropdownMenuItem(
+                                                text = {
+                                                    Text(
+                                                        email,
+                                                        style = MaterialTheme.typography.labelSmall,
+                                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                    )
+                                                },
+                                                onClick = {},
+                                                enabled = false
+                                            )
+                                        }
+                                        DropdownMenuItem(
+                                            text = { Text("Switch account") },
+                                            leadingIcon = { Icon(Icons.Outlined.SwitchAccount, null) },
+                                            onClick = {
+                                                showAccountMenu = false
+                                                switchAccount()
+                                            }
+                                        )
+                                        DropdownMenuItem(
+                                            text = { Text("Disconnect Drive", color = MaterialTheme.colorScheme.error) },
+                                            leadingIcon = { Icon(Icons.Outlined.Close, null, tint = MaterialTheme.colorScheme.error) },
+                                            onClick = {
+                                                showAccountMenu = false
+                                                disconnectDrive()
+                                            }
+                                        )
+                                    }
                                 }
                             }
                             IconButton(onClick = onNavigateToSettings) {

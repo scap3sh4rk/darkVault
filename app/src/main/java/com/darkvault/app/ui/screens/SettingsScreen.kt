@@ -3,6 +3,7 @@ package com.darkvault.app.ui.screens
 import androidx.biometric.BiometricPrompt
 import androidx.biometric.BiometricManager.Authenticators.BIOMETRIC_STRONG
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -20,8 +21,10 @@ import androidx.compose.material.icons.outlined.Image
 import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material.icons.outlined.Timer
 import androidx.compose.material.icons.outlined.VideoFile
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuBox
@@ -38,6 +41,7 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
@@ -50,17 +54,21 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.fragment.app.FragmentActivity
 import com.darkvault.app.crypto.BiometricHelper
 import com.darkvault.app.crypto.BiometricKeyManager
 import com.darkvault.app.data.PreferencesManager
+import com.darkvault.app.ui.components.VaultTextField
 import com.darkvault.app.ui.theme.CyanPrimary
 import com.darkvault.app.ui.theme.VaultBackground
 import com.darkvault.app.ui.theme.VaultOutline
 import com.darkvault.app.ui.theme.VaultSurfaceVariant
 import com.darkvault.app.viewmodel.AuthViewModel
+import com.google.android.gms.auth.api.signin.GoogleSignIn
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -84,6 +92,23 @@ fun SettingsScreen(
     var autoLockExpanded by remember { mutableStateOf(false) }
 
     val autoLockOptions = listOf(0 to "Never", 1 to "1 minute", 5 to "5 minutes", 15 to "15 minutes", 30 to "30 minutes")
+
+    // Change password dialog state
+    var showChangePasswordDialog by remember { mutableStateOf(false) }
+    var changePwdCurrent by remember { mutableStateOf("") }
+    var changePwdNew by remember { mutableStateOf("") }
+    var changePwdConfirm by remember { mutableStateOf("") }
+    var changePwdError by remember { mutableStateOf<String?>(null) }
+    var changePwdLoading by remember { mutableStateOf(false) }
+
+    fun resetChangePwdDialog() {
+        showChangePasswordDialog = false
+        changePwdCurrent = ""
+        changePwdNew = ""
+        changePwdConfirm = ""
+        changePwdError = null
+        changePwdLoading = false
+    }
 
     // Biometric prompt for enrollment
     val biometricPrompt = remember(activity) {
@@ -223,6 +248,94 @@ fun SettingsScreen(
                         Text("Lock", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.labelMedium)
                     }
                 }
+            }
+
+            Spacer(Modifier.height(16.dp))
+
+            // ── Password section ───────────────────────────────────────────────
+
+            SectionHeader("Password")
+
+            SettingsCard {
+                SettingRow(
+                    icon = { Icon(Icons.Outlined.Lock, null, tint = CyanPrimary, modifier = Modifier.size(22.dp)) },
+                    title = "Change password",
+                    subtitle = "Update master password and re-key vault"
+                ) {
+                    TextButton(onClick = { showChangePasswordDialog = true }) {
+                        Text("Change", color = CyanPrimary, style = MaterialTheme.typography.labelMedium)
+                    }
+                }
+            }
+
+            if (showChangePasswordDialog) {
+                AlertDialog(
+                    onDismissRequest = { resetChangePwdDialog() },
+                    containerColor = VaultSurfaceVariant,
+                    title = { Text("Change Password", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface) },
+                    text = {
+                        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                            VaultTextField(
+                                value = changePwdCurrent,
+                                onValueChange = { changePwdCurrent = it; changePwdError = null },
+                                label = "Current password",
+                                isPassword = true,
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                            VaultTextField(
+                                value = changePwdNew,
+                                onValueChange = { changePwdNew = it; changePwdError = null },
+                                label = "New password",
+                                isPassword = true,
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                            VaultTextField(
+                                value = changePwdConfirm,
+                                onValueChange = { changePwdConfirm = it; changePwdError = null },
+                                label = "Confirm new password",
+                                isPassword = true,
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                            changePwdError?.let {
+                                Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+                            }
+                        }
+                    },
+                    confirmButton = {
+                        TextButton(
+                            enabled = !changePwdLoading,
+                            onClick = {
+                                when {
+                                    changePwdCurrent.isBlank() -> { changePwdError = "Enter current password"; return@TextButton }
+                                    changePwdNew.length < 8 -> { changePwdError = "New password must be at least 8 characters"; return@TextButton }
+                                    changePwdNew != changePwdConfirm -> { changePwdError = "Passwords do not match"; return@TextButton }
+                                }
+                                changePwdLoading = true
+                                scope.launch {
+                                    val account = GoogleSignIn.getLastSignedInAccount(context)
+                                    val folderId = prefs.vaultKeyFolderId.first()
+                                    val result = authViewModel.changePassword(changePwdCurrent, changePwdNew, account, folderId)
+                                    changePwdLoading = false
+                                    when (result) {
+                                        is AuthViewModel.PasswordChangeResult.Success -> {
+                                            resetChangePwdDialog()
+                                            snackbarHost.showSnackbar("Password changed successfully")
+                                        }
+                                        is AuthViewModel.PasswordChangeResult.Error -> {
+                                            changePwdError = result.message
+                                        }
+                                    }
+                                }
+                            }
+                        ) {
+                            if (changePwdLoading) CircularProgressIndicator(modifier = Modifier.size(16.dp), color = CyanPrimary, strokeWidth = 2.dp)
+                            else Text("Change", color = CyanPrimary)
+                        }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = { resetChangePwdDialog() }) { Text("Cancel") }
+                    }
+                )
             }
 
             Spacer(Modifier.height(16.dp))
