@@ -388,7 +388,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                 _operationState.value = OperationState.InProgress(file.originalName, "Decrypting…")
                 val decrypted = withContext(Dispatchers.Default) {
                     val out = ByteArrayOutputStream()
-                    CryptoManager.decrypt(java.io.ByteArrayInputStream(encBytes), out, password)
+                    CryptoManager.decrypt(java.io.ByteArrayInputStream(encBytes), out, password, VaultSession.dek)
                     out.toByteArray()
                 }
 
@@ -417,7 +417,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                 val encBytes = client.downloadFile(file.id)
                 withContext(Dispatchers.Default) {
                     val out = ByteArrayOutputStream()
-                    CryptoManager.decrypt(java.io.ByteArrayInputStream(encBytes), out, password)
+                    CryptoManager.decrypt(java.io.ByteArrayInputStream(encBytes), out, password, VaultSession.dek)
                     out.toByteArray()
                 }
             }.getOrNull()
@@ -429,6 +429,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         val ids = selectedIds.value.toList()
         val items = _rawItems.value.filter { it.id in ids && !it.isFolder }
         selectedIds.value = emptySet()
+        val dek = VaultSession.dek
         viewModelScope.launch {
             _operationState.value = OperationState.InProgress("Batch download", "Downloading ${items.size} files…")
             val client = DriveApiClient(getApplication(), account)
@@ -437,7 +438,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                 runCatching {
                     val encBytes = client.downloadFile(file.id)
                     val out = ByteArrayOutputStream()
-                    CryptoManager.decrypt(java.io.ByteArrayInputStream(encBytes), out, password)
+                    CryptoManager.decrypt(java.io.ByteArrayInputStream(encBytes), out, password, dek)
                     val destDir = File(getApplication<Application>().getExternalFilesDir(null), "decrypted")
                     destDir.mkdirs()
                     File(destDir, file.originalName).writeBytes(out.toByteArray())
@@ -450,6 +451,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
 
     // Task 6: Export vault backup — decrypt all files to external storage
     fun exportVaultBackup(password: String, account: GoogleSignInAccount) {
+        val dek = VaultSession.dek
         viewModelScope.launch {
             val allFiles = _rawItems.value.filter { !it.isFolder }
             if (allFiles.isEmpty()) {
@@ -468,7 +470,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                 runCatching {
                     val enc = client.downloadFile(file.id)
                     val out = ByteArrayOutputStream()
-                    CryptoManager.decrypt(java.io.ByteArrayInputStream(enc), out, password)
+                    CryptoManager.decrypt(java.io.ByteArrayInputStream(enc), out, password, dek)
                     File(exportDir, file.originalName).writeBytes(out.toByteArray())
                     done++
                     _operationState.value = OperationState.InProgress("Export", "Exporting $done/${allFiles.size}…")

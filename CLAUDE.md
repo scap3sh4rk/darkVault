@@ -113,13 +113,52 @@ All via Drive REST API v3 with OkHttp + Bearer token from `GoogleAuthUtil.getTok
 - **Auto-lock timer**: Locks vault after N minutes in background (via `onPause`/`onResume`)
 - **appProperties truncation**: All values capped at 100 chars to stay within Drive's 124-byte limit
 
-## Known Architectural Debt (plan before adding user data)
-- **Envelope encryption / re-keying**: Current format derives the data key directly from password+salt per file (no DEK/KEK split). Password change = re-encrypt all files. Fix: wrap a random per-vault DEK with the PBKDF2 KEK. This is a breaking format change.
-- **Recovery key**: Forgetting master password = permanent data loss. Fix requires envelope encryption first, then offer a recovery key (high-entropy, shown once at setup) that can also decrypt the DEK.
-- **Chunked streaming AEAD**: Single-shot AES-GCM loads whole file into RAM; will OOM on video files. Fix: stream in fixed-size chunks, each with own nonce. Breaking format change.
-- **Integrity manifest**: No signed index of vault contents; tampering/corruption on Drive goes undetected.
-- **Conflict resolution**: No `updatedAt` version field; last-write-wins is undefined when two devices write concurrently.
-- **Rate limiting**: No backoff/retry on Drive API 403/429 responses.
+## Implemented Features (v3)
+
+### Security
+- **FLAG_SECURE**: Activity window flag prevents screenshots/recents-screen leakage
+- **Constant-time password verify**: `MessageDigest.isEqual()` prevents timing side-channels
+- **Key zeroing**: All key bytes, IVs, and salts zeroed via `Arrays.fill()` after use; PBKDF2 spec cleared with `clearPassword()`
+- **Brute-force protection**: Exponential backoff on failed unlock attempts (30s, 60s, 120s… up to 30 min cap); persisted in DataStore across restarts
+- **Auto-lock biometric fix**: NavGraph navigates back to UnlockScreen on lock; `LaunchedEffect(Unit)` auto-triggers biometric on fresh composition
+
+### Envelope Encryption (DEK/KEK)
+- **VaultKeyManager**: Generates/wraps/unwraps 256-bit DEK using AES-256-GCM; formats/parses recovery key as dash-separated hex
+- **VaultKeyBundle**: JSON-serializable bundle with `kekSalt`, `dekWrappedByKek`, `dekWrappedByRecovery`; stored as `vault.key` on Drive
+- **vault.key on Drive**: First unlock generates DEK + recovery key, wraps both, uploads to Drive; subsequent unlocks download and unwrap
+- **Recovery key**: Shown once at setup via `AuthViewModel.recoveryKey` StateFlow; formatted as 8-group hex for offline storage
+- **Re-keying ready**: Password change = re-derive KEK, re-wrap DEK, re-upload vault.key — no file re-encryption needed
+- **Multi-version decrypt**: Handles v0x00 (legacy), v0x02 (per-file PBKDF2), v0x03 (DEK-based) transparently
+- **VaultSession.clearDek()**: Zeros and nulls DEK bytes on lock
+- **DEK-aware encrypt/decrypt**: UploadForegroundService uses `encryptWithDek()` when DEK is available; all download/decrypt paths pass DEK to `CryptoManager.decrypt()`
+
+### File Management
+- **Duplicate rename**: Files with conflicting names upload as `file (2).ext`, `file (3).ext` etc. instead of being skipped
+- **Idempotent uploads**: Each upload job has a `clientId` UUID stored in Drive `appProperties`; retries skip completed jobs
+- **Soft delete / trash**: Delete moves files to Drive trash (`PATCH {"trashed":true}`); permanent delete available separately
+- **Rate limiting**: Drive API calls retry up to 4× with exponential backoff (1s→2s→4s→…→30s cap) on 429/500/503 errors
+- **Recents section**: Top 8 most-recently-modified files shown as horizontal scroll row at vault root
+- **Batch download**: Multi-select + download button decrypts and saves all selected files to external storage
+- **Export/backup**: Downloads and decrypts all vault files to a timestamped local folder
+- **Last synced indicator**: Shows "just now / N min ago / Nh ago" below filter chips after each refresh
+
+## Known Architectural Debt (updated)
+
+The following items from the previous debt list are now resolved:
+- ~~Envelope encryption / re-keying~~ — Implemented via DEK/KEK split with VaultKeyBundle
+- ~~Recovery key~~ — Implemented, shown once at setup
+- ~~Rate limiting~~ — Implemented with exponential backoff (1s→30s cap) on 429/500/503
+
+Still outstanding:
+- **Chunked streaming AEAD**: Single-shot AES-GCM still loads whole file into RAM (OOM on large videos)
+- **Integrity manifest**: No signed index of vault contents
+- **Conflict resolution**: No `updatedAt` version field per file
+- **appProperties size limits**: Values capped at 100 chars but no enforcement on very long paths
+- **KDF upgrade**: PBKDF2 at 100k iterations; Argon2id would be stronger but requires external dep
+- **AAD on GCM**: File-level additional authenticated data not yet bound to metadata
+- **WorkManager background sync**: Upload retry on next launch uses foreground service only
+- **Clipboard hygiene**: Needed when Phase 2 password manager is implemented
+- **Schema versioning for passwords.vault**: Needed for Phase 2
 
 ## Ideas & Future Notes
 - Offline mode: track upload queue in Room, retry on next launch

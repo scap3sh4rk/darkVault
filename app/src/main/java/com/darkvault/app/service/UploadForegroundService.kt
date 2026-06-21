@@ -98,7 +98,12 @@ class UploadForegroundService : Service() {
                     val encBytes = withContext(Dispatchers.Default) {
                         val inp = contentResolver.openInputStream(job.uri)!!
                         val out = ByteArrayOutputStream()
-                        CryptoManager.encrypt(inp, out, password)
+                        val dek = VaultSession.dek
+                        if (dek != null) {
+                            CryptoManager.encryptWithDek(inp, out, dek)
+                        } else {
+                            CryptoManager.encrypt(inp, out, password)
+                        }
                         out.toByteArray()
                     }
 
