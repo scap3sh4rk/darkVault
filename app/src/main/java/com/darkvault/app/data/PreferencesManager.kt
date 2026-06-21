@@ -20,11 +20,19 @@ class PreferencesManager(private val context: Context) {
         private val KEY_PASSWORD_HASH = stringPreferencesKey("password_hash")
         private val KEY_PASSWORD_SALT = stringPreferencesKey("password_salt")
         private val KEY_VAULT_FOLDER_ID = stringPreferencesKey("vault_folder_id")
+        private val KEY_HAS_VAULT_KEY = booleanPreferencesKey("has_vault_key")
+        private val KEY_VAULT_KEY_FOLDER_ID = stringPreferencesKey("vault_key_folder_id")
     }
 
     val isSetupDone: Flow<Boolean> = context.dataStore.data.map { it[KEY_SETUP_DONE] ?: false }
 
     val vaultFolderId: Flow<String?> = context.dataStore.data.map { it[KEY_VAULT_FOLDER_ID] }
+
+    /** True once vault.key has been created on Drive for this vault. */
+    val hasVaultKey: Flow<Boolean> = context.dataStore.data.map { it[KEY_HAS_VAULT_KEY] ?: false }
+
+    /** The Drive folder ID where vault.key was last uploaded. */
+    val vaultKeyFolderId: Flow<String?> = context.dataStore.data.map { it[KEY_VAULT_KEY_FOLDER_ID] }
 
     suspend fun savePasswordHash(hash: ByteArray, salt: ByteArray) {
         context.dataStore.edit { prefs ->
@@ -48,6 +56,14 @@ class PreferencesManager(private val context: Context) {
 
     suspend fun saveVaultFolderId(folderId: String) {
         context.dataStore.edit { it[KEY_VAULT_FOLDER_ID] = folderId }
+    }
+
+    /** Records that vault.key has been uploaded to [folderId] on Drive. */
+    suspend fun setHasVaultKey(folderId: String) {
+        context.dataStore.edit {
+            it[KEY_HAS_VAULT_KEY] = true
+            it[KEY_VAULT_KEY_FOLDER_ID] = folderId
+        }
     }
 
     suspend fun clearAll() {

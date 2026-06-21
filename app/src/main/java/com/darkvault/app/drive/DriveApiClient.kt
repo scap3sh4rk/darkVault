@@ -171,4 +171,81 @@ class DriveApiClient(
         val resp = http.newCall(req).execute()
         if (!resp.isSuccessful && resp.code != 404) error("Delete failed: ${resp.code}")
     }
+
+    /**
+     * Downloads and returns the JSON contents of vault.key from [vaultFolderId],
+     * or null if the file does not exist or an error occurs.
+     */
+    suspend fun downloadVaultKey(vaultFolderId: String): String? = withContext(Dispatchers.IO) {
+        val t = token()
+        val q = java.net.URLEncoder.encode(
+            "name='vault.key' and '$vaultFolderId' in parents and trashed=false", "UTF-8"
+        )
+        val searchResp = http.newCall(
+            Request.Builder()
+                .url("https://www.googleapis.com/drive/v3/files?q=$q&fields=files(id)")
+                .addHeader("Authorization", "Bearer $t")
+                .build()
+        ).execute()
+        if (!searchResp.isSuccessful) return@withContext null
+        val files = gson.fromJson(searchResp.body!!.string(), JsonObject::class.java)
+            .getAsJsonArray("files") ?: return@withContext null
+        if (files.size() == 0) return@withContext null
+        val fileId = files[0].asJsonObject.get("id").asString
+
+        val dlResp = http.newCall(
+            Request.Builder()
+                .url("https://www.googleapis.com/drive/v3/files/$fileId?alt=media")
+                .addHeader("Authorization", "Bearer $t")
+                .build()
+        ).execute()
+        if (!dlResp.isSuccessful) return@withContext null
+        dlResp.body?.string()
+    }
+
+    /**
+     * Uploads (creates or replaces) vault.key in [vaultFolderId] with [content] as the body.
+     */
+    suspend fun uploadVaultKey(content: String, vaultFolderId: String) = withContext(Dispatchers.IO) {
+        val t = token()
+        // Delete any existing vault.key first
+        val q = java.net.URLEncoder.encode(
+            "name='vault.key' and '$vaultFolderId' in parents and trashed=false", "UTF-8"
+        )
+        val searchResp = http.newCall(
+            Request.Builder()
+                .url("https://www.googleapis.com/drive/v3/files?q=$q&fields=files(id)")
+                .addHeader("Authorization", "Bearer $t")
+                .build()
+        ).execute()
+        if (searchResp.isSuccessful) {
+            val files = gson.fromJson(searchResp.body!!.string(), JsonObject::class.java)
+                .getAsJsonArray("files")
+            files?.forEach { el ->
+                val fid = el.asJsonObject.get("id").asString
+                http.newCall(
+                    Request.Builder()
+                        .url("https://www.googleapis.com/drive/v3/files/$fid")
+                        .addHeader("Authorization", "Bearer $t")
+                        .delete()
+                        .build()
+                ).execute()
+            }
+        }
+
+        // Upload new vault.key via multipart
+        val meta = """{"name":"vault.key","parents":["$vaultFolderId"]}"""
+        val boundary = "vault_key_boundary"
+        val body = "--$boundary\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n$meta\r\n" +
+            "--$boundary\r\nContent-Type: text/plain; charset=UTF-8\r\n\r\n$content\r\n" +
+            "--$boundary--"
+        val resp = http.newCall(
+            Request.Builder()
+                .url("https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id")
+                .addHeader("Authorization", "Bearer $t")
+                .post(body.toRequestBody("multipart/related; boundary=$boundary".toMediaType()))
+                .build()
+        ).execute()
+        if (!resp.isSuccessful) error("Failed to upload vault.key: ${resp.code}")
+    }
 }
