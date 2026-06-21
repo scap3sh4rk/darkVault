@@ -31,6 +31,8 @@ class PreferencesManager(private val context: Context) {
         private val KEY_AUTO_LOCK_MINUTES = stringPreferencesKey("auto_lock_minutes")
         private val KEY_FAILED_ATTEMPTS = intPreferencesKey("failed_attempts")
         private val KEY_LOCKOUT_UNTIL_MS = longPreferencesKey("lockout_until_ms")
+        private val KEY_HAS_VAULT_KEY = booleanPreferencesKey("has_vault_key")
+        private val KEY_VAULT_KEY_FOLDER_ID = stringPreferencesKey("vault_key_folder_id")
     }
 
     // ── Auth ──────────────────────────────────────────────────────────────
@@ -121,6 +123,18 @@ class PreferencesManager(private val context: Context) {
         context.dataStore.edit {
             it[KEY_FAILED_ATTEMPTS] = 0
             it[KEY_LOCKOUT_UNTIL_MS] = 0L
+        }
+    }
+
+    // ── Vault key (envelope encryption) ──────────────────────────────────
+
+    val hasVaultKey: Flow<Boolean> = context.dataStore.data.map { it[KEY_HAS_VAULT_KEY] ?: false }
+    val vaultKeyFolderId: Flow<String?> = context.dataStore.data.map { it[KEY_VAULT_KEY_FOLDER_ID] }
+
+    suspend fun setHasVaultKey(folderId: String) {
+        context.dataStore.edit {
+            it[KEY_HAS_VAULT_KEY] = true
+            it[KEY_VAULT_KEY_FOLDER_ID] = folderId
         }
     }
 

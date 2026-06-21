@@ -26,8 +26,9 @@ object CryptoManager {
     private const val GCM_TAG_BITS = 128
     private const val ALGORITHM = "AES/GCM/NoPadding"
 
-    // Version byte prepended to new vault files. Legacy files have no version byte.
-    private const val VERSION_GZIP: Byte = 0x02
+    // Version bytes written as the first byte of every vault file
+    private const val VERSION_GZIP: Byte = 0x02    // per-file key + gzip compression
+    private const val VERSION_DEK_GCM: Byte = 0x03 // envelope encryption: DEK-wrapped, gzip+AES-GCM
 
     fun deriveKey(password: String, salt: ByteArray): SecretKey {
         val factory = SecretKeyFactory.getInstance("PBKDF2WithHmacSHA256")
@@ -55,6 +56,10 @@ object CryptoManager {
         }
     }
 
+    /**
+     * Legacy encrypt (per-file key derivation, no version byte).
+     * Kept for reference — new uploads should use [encryptWithDek].
+     */
     fun encrypt(input: InputStream, output: OutputStream, password: String) {
         val salt = SecureRandom().generateSeed(SALT_BYTES)
         val iv = SecureRandom().generateSeed(IV_BYTES)
@@ -81,47 +86,74 @@ object CryptoManager {
         }
     }
 
-    fun decrypt(input: InputStream, output: OutputStream, password: String) {
+    fun encryptWithDek(input: InputStream, output: OutputStream, dek: ByteArray) {
+        val compressed = ByteArrayOutputStream()
+        GZIPOutputStream(compressed).use { gz -> input.copyTo(gz) }
+        val compressedBytes = compressed.toByteArray()
+        try {
+            val payload = VaultKeyManager.encryptWithDek(compressedBytes, dek)
+            output.write(VERSION_DEK_GCM.toInt())
+            output.write(payload)
+            output.flush()
+        } finally {
+            Arrays.fill(compressedBytes, 0)
+        }
+    }
+
+    fun decrypt(input: InputStream, output: OutputStream, password: String, dek: ByteArray? = null) {
         val firstByte = input.read()
         if (firstByte == -1) throw IOException("Empty vault file")
 
-        val versioned = firstByte.toByte() == VERSION_GZIP
-
-        val salt: ByteArray
-        val iv: ByteArray
-
-        if (versioned) {
-            salt = input.readExact(SALT_BYTES)
-            iv = input.readExact(IV_BYTES)
-        } else {
-            // Legacy format: firstByte is the first byte of the salt
-            val rest = input.readExact(SALT_BYTES - 1)
-            salt = ByteArray(SALT_BYTES).also {
-                it[0] = firstByte.toByte()
-                rest.copyInto(it, destinationOffset = 1)
+        when (firstByte.toByte()) {
+            VERSION_DEK_GCM -> {
+                if (dek == null) throw IOException("DEK required for v0.3 vault files but none provided")
+                val payload = input.readBytes()
+                val decrypted = VaultKeyManager.decryptWithDek(payload, dek)
+                try {
+                    GZIPInputStream(ByteArrayInputStream(decrypted)).use { it.copyTo(output) }
+                    output.flush()
+                } finally {
+                    Arrays.fill(decrypted, 0)
+                }
             }
-            iv = input.readExact(IV_BYTES)
-        }
 
-        val key = deriveKey(password, salt)
-        val keyBytes = key.encoded
-        val cipher = Cipher.getInstance(ALGORITHM)
-        cipher.init(Cipher.DECRYPT_MODE, key, GCMParameterSpec(GCM_TAG_BITS, iv))
-        val ciphertext = input.readBytes()
-        val decrypted = cipher.doFinal(ciphertext)
-
-        try {
-            if (versioned) {
-                GZIPInputStream(ByteArrayInputStream(decrypted)).use { it.copyTo(output) }
-            } else {
-                output.write(decrypted)
+            VERSION_GZIP -> {
+                val salt = input.readExact(SALT_BYTES)
+                val iv = input.readExact(IV_BYTES)
+                val key = deriveKey(password, salt)
+                val keyBytes = key.encoded
+                val cipher = Cipher.getInstance(ALGORITHM)
+                cipher.init(Cipher.DECRYPT_MODE, key, GCMParameterSpec(GCM_TAG_BITS, iv))
+                val ciphertext = input.readBytes()
+                val decrypted = cipher.doFinal(ciphertext)
+                try {
+                    GZIPInputStream(ByteArrayInputStream(decrypted)).use { it.copyTo(output) }
+                    output.flush()
+                } finally {
+                    Arrays.fill(keyBytes, 0); Arrays.fill(decrypted, 0)
+                    Arrays.fill(iv, 0); Arrays.fill(salt, 0)
+                }
             }
-            output.flush()
-        } finally {
-            Arrays.fill(keyBytes, 0)
-            Arrays.fill(decrypted, 0)
-            Arrays.fill(iv, 0)
-            Arrays.fill(salt, 0)
+
+            else -> {
+                // Legacy: first byte is part of the 16-byte salt
+                val remainingSalt = input.readExact(SALT_BYTES - 1)
+                val salt = byteArrayOf(firstByte.toByte()) + remainingSalt
+                val iv = input.readExact(IV_BYTES)
+                val key = deriveKey(password, salt)
+                val keyBytes = key.encoded
+                val cipher = Cipher.getInstance(ALGORITHM)
+                cipher.init(Cipher.DECRYPT_MODE, key, GCMParameterSpec(GCM_TAG_BITS, iv))
+                val ciphertext = input.readBytes()
+                val decrypted = cipher.doFinal(ciphertext)
+                try {
+                    output.write(decrypted)
+                    output.flush()
+                } finally {
+                    Arrays.fill(keyBytes, 0); Arrays.fill(decrypted, 0)
+                    Arrays.fill(iv, 0); Arrays.fill(salt, 0)
+                }
+            }
         }
     }
 

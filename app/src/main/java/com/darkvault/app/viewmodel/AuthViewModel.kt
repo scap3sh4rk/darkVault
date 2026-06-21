@@ -1,13 +1,18 @@
 package com.darkvault.app.viewmodel
 
 import android.app.Application
+import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.darkvault.app.VaultSession
 import com.darkvault.app.crypto.BiometricHelper
 import com.darkvault.app.crypto.BiometricKeyManager
 import com.darkvault.app.crypto.CryptoManager
+import com.darkvault.app.crypto.VaultKeyManager
 import com.darkvault.app.data.PreferencesManager
+import com.darkvault.app.drive.DriveApiClient
+import com.darkvault.app.model.VaultKeyBundle
+import com.google.android.gms.auth.api.signin.GoogleSignInAccount
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -18,7 +23,10 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.security.SecureRandom
 import javax.crypto.Cipher
+
+private const val TAG = "AuthViewModel"
 
 class AuthViewModel(application: Application) : AndroidViewModel(application) {
 
@@ -61,6 +69,12 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
         get() = BiometricHelper.isAvailable(getApplication())
 
     private var autoLockJob: Job? = null
+
+    /** Emits the formatted recovery key once after first vault key creation. */
+    private val _recoveryKey = MutableStateFlow<String?>(null)
+    val recoveryKey: StateFlow<String?> = _recoveryKey
+
+    fun clearRecoveryKey() { _recoveryKey.value = null }
 
     // ── Setup ─────────────────────────────────────────────────────────────
 
@@ -114,10 +128,6 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    /**
-     * Called after BiometricPrompt succeeds with a decryption CryptoObject.
-     * The cipher decrypts the stored ciphertext to recover the master password.
-     */
     fun unlockWithBiometricCipher(cipher: Cipher, onSuccess: () -> Unit) {
         viewModelScope.launch {
             val creds = prefs.getBiometricCredentials()
@@ -135,21 +145,55 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    // ── Biometric enrollment ──────────────────────────────────────────────
+    fun loadOrCreateDek(password: String, folderId: String, account: GoogleSignInAccount) {
+        viewModelScope.launch {
+            withContext(Dispatchers.IO) {
+                try {
+                    val client = DriveApiClient(getApplication(), account)
+                    val existingJson = client.downloadVaultKey(folderId)
 
-    /**
-     * Prepares an encryption cipher; the caller shows BiometricPrompt with it.
-     * On biometric success, call [completeEnrollment] with the authenticated cipher.
-     */
-    fun prepareEnrollCipher(): Cipher? {
-        return try {
-            BiometricKeyManager.getCipherForEncryption()
-        } catch (e: Exception) {
-            null
+                    if (existingJson != null) {
+                        val bundle = VaultKeyBundle.fromJson(existingJson)
+                        val kek = CryptoManager.deriveKey(password, bundle.kekSalt).encoded
+                        val dek = VaultKeyManager.unwrapDek(bundle.dekWrappedByKek, kek)
+                        java.util.Arrays.fill(kek, 0)
+                        VaultSession.dek = dek
+                        Log.d(TAG, "DEK loaded from existing vault.key")
+                    } else {
+                        val dek = VaultKeyManager.generateDek()
+                        val recoveryKey = VaultKeyManager.generateRecoveryKey()
+                        val kekSalt = SecureRandom().generateSeed(16)
+                        val kek = CryptoManager.deriveKey(password, kekSalt).encoded
+
+                        val bundle = VaultKeyBundle(
+                            version = 1,
+                            kekSalt = kekSalt,
+                            dekWrappedByKek = VaultKeyManager.wrapDek(dek, kek),
+                            dekWrappedByRecovery = VaultKeyManager.wrapDek(dek, recoveryKey)
+                        )
+
+                        client.uploadVaultKey(bundle.toJson(), folderId)
+                        prefs.setHasVaultKey(folderId)
+                        VaultSession.dek = dek
+                        _recoveryKey.value = VaultKeyManager.formatRecoveryKey(recoveryKey)
+
+                        java.util.Arrays.fill(recoveryKey, 0)
+                        java.util.Arrays.fill(kek, 0)
+                        Log.d(TAG, "New DEK created and vault.key uploaded")
+                    }
+                } catch (e: Exception) {
+                    Log.e(TAG, "Failed to load/create DEK — falling back to per-file derivation", e)
+                }
+            }
         }
     }
 
-    /** Called after BiometricPrompt succeeds during enrollment (SettingsScreen). */
+    // ── Biometric enrollment ──────────────────────────────────────────────
+
+    fun prepareEnrollCipher(): Cipher? {
+        return try { BiometricKeyManager.getCipherForEncryption() } catch (e: Exception) { null }
+    }
+
     fun completeEnrollment(cipher: Cipher) {
         viewModelScope.launch {
             val password = _masterPassword.value ?: return@launch
@@ -157,7 +201,6 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
                 val encrypted = cipher.doFinal(password.toByteArray(Charsets.UTF_8))
                 prefs.saveBiometricCredentials(cipher.iv, encrypted)
             } catch (e: Exception) {
-                // Key invalidated or cipher error — disable biometric
                 prefs.clearBiometricCredentials()
                 BiometricKeyManager.deleteKey()
             }
@@ -174,12 +217,12 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
     // ── Lock / auto-lock ──────────────────────────────────────────────────
 
     fun lockVault() {
+        VaultSession.clearDek()
         _masterPassword.value = null
         VaultSession.masterPassword = null
         autoLockJob?.cancel()
     }
 
-    /** Called by MainActivity when the app goes to background. */
     fun onAppBackground() {
         val minutes = autoLockMinutes.value
         if (minutes <= 0) return
@@ -190,20 +233,13 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    /** Called by MainActivity when the app returns to foreground. */
-    fun onAppForeground() {
-        autoLockJob?.cancel()
-    }
+    fun onAppForeground() { autoLockJob?.cancel() }
 
     fun clearError() { _authError.value = null }
-
-    // ── Settings pass-through ─────────────────────────────────────────────
 
     fun setAutoLockMinutes(minutes: Int) {
         viewModelScope.launch { prefs.setAutoLockMinutes(minutes) }
     }
-
-    // ── Private helpers ───────────────────────────────────────────────────
 
     private fun setActiveSession(password: String) {
         _masterPassword.value = password
