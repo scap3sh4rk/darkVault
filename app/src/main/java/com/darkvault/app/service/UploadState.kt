@@ -19,6 +19,7 @@ sealed class UploadEvent {
     data class Encrypting(val jobId: String, val fileName: String) : UploadEvent()
     data class Uploading(val jobId: String, val fileName: String, val uploaded: Long, val total: Long) : UploadEvent()
     data class Completed(val jobId: String, val fileName: String) : UploadEvent()
+    data class Renamed(val jobId: String, val originalName: String, val newName: String) : UploadEvent()
     data class Failed(val jobId: String, val fileName: String, val reason: String) : UploadEvent()
     data class Duplicate(val jobId: String, val fileName: String) : UploadEvent()
     data class Cancelled(val jobId: String, val fileName: String) : UploadEvent()

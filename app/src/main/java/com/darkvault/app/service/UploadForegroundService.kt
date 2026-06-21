@@ -74,17 +74,20 @@ class UploadForegroundService : Service() {
                 }
 
                 try {
-                    // Duplicate check
-                    val exists = client.fileExistsByOriginalName(job.originalName, job.folderId)
-                    if (exists) {
-                        UploadState.events.emit(UploadEvent.Duplicate(job.id, job.originalName))
+                    // Idempotent check — skip if this job was already completed on Drive
+                    if (client.fileExistsByClientId(job.id, job.folderId)) {
+                        UploadState.events.emit(UploadEvent.Completed(job.id, job.originalName))
                         continue
                     }
 
+                    // Rename duplicates instead of skipping
+                    val uploadName = client.findUniqueOriginalName(job.originalName, job.folderId)
+                    val wasRenamed = uploadName != job.originalName
+
                     // Encrypt
-                    UploadState.active.value = ActiveUpload(job.id, job.originalName, 0, job.fileSize, "Encrypting…")
-                    UploadState.events.emit(UploadEvent.Encrypting(job.id, job.originalName))
-                    updateNotification("Encrypting ${job.originalName}…", 0, 0)
+                    UploadState.active.value = ActiveUpload(job.id, uploadName, 0, job.fileSize, "Encrypting…")
+                    UploadState.events.emit(UploadEvent.Encrypting(job.id, uploadName))
+                    updateNotification("Encrypting $uploadName…", 0, 0)
 
                     if (job.id in UploadState.cancelledIds) {
                         UploadState.cancelledIds.remove(job.id)
@@ -101,29 +104,34 @@ class UploadForegroundService : Service() {
 
                     val total = encBytes.size.toLong()
 
-                    // Start resumable session
+                    // Start resumable session — include clientId for idempotency
                     val sessionUri = client.startResumableSession(
-                        "${job.originalName}.vault",
-                        job.originalName,
+                        "${uploadName}.vault",
+                        uploadName,
                         job.mimeType,
                         job.folderId,
-                        total
+                        total,
+                        clientId = job.id
                     )
 
                     // Upload in chunks
-                    UploadState.active.value = ActiveUpload(job.id, job.originalName, 0, total, "Uploading…")
-                    UploadState.events.emit(UploadEvent.Uploading(job.id, job.originalName, 0, total))
+                    UploadState.active.value = ActiveUpload(job.id, uploadName, 0, total, "Uploading…")
+                    UploadState.events.emit(UploadEvent.Uploading(job.id, uploadName, 0, total))
 
                     client.uploadChunked(sessionUri, encBytes) { uploaded, t ->
                         if (job.id !in UploadState.cancelledIds) {
-                            UploadState.active.value = ActiveUpload(job.id, job.originalName, uploaded, t, "Uploading…")
-                            UploadState.events.emit(UploadEvent.Uploading(job.id, job.originalName, uploaded, t))
-                            updateNotification("Uploading ${job.originalName}", uploaded, t)
+                            UploadState.active.value = ActiveUpload(job.id, uploadName, uploaded, t, "Uploading…")
+                            UploadState.events.emit(UploadEvent.Uploading(job.id, uploadName, uploaded, t))
+                            updateNotification("Uploading $uploadName", uploaded, t)
                         }
                     }
 
                     UploadState.active.value = null
-                    UploadState.events.emit(UploadEvent.Completed(job.id, job.originalName))
+
+                    if (wasRenamed) {
+                        UploadState.events.emit(UploadEvent.Renamed(job.id, job.originalName, uploadName))
+                    }
+                    UploadState.events.emit(UploadEvent.Completed(job.id, uploadName))
 
                 } catch (e: Exception) {
                     UploadState.active.value = null

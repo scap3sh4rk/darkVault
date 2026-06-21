@@ -33,6 +33,33 @@ class DriveApiClient(
         GoogleAuthUtil.getToken(context, account.account!!, driveScope)
     }
 
+    // ── Retry helper ───────────────────────────────────────────────────────
+
+    /**
+     * Wraps a suspend block with exponential back-off retry for transient Drive
+     * errors (429, 500, 503).  Respects the Retry-After header when present.
+     */
+    private suspend fun <T> withRetry(maxAttempts: Int = 4, block: suspend () -> T): T {
+        var attempt = 0
+        var delayMs = 1000L
+        while (true) {
+            try {
+                return block()
+            } catch (e: Exception) {
+                attempt++
+                if (attempt >= maxAttempts) throw e
+                val message = e.message ?: ""
+                if (!message.contains("429") && !message.contains("500") && !message.contains("503")) throw e
+                // Extract numeric Retry-After if present in the message (format "Retry-After: N")
+                val retryAfterSecs = Regex("Retry-After:\\s*(\\d+)").find(message)
+                    ?.groupValues?.get(1)?.toLongOrNull()
+                val waitMs = if (retryAfterSecs != null) retryAfterSecs * 1000L else delayMs
+                kotlinx.coroutines.delay(waitMs)
+                delayMs = minOf(delayMs * 2, 30_000L)
+            }
+        }
+    }
+
     // ── Folder management ──────────────────────────────────────────────────
 
     suspend fun ensureVaultFolder(savedFolderId: String?): String = withContext(Dispatchers.IO) {
@@ -122,55 +149,59 @@ class DriveApiClient(
     // ── File listing ───────────────────────────────────────────────────────
 
     /** Returns both .vault files and sub-folders inside [folderId]. */
-    suspend fun listItems(folderId: String): List<VaultFile> = withContext(Dispatchers.IO) {
-        val t = token()
-        val q = java.net.URLEncoder.encode("'$folderId' in parents and trashed=false", "UTF-8")
-        val fields = "files(id,name,size,createdTime,modifiedTime,mimeType,appProperties)"
-        val resp = http.newCall(
-            Request.Builder()
-                .url("https://www.googleapis.com/drive/v3/files?q=$q&fields=$fields&orderBy=name")
-                .addHeader("Authorization", "Bearer $t")
-                .build()
-        ).execute()
+    suspend fun listItems(folderId: String): List<VaultFile> = withRetry {
+        withContext(Dispatchers.IO) {
+            val t = token()
+            val q = java.net.URLEncoder.encode("'$folderId' in parents and trashed=false", "UTF-8")
+            val fields = "files(id,name,size,createdTime,modifiedTime,mimeType,appProperties)"
+            val resp = http.newCall(
+                Request.Builder()
+                    .url("https://www.googleapis.com/drive/v3/files?q=$q&fields=$fields&orderBy=name")
+                    .addHeader("Authorization", "Bearer $t")
+                    .build()
+            ).execute()
 
-        if (!resp.isSuccessful) return@withContext emptyList()
+            if (!resp.isSuccessful) {
+                error("listItems failed: ${resp.code}")
+            }
 
-        val body = gson.fromJson(resp.body!!.string(), JsonObject::class.java)
-        val files = body.getAsJsonArray("files") ?: return@withContext emptyList()
+            val body = gson.fromJson(resp.body!!.string(), JsonObject::class.java)
+            val files = body.getAsJsonArray("files") ?: return@withContext emptyList()
 
-        files.mapNotNull { el ->
-            val obj = el.asJsonObject
-            val id = obj.get("id")?.asString ?: return@mapNotNull null
-            val name = obj.get("name")?.asString ?: return@mapNotNull null
-            val mimeType = obj.get("mimeType")?.asString ?: ""
-            val createdTime = obj.get("createdTime")?.asString ?: ""
-            val modifiedTime = obj.get("modifiedTime")?.asString ?: ""
+            files.mapNotNull { el ->
+                val obj = el.asJsonObject
+                val id = obj.get("id")?.asString ?: return@mapNotNull null
+                val name = obj.get("name")?.asString ?: return@mapNotNull null
+                val mimeType = obj.get("mimeType")?.asString ?: ""
+                val createdTime = obj.get("createdTime")?.asString ?: ""
+                val modifiedTime = obj.get("modifiedTime")?.asString ?: ""
 
-            if (mimeType == "application/vnd.google-apps.folder") {
-                VaultFile(
-                    id = id,
-                    name = name,
-                    originalName = name,
-                    originalMimeType = mimeType,
-                    size = 0L,
-                    createdTime = createdTime,
-                    modifiedTime = modifiedTime,
-                    isFolder = true
-                )
-            } else {
-                val appProps = obj.getAsJsonObject("appProperties") ?: return@mapNotNull null
-                val originalName = appProps.get("originalName")?.asString ?: return@mapNotNull null
-                val originalMime = appProps.get("originalMimeType")?.asString ?: "application/octet-stream"
-                VaultFile(
-                    id = id,
-                    name = name,
-                    originalName = originalName,
-                    originalMimeType = originalMime,
-                    size = obj.get("size")?.asLong ?: 0L,
-                    createdTime = createdTime,
-                    modifiedTime = modifiedTime,
-                    isFolder = false
-                )
+                if (mimeType == "application/vnd.google-apps.folder") {
+                    VaultFile(
+                        id = id,
+                        name = name,
+                        originalName = name,
+                        originalMimeType = mimeType,
+                        size = 0L,
+                        createdTime = createdTime,
+                        modifiedTime = modifiedTime,
+                        isFolder = true
+                    )
+                } else {
+                    val appProps = obj.getAsJsonObject("appProperties") ?: return@mapNotNull null
+                    val originalName = appProps.get("originalName")?.asString ?: return@mapNotNull null
+                    val originalMime = appProps.get("originalMimeType")?.asString ?: "application/octet-stream"
+                    VaultFile(
+                        id = id,
+                        name = name,
+                        originalName = originalName,
+                        originalMimeType = originalMime,
+                        size = obj.get("size")?.asLong ?: 0L,
+                        createdTime = createdTime,
+                        modifiedTime = modifiedTime,
+                        isFolder = false
+                    )
+                }
             }
         }
     }
@@ -178,7 +209,7 @@ class DriveApiClient(
     // Kept for compatibility with existing callers
     suspend fun listFiles(folderId: String): List<VaultFile> = listItems(folderId)
 
-    // ── Duplicate detection ────────────────────────────────────────────────
+    // ── Duplicate / rename detection ───────────────────────────────────────
 
     suspend fun fileExistsByOriginalName(originalName: String, folderId: String): Boolean =
         withContext(Dispatchers.IO) {
@@ -201,24 +232,68 @@ class DriveApiClient(
             files != null && files.size() > 0
         }
 
+    /**
+     * Returns a unique originalName for the file, adding a counter suffix
+     * (e.g. "photo (2).jpg") if the base name already exists.
+     */
+    suspend fun findUniqueOriginalName(baseName: String, folderId: String): String {
+        if (!fileExistsByOriginalName(baseName, folderId)) return baseName
+        val dot = baseName.lastIndexOf('.')
+        val stem = if (dot > 0) baseName.substring(0, dot) else baseName
+        val ext = if (dot > 0) baseName.substring(dot) else ""
+        var counter = 2
+        while (counter <= 999) {
+            val candidate = "$stem ($counter)$ext"
+            if (!fileExistsByOriginalName(candidate, folderId)) return candidate
+            counter++
+        }
+        return "$stem (${System.currentTimeMillis()})$ext"
+    }
+
+    // ── Idempotent upload key ──────────────────────────────────────────────
+
+    /**
+     * Checks whether a file with this clientId (job UUID) was already uploaded.
+     * Used to make retried uploads idempotent.
+     */
+    suspend fun fileExistsByClientId(clientId: String, folderId: String): Boolean =
+        withContext(Dispatchers.IO) {
+            val t = token()
+            val q = java.net.URLEncoder.encode(
+                "appProperties has { key='clientId' and value='$clientId' }" +
+                    " and '$folderId' in parents and trashed=false", "UTF-8"
+            )
+            val resp = http.newCall(
+                Request.Builder()
+                    .url("https://www.googleapis.com/drive/v3/files?q=$q&fields=files(id)")
+                    .addHeader("Authorization", "Bearer $t")
+                    .build()
+            ).execute()
+            if (!resp.isSuccessful) return@withContext false
+            val files = gson.fromJson(resp.body!!.string(), JsonObject::class.java).getAsJsonArray("files")
+            files != null && files.size() > 0
+        }
+
     // ── Upload ─────────────────────────────────────────────────────────────
 
     /**
-     * Uploads using Drive's resumable upload protocol.
-     * Returns a session URI that can be used to resume if interrupted.
+     * Starts a Drive resumable upload session.
+     * [clientId] is the UploadJob UUID, stored in appProperties for idempotent retries.
      */
     suspend fun startResumableSession(
         fileName: String,
         originalName: String,
         originalMimeType: String,
         folderId: String,
-        totalBytes: Long
+        totalBytes: Long,
+        clientId: String = ""
     ): String = withContext(Dispatchers.IO) {
         val t = token()
         val escapedFile = fileName.replace("\\", "\\\\").replace("\"", "\\\"")
         val escapedOrig = originalName.take(100).replace("\\", "\\\\").replace("\"", "\\\"")
         val escapedMime = originalMimeType.take(100).replace("\\", "\\\\").replace("\"", "\\\"")
-        val metaJson = """{"name":"$escapedFile","parents":["$folderId"],"appProperties":{"originalName":"$escapedOrig","originalMimeType":"$escapedMime","updatedAt":"${System.currentTimeMillis()}"}}"""
+        val clientIdProp = if (clientId.isNotEmpty()) ""","clientId":"$clientId"""" else ""
+        val metaJson = """{"name":"$escapedFile","parents":["$folderId"],"appProperties":{"originalName":"$escapedOrig","originalMimeType":"$escapedMime","updatedAt":"${System.currentTimeMillis()}"$clientIdProp}}"""
 
         val resp = http.newCall(
             Request.Builder()
@@ -248,13 +323,19 @@ class DriveApiClient(
             val end = minOf(offset + chunkSize - 1, total - 1)
             val chunk = data.copyOfRange(offset.toInt(), (end + 1).toInt())
 
-            val resp = http.newCall(
-                Request.Builder()
-                    .url(sessionUri)
-                    .addHeader("Content-Range", "bytes $offset-$end/$total")
-                    .put(chunk.toRequestBody("application/octet-stream".toMediaType()))
-                    .build()
-            ).execute()
+            val resp = withRetry {
+                http.newCall(
+                    Request.Builder()
+                        .url(sessionUri)
+                        .addHeader("Content-Range", "bytes $offset-$end/$total")
+                        .put(chunk.toRequestBody("application/octet-stream".toMediaType()))
+                        .build()
+                ).execute().also { r ->
+                    if (r.code != 200 && r.code != 201 && r.code != 308) {
+                        error("Upload chunk failed: ${r.code} at offset $offset")
+                    }
+                }
+            }
 
             when (resp.code) {
                 200, 201 -> {
@@ -312,44 +393,75 @@ class DriveApiClient(
     suspend fun downloadFileWithProgress(
         fileId: String,
         onProgress: suspend (downloaded: Long, total: Long) -> Unit
-    ): ByteArray = withContext(Dispatchers.IO) {
-        val t = token()
-        val resp = http.newCall(
-            Request.Builder()
-                .url("https://www.googleapis.com/drive/v3/files/$fileId?alt=media")
-                .addHeader("Authorization", "Bearer $t")
-                .build()
-        ).execute()
-        if (!resp.isSuccessful) error("Download failed: ${resp.code}")
+    ): ByteArray = withRetry {
+        withContext(Dispatchers.IO) {
+            val t = token()
+            val resp = http.newCall(
+                Request.Builder()
+                    .url("https://www.googleapis.com/drive/v3/files/$fileId?alt=media")
+                    .addHeader("Authorization", "Bearer $t")
+                    .build()
+            ).execute()
+            if (!resp.isSuccessful) error("Download failed: ${resp.code}")
 
-        val body = resp.body ?: error("Empty download response")
-        val total = body.contentLength()
-        val out = ByteArrayOutputStream()
-        val buf = ByteArray(65536)
-        val stream = body.byteStream()
-        var read: Int
-        var downloaded = 0L
+            val body = resp.body ?: error("Empty download response")
+            val total = body.contentLength()
+            val out = ByteArrayOutputStream()
+            val buf = ByteArray(65536)
+            val stream = body.byteStream()
+            var read: Int
+            var downloaded = 0L
 
-        while (stream.read(buf).also { read = it } != -1) {
-            out.write(buf, 0, read)
-            downloaded += read
-            if (total > 0) onProgress(downloaded, total)
+            while (stream.read(buf).also { read = it } != -1) {
+                out.write(buf, 0, read)
+                downloaded += read
+                if (total > 0) onProgress(downloaded, total)
+            }
+            out.toByteArray()
         }
-        out.toByteArray()
     }
 
-    // ── Delete ─────────────────────────────────────────────────────────────
+    // ── Delete / Trash ─────────────────────────────────────────────────────
 
-    suspend fun deleteFile(fileId: String) = withContext(Dispatchers.IO) {
+    /** Permanently deletes the file from Drive. */
+    suspend fun deleteFile(fileId: String) = withRetry {
+        withContext(Dispatchers.IO) {
+            val t = token()
+            val resp = http.newCall(
+                Request.Builder()
+                    .url("https://www.googleapis.com/drive/v3/files/$fileId")
+                    .addHeader("Authorization", "Bearer $t")
+                    .delete()
+                    .build()
+            ).execute()
+            if (!resp.isSuccessful && resp.code != 404) error("Delete failed: ${resp.code}")
+        }
+    }
+
+    /** Moves a file to Drive trash (soft delete). */
+    suspend fun trashFile(fileId: String) = withContext(Dispatchers.IO) {
         val t = token()
         val resp = http.newCall(
             Request.Builder()
-                .url("https://www.googleapis.com/drive/v3/files/$fileId")
+                .url("https://www.googleapis.com/drive/v3/files/$fileId?fields=id")
                 .addHeader("Authorization", "Bearer $t")
-                .delete()
+                .method("PATCH", """{"trashed":true}""".toRequestBody("application/json; charset=UTF-8".toMediaType()))
                 .build()
         ).execute()
-        if (!resp.isSuccessful && resp.code != 404) error("Delete failed: ${resp.code}")
+        if (!resp.isSuccessful && resp.code != 404) error("Trash failed: ${resp.code}")
+    }
+
+    /** Restores a trashed file. */
+    suspend fun restoreFile(fileId: String) = withContext(Dispatchers.IO) {
+        val t = token()
+        val resp = http.newCall(
+            Request.Builder()
+                .url("https://www.googleapis.com/drive/v3/files/$fileId?fields=id")
+                .addHeader("Authorization", "Bearer $t")
+                .method("PATCH", """{"trashed":false}""".toRequestBody("application/json; charset=UTF-8".toMediaType()))
+                .build()
+        ).execute()
+        if (!resp.isSuccessful) error("Restore failed: ${resp.code}")
     }
 
     // ── Storage quota ──────────────────────────────────────────────────────

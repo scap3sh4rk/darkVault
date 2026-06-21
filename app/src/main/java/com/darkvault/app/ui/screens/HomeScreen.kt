@@ -6,6 +6,9 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.shrinkVertically
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -21,12 +24,15 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.CreateNewFolder
 import androidx.compose.material.icons.outlined.DeleteSweep
+import androidx.compose.material.icons.outlined.Download
+import androidx.compose.material.icons.outlined.FolderZip
 import androidx.compose.material.icons.outlined.InsertDriveFile
 import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.Search
@@ -34,6 +40,8 @@ import androidx.compose.material.icons.outlined.SelectAll
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.Sort
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -65,8 +73,10 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.darkvault.app.model.FilterType
 import com.darkvault.app.model.SortOrder
 import com.darkvault.app.model.VaultFile
 import com.darkvault.app.ui.components.CyberButton
@@ -76,9 +86,11 @@ import com.darkvault.app.ui.components.StorageInfoCard
 import com.darkvault.app.ui.components.UploadProgressCard
 import com.darkvault.app.ui.components.VaultFileCard
 import com.darkvault.app.ui.components.VaultFolderCard
+import com.darkvault.app.ui.components.fileTypeIcon
 import com.darkvault.app.ui.theme.CyanPrimary
 import com.darkvault.app.ui.theme.VaultBackground
 import com.darkvault.app.ui.theme.VaultOutline
+import com.darkvault.app.ui.theme.VaultSurfaceVariant
 import com.darkvault.app.viewmodel.AuthViewModel
 import com.darkvault.app.viewmodel.HomeUiState
 import com.darkvault.app.viewmodel.HomeViewModel
@@ -112,11 +124,14 @@ fun HomeScreen(
     val filterType by homeViewModel.filterType.collectAsState()
     val sortOrder by homeViewModel.sortOrder.collectAsState()
     val selectedIds by homeViewModel.selectedIds.collectAsState()
+    val recentItems by homeViewModel.recentItems.collectAsState() // Task 4
+    val lastSynced by homeViewModel.lastSyncedMs.collectAsState() // Task 7
 
     val isSelectionMode = selectedIds.isNotEmpty()
 
     var currentAccount by remember { mutableStateOf(GoogleSignIn.getLastSignedInAccount(context)) }
     var fileToDelete by remember { mutableStateOf<VaultFile?>(null) }
+    var fileToPermDelete by remember { mutableStateOf<VaultFile?>(null) } // Task 3: permanent delete
     var showUploadMenu by remember { mutableStateOf(false) }
     var showSortMenu by remember { mutableStateOf(false) }
     var showSearch by remember { mutableStateOf(false) }
@@ -224,8 +239,15 @@ fun HomeScreen(
                             IconButton(onClick = { homeViewModel.selectAll() }) {
                                 Icon(Icons.Outlined.SelectAll, "Select all", tint = CyanPrimary)
                             }
+                            // Task 5: Batch download
+                            IconButton(onClick = {
+                                val pwd = password; val acc = currentAccount
+                                if (pwd != null && acc != null) homeViewModel.downloadSelected(pwd, acc)
+                            }) {
+                                Icon(Icons.Outlined.Download, "Download selected", tint = CyanPrimary)
+                            }
                             IconButton(onClick = { showDeleteSelected = true }) {
-                                Icon(Icons.Outlined.DeleteSweep, "Delete selected", tint = MaterialTheme.colorScheme.error)
+                                Icon(Icons.Outlined.DeleteSweep, "Move selected to trash", tint = MaterialTheme.colorScheme.error)
                             }
                             IconButton(onClick = { homeViewModel.clearSelection() }) {
                                 Icon(Icons.Outlined.Close, "Cancel selection", tint = CyanPrimary)
@@ -234,6 +256,14 @@ fun HomeScreen(
                             if (currentAccount != null) {
                                 IconButton(onClick = { showSearch = !showSearch }) {
                                     Icon(if (showSearch) Icons.Outlined.Close else Icons.Outlined.Search, "Search", tint = CyanPrimary)
+                                }
+                                // Task 6: Export backup button
+                                IconButton(onClick = {
+                                    val pwd = password; val acc = currentAccount
+                                    if (pwd != null && acc != null) homeViewModel.exportVaultBackup(pwd, acc)
+                                    else scope.launch { snackbarHostState.showSnackbar("Vault is locked") }
+                                }) {
+                                    Icon(Icons.Outlined.FolderZip, "Export backup", tint = CyanPrimary)
                                 }
                                 Box {
                                     IconButton(onClick = { showSortMenu = true }) {
@@ -368,6 +398,22 @@ fun HomeScreen(
                     modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
                 )
 
+                // Task 7: Last synced indicator
+                if (lastSynced > 0) {
+                    val elapsed = (System.currentTimeMillis() - lastSynced) / 1000
+                    val label = when {
+                        elapsed < 60 -> "Last synced: just now"
+                        elapsed < 3600 -> "Last synced: ${elapsed / 60} min ago"
+                        else -> "Last synced: ${elapsed / 3600}h ago"
+                    }
+                    Text(
+                        label,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = VaultOutline,
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 2.dp)
+                    )
+                }
+
                 when (uiState) {
                     is HomeUiState.Loading -> {
                         Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
@@ -391,6 +437,43 @@ fun HomeScreen(
                                 verticalArrangement = Arrangement.spacedBy(8.dp),
                                 modifier = Modifier.weight(1f)
                             ) {
+                                // Task 4: Recents section — only at root, no search/filter active
+                                val showRecents = folderStack.size == 1 &&
+                                    searchQuery.isBlank() &&
+                                    filterType == FilterType.ALL &&
+                                    recentItems.isNotEmpty()
+
+                                if (showRecents) {
+                                    item(key = "recents_header") {
+                                        Text(
+                                            "Recents",
+                                            style = MaterialTheme.typography.labelLarge,
+                                            color = CyanPrimary,
+                                            modifier = Modifier.padding(bottom = 4.dp)
+                                        )
+                                        LazyRow(
+                                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                            contentPadding = PaddingValues(bottom = 8.dp)
+                                        ) {
+                                            items(recentItems, key = { "recent_${it.id}" }) { file ->
+                                                RecentFileCard(
+                                                    file = file,
+                                                    onClick = {
+                                                        val pwd = password; val acc = currentAccount
+                                                        if (HomeViewModel.isImageMime(file.originalMimeType)) {
+                                                            previewFile = file
+                                                        } else if (pwd != null && acc != null) {
+                                                            homeViewModel.downloadAndDecrypt(file, pwd, acc)
+                                                        } else {
+                                                            scope.launch { snackbarHostState.showSnackbar("Vault is locked") }
+                                                        }
+                                                    }
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
+
                                 items(displayItems, key = { it.id }) { item ->
                                     if (item.isFolder) {
                                         VaultFolderCard(
@@ -436,36 +519,73 @@ fun HomeScreen(
         }
     }
 
-    // ── Delete single file dialog ──────────────────────────────────────────
+    // ── Task 3: Move to trash / permanent delete dialog ────────────────────
 
     fileToDelete?.let { file ->
         AlertDialog(
             onDismissRequest = { fileToDelete = null },
-            title = { Text("Delete \"${file.originalName}\"?") },
-            text = { Text("This will permanently remove it from your Drive vault.", style = MaterialTheme.typography.bodyMedium) },
+            title = { Text("Move to Trash?") },
+            text = {
+                Text(
+                    "\"${file.originalName}\" will be moved to your Drive trash.",
+                    style = MaterialTheme.typography.bodyMedium
+                )
+            },
             confirmButton = {
                 TextButton(onClick = {
                     currentAccount?.let { homeViewModel.deleteFile(file, it) }
                     fileToDelete = null
-                }) { Text("Delete", color = MaterialTheme.colorScheme.error) }
+                }) { Text("Move to Trash", color = MaterialTheme.colorScheme.error) }
             },
-            dismissButton = { TextButton(onClick = { fileToDelete = null }) { Text("Cancel") } },
+            dismissButton = {
+                Row {
+                    TextButton(onClick = {
+                        fileToPermDelete = file
+                        fileToDelete = null
+                    }) { Text("Delete Permanently", color = MaterialTheme.colorScheme.error.copy(alpha = 0.7f)) }
+                    TextButton(onClick = { fileToDelete = null }) { Text("Cancel") }
+                }
+            },
             containerColor = MaterialTheme.colorScheme.surfaceVariant
         )
     }
 
-    // ── Delete selected dialog ─────────────────────────────────────────────
+    // Permanent delete confirmation
+    fileToPermDelete?.let { file ->
+        AlertDialog(
+            onDismissRequest = { fileToPermDelete = null },
+            title = { Text("Delete permanently?") },
+            text = {
+                Text(
+                    "\"${file.originalName}\" will be permanently deleted and cannot be recovered.",
+                    style = MaterialTheme.typography.bodyMedium
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    currentAccount?.let { homeViewModel.permanentDeleteFile(file, it) }
+                    fileToPermDelete = null
+                }) { Text("Delete Permanently", color = MaterialTheme.colorScheme.error) }
+            },
+            dismissButton = {
+                TextButton(onClick = { fileToPermDelete = null }) { Text("Cancel") }
+            },
+            containerColor = MaterialTheme.colorScheme.surfaceVariant
+        )
+    }
+
+    // ── Delete selected dialog (Task 3: now moves to trash) ───────────────
 
     if (showDeleteSelected) {
         AlertDialog(
             onDismissRequest = { showDeleteSelected = false },
-            title = { Text("Delete ${selectedIds.size} item(s)?") },
-            text = { Text("This will permanently remove them from your Drive vault.", style = MaterialTheme.typography.bodyMedium) },
+            title = { Text("Move ${selectedIds.size} item(s) to trash?") },
+            text = { Text("Selected items will be moved to your Drive trash.", style = MaterialTheme.typography.bodyMedium) },
             confirmButton = {
                 TextButton(onClick = {
                     currentAccount?.let { homeViewModel.deleteSelected(it) }
                     showDeleteSelected = false
-                }) { Text("Delete", color = MaterialTheme.colorScheme.error) }
+                }) { Text("Move to Trash", color = MaterialTheme.colorScheme.error) }
             },
             dismissButton = { TextButton(onClick = { showDeleteSelected = false }) { Text("Cancel") } },
             containerColor = MaterialTheme.colorScheme.surfaceVariant
@@ -482,6 +602,51 @@ fun HomeScreen(
             account = currentAccount,
             onDismiss = { previewFile = null }
         )
+    }
+}
+
+// ── Task 4: Compact recent file card ─────────────────────────────────────────
+
+@Composable
+private fun RecentFileCard(
+    file: VaultFile,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Card(
+        shape = RoundedCornerShape(10.dp),
+        colors = CardDefaults.cardColors(containerColor = VaultSurfaceVariant),
+        modifier = modifier
+            .width(100.dp)
+            .border(1.dp, VaultOutline, RoundedCornerShape(10.dp))
+            .clickable(onClick = onClick)
+    ) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 10.dp)
+        ) {
+            Box(
+                contentAlignment = Alignment.Center,
+                modifier = Modifier
+                    .size(36.dp)
+                    .background(VaultBackground, RoundedCornerShape(8.dp))
+            ) {
+                Icon(
+                    fileTypeIcon(file.originalName, file.originalMimeType),
+                    null,
+                    tint = CyanPrimary,
+                    modifier = Modifier.size(20.dp)
+                )
+            }
+            Spacer(Modifier.height(6.dp))
+            Text(
+                file.originalName,
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurface,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
     }
 }
 

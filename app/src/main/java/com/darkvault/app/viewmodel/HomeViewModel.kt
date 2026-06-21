@@ -69,6 +69,10 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     private val _storageInfo = MutableStateFlow<StorageInfo?>(null)
     val storageInfo: StateFlow<StorageInfo?> = _storageInfo
 
+    // Task 7: Last synced timestamp
+    private val _lastSyncedMs = MutableStateFlow<Long>(0L)
+    val lastSyncedMs: StateFlow<Long> = _lastSyncedMs
+
     // ── Folder navigation ──────────────────────────────────────────────────
     /** Stack of (folderId, folderName). Root = vault root folder. */
     private val _folderStack = MutableStateFlow<List<FolderEntry>>(emptyList())
@@ -123,6 +127,13 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         result
     }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
+    // Task 4: Recents — 8 most recently modified non-folder files
+    val recentItems: StateFlow<List<VaultFile>> = _rawItems.map { items ->
+        items.filter { !it.isFolder && it.modifiedTime.isNotEmpty() }
+            .sortedByDescending { it.modifiedTime }
+            .take(8)
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+
     // ── Upload state (from foreground service) ─────────────────────────────
     val activeUpload: StateFlow<ActiveUpload?> = UploadState.active
 
@@ -137,8 +148,10 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             UploadState.events.collect { event ->
                 when (event) {
-                    is UploadEvent.Duplicate ->
-                        _operationState.value = OperationState.Done("\"${event.fileName}\" already exists — skipped")
+                    is UploadEvent.Renamed ->
+                        _operationState.value = OperationState.Done(
+                            "\"${event.originalName}\" already exists — uploaded as \"${event.newName}\""
+                        )
                     is UploadEvent.Completed -> {
                         val count = UploadState.queue.size + 1
                         if (count <= 1) {
@@ -150,6 +163,9 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                         _operationState.value = OperationState.Failed("Failed to upload \"${event.fileName}\": ${event.reason}")
                     is UploadEvent.Cancelled ->
                         _operationState.value = OperationState.Done("Upload of \"${event.fileName}\" cancelled")
+                    // UploadEvent.Duplicate is kept for backward compat but no longer emitted
+                    is UploadEvent.Duplicate ->
+                        _operationState.value = OperationState.Done("\"${event.fileName}\" already exists — skipped")
                     else -> Unit
                 }
             }
@@ -177,6 +193,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             }.onSuccess { items ->
                 _rawItems.value = items
                 _uiState.value = HomeUiState.Success(items)
+                _lastSyncedMs.value = System.currentTimeMillis() // Task 7
             }.onFailure { e ->
                 _uiState.value = HomeUiState.Error(e.message ?: "Failed to load files")
             }
@@ -228,6 +245,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             }.onSuccess { items ->
                 _rawItems.value = items
                 _uiState.value = HomeUiState.Success(items)
+                _lastSyncedMs.value = System.currentTimeMillis() // Task 7
             }.onFailure { e ->
                 _uiState.value = HomeUiState.Error(e.message ?: "Failed to load folder")
             }
@@ -406,15 +424,86 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    // Task 5: Batch download selected files
+    fun downloadSelected(password: String, account: GoogleSignInAccount) {
+        val ids = selectedIds.value.toList()
+        val items = _rawItems.value.filter { it.id in ids && !it.isFolder }
+        selectedIds.value = emptySet()
+        viewModelScope.launch {
+            _operationState.value = OperationState.InProgress("Batch download", "Downloading ${items.size} files…")
+            val client = DriveApiClient(getApplication(), account)
+            var done = 0
+            for (file in items) {
+                runCatching {
+                    val encBytes = client.downloadFile(file.id)
+                    val out = ByteArrayOutputStream()
+                    CryptoManager.decrypt(java.io.ByteArrayInputStream(encBytes), out, password)
+                    val destDir = File(getApplication<Application>().getExternalFilesDir(null), "decrypted")
+                    destDir.mkdirs()
+                    File(destDir, file.originalName).writeBytes(out.toByteArray())
+                    done++
+                }
+            }
+            _operationState.value = OperationState.Done("Downloaded $done of ${items.size} file(s)")
+        }
+    }
+
+    // Task 6: Export vault backup — decrypt all files to external storage
+    fun exportVaultBackup(password: String, account: GoogleSignInAccount) {
+        viewModelScope.launch {
+            val allFiles = _rawItems.value.filter { !it.isFolder }
+            if (allFiles.isEmpty()) {
+                _operationState.value = OperationState.Done("Vault is empty — nothing to export")
+                return@launch
+            }
+            val exportDir = File(
+                getApplication<Application>().getExternalFilesDir(null),
+                "darkVault_export_${System.currentTimeMillis()}"
+            )
+            exportDir.mkdirs()
+            val client = DriveApiClient(getApplication(), account)
+            var done = 0
+            _operationState.value = OperationState.InProgress("Export", "Exporting 0/${allFiles.size}…")
+            for (file in allFiles) {
+                runCatching {
+                    val enc = client.downloadFile(file.id)
+                    val out = ByteArrayOutputStream()
+                    CryptoManager.decrypt(java.io.ByteArrayInputStream(enc), out, password)
+                    File(exportDir, file.originalName).writeBytes(out.toByteArray())
+                    done++
+                    _operationState.value = OperationState.InProgress("Export", "Exporting $done/${allFiles.size}…")
+                }
+            }
+            _operationState.value = OperationState.Done("Exported $done file(s) to ${exportDir.absolutePath}")
+        }
+    }
+
     // ── Delete ─────────────────────────────────────────────────────────────
 
+    /** Moves file to Drive trash (soft delete). */
     fun deleteFile(file: VaultFile, account: GoogleSignInAccount) {
         viewModelScope.launch {
-            _operationState.value = OperationState.InProgress(file.originalName, "Deleting…")
+            _operationState.value = OperationState.InProgress(file.originalName, "Moving to trash…")
+            runCatching {
+                DriveApiClient(getApplication(), account).trashFile(file.id)
+            }.onSuccess {
+                _operationState.value = OperationState.Done("\"${file.originalName}\" moved to trash")
+                _rawItems.value = _rawItems.value.filter { it.id != file.id }
+                _uiState.value = HomeUiState.Success(_rawItems.value)
+            }.onFailure { e ->
+                _operationState.value = OperationState.Failed(e.message ?: "Trash failed")
+            }
+        }
+    }
+
+    /** Permanently deletes a file from Drive. */
+    fun permanentDeleteFile(file: VaultFile, account: GoogleSignInAccount) {
+        viewModelScope.launch {
+            _operationState.value = OperationState.InProgress(file.originalName, "Deleting permanently…")
             runCatching {
                 DriveApiClient(getApplication(), account).deleteFile(file.id)
             }.onSuccess {
-                _operationState.value = OperationState.Done("\"${file.originalName}\" deleted")
+                _operationState.value = OperationState.Done("\"${file.originalName}\" permanently deleted")
                 _rawItems.value = _rawItems.value.filter { it.id != file.id }
                 _uiState.value = HomeUiState.Success(_rawItems.value)
             }.onFailure { e ->
@@ -423,19 +512,35 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    /** Restores a trashed file. */
+    fun restoreFile(file: VaultFile, account: GoogleSignInAccount) {
+        viewModelScope.launch {
+            _operationState.value = OperationState.InProgress(file.originalName, "Restoring…")
+            runCatching {
+                DriveApiClient(getApplication(), account).restoreFile(file.id)
+            }.onSuccess {
+                _operationState.value = OperationState.Done("\"${file.originalName}\" restored")
+                cachedAccount?.let { loadFiles(it, refreshStorage = false) }
+            }.onFailure { e ->
+                _operationState.value = OperationState.Failed(e.message ?: "Restore failed")
+            }
+        }
+    }
+
+    /** Moves selected items to trash (soft delete). */
     fun deleteSelected(account: GoogleSignInAccount) {
         val ids = selectedIds.value.toList()
         val items = _rawItems.value.filter { it.id in ids }
         selectedIds.value = emptySet()
         viewModelScope.launch {
             val client = DriveApiClient(getApplication(), account)
-            var deleted = 0
+            var trashed = 0
             items.forEach { file ->
-                runCatching { client.deleteFile(file.id) }.onSuccess { deleted++ }
+                runCatching { client.trashFile(file.id) }.onSuccess { trashed++ }
             }
             _rawItems.value = _rawItems.value.filter { it.id !in ids }
             _uiState.value = HomeUiState.Success(_rawItems.value)
-            _operationState.value = OperationState.Done("$deleted item(s) deleted")
+            _operationState.value = OperationState.Done("$trashed item(s) moved to trash")
         }
     }
 
