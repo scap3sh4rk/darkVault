@@ -64,11 +64,15 @@ private val LightVaultColorScheme = lightColorScheme(
 @Composable
 fun DarkVaultTheme(
     darkTheme: Boolean = true,
+    fontKey: String = "inter",
     content: @Composable () -> Unit
 ) {
+    val typography = androidx.compose.runtime.remember(fontKey) {
+        buildTypography(fontFromKey(fontKey).family)
+    }
     MaterialTheme(
         colorScheme = if (darkTheme) DarkVaultColorScheme else LightVaultColorScheme,
-        typography = DarkVaultTypography,
+        typography = typography,
         content = content
     )
 }

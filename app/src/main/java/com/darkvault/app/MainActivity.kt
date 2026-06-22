@@ -50,7 +50,16 @@ class MainActivity : AppCompatActivity() {
                 "LIGHT" -> false
                 else -> isSystemInDarkTheme()
             }
-            DarkVaultTheme(darkTheme = isDark) {
+            val fontKey by prefs.appFont.collectAsState(initial = "inter")
+            val screenshotEnabled by prefs.screenshotEnabled.collectAsState(initial = false)
+            androidx.compose.runtime.LaunchedEffect(screenshotEnabled) {
+                if (screenshotEnabled) {
+                    window.clearFlags(android.view.WindowManager.LayoutParams.FLAG_SECURE)
+                } else {
+                    window.addFlags(android.view.WindowManager.LayoutParams.FLAG_SECURE)
+                }
+            }
+            DarkVaultTheme(darkTheme = isDark, fontKey = fontKey) {
                 DarkVaultNavGraph(authViewModel)
             }
         }
@@ -86,15 +95,6 @@ class MainActivity : AppCompatActivity() {
     override fun onResume() {
         super.onResume()
         authViewModel.onAppForeground()
-        // Apply screenshot flag from DataStore (debug toggle can override FLAG_SECURE)
-        lifecycleScope.launch {
-            val screenshotEnabled = prefs.screenshotEnabled.first()
-            if (screenshotEnabled) {
-                window.clearFlags(android.view.WindowManager.LayoutParams.FLAG_SECURE)
-            } else {
-                window.addFlags(android.view.WindowManager.LayoutParams.FLAG_SECURE)
-            }
-        }
     }
 
     private fun observeAppLifecycle() { /* handled via onPause/onResume */ }
