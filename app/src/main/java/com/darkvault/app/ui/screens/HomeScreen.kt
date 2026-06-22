@@ -13,6 +13,7 @@ import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.shrinkVertically
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -119,10 +120,12 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.foundation.text.selection.SelectionContainer
 import com.darkvault.app.BuildConfig
+import com.darkvault.app.R
 import com.darkvault.app.VaultSession
 import com.darkvault.app.model.FilterType
 import com.darkvault.app.service.ConflictResolution
@@ -216,9 +219,10 @@ fun HomeScreen(
     // Task 6 — breadcrumb expansion state
     var breadcrumbExpanded by remember { mutableStateOf(false) }
 
-    // Task 9 — system back intercept for sub-folder navigation
-    BackHandler(enabled = homeViewModel.canGoBack) {
-        homeViewModel.navigateUp()
+    // Back intercept: clear selection first; if not selecting, go up one folder level
+    BackHandler(enabled = isSelectionMode || homeViewModel.canGoBack) {
+        if (isSelectionMode) homeViewModel.clearSelection()
+        else homeViewModel.navigateUp()
     }
 
     val filePicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
@@ -323,7 +327,15 @@ fun HomeScreen(
                             Text("${selectedIds.size} selected", style = MaterialTheme.typography.titleLarge, color = CyanPrimary)
                         } else {
                             Column {
-                                Text("darkVault", style = MaterialTheme.typography.titleLarge, color = CyanPrimary)
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Image(
+                                        painter = painterResource(id = R.drawable.icon),
+                                        contentDescription = null,
+                                        modifier = Modifier.size(22.dp)
+                                    )
+                                    Spacer(Modifier.width(6.dp))
+                                    Text("darkVault", style = MaterialTheme.typography.titleLarge, color = CyanPrimary)
+                                }
                                 if (folderStack.size <= 1) {
                                     currentAccount?.email?.let { email ->
                                         Text(
@@ -849,11 +861,20 @@ fun HomeScreen(
             } // end inner Column
             } // end PullToRefreshBox
 
-            // Minimal storage capsule at bottom — no text, just a thin fill bar
+            // Storage bar with percentage indicator
             storageInfo?.let { info ->
                 if (info.driveLimitBytes > 0) {
                     val driveFraction = (info.driveTotalUsedBytes.toFloat() / info.driveLimitBytes).coerceIn(0f, 1f)
                     val vaultFraction = (info.usedByVaultBytes.toFloat() / info.driveLimitBytes).coerceIn(0f, 1f)
+                    val drivePercent = (driveFraction * 100).toInt()
+                    Text(
+                        "$drivePercent%",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = VaultOutline,
+                        modifier = Modifier
+                            .align(Alignment.End)
+                            .padding(end = 40.dp, bottom = 2.dp)
+                    )
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()

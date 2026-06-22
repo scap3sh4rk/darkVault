@@ -77,10 +77,13 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.TextUnitType
+import androidx.compose.foundation.Image
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.fragment.app.FragmentActivity
 import com.darkvault.app.BuildConfig
+import com.darkvault.app.R
 import com.darkvault.app.crypto.BiometricHelper
 import com.darkvault.app.crypto.BiometricKeyManager
 import com.darkvault.app.crypto.CryptoManager
@@ -249,8 +252,6 @@ fun SettingsScreen(
     }
 
     val devOptionsEnabled by prefs.devOptionsEnabled.collectAsState(initial = true)
-    // Holds the value to write on biometric success; set before launching the prompt
-    var pendingDevToggleValue by remember { mutableStateOf(true) }
 
     // Biometric prompt for enrollment
     val biometricPrompt = remember(activity) {
@@ -270,29 +271,6 @@ fun SettingsScreen(
                 }
                 override fun onAuthenticationFailed() {
                     scope.launch { snackbarHost.showSnackbar("Biometric not recognized") }
-                }
-            }
-        )
-    }
-
-    // Biometric prompt for dev-options toggle — reads pendingDevToggleValue at callback time
-    val devToggleBiometricPrompt = remember(activity) {
-        BiometricPrompt(
-            activity,
-            ContextCompat.getMainExecutor(activity),
-            object : BiometricPrompt.AuthenticationCallback() {
-                override fun onAuthenticationSucceeded(result: BiometricPrompt.AuthenticationResult) {
-                    scope.launch { prefs.setDevOptionsEnabled(pendingDevToggleValue) }
-                }
-                override fun onAuthenticationError(errorCode: Int, errString: CharSequence) {
-                    if (errorCode != BiometricPrompt.ERROR_NEGATIVE_BUTTON &&
-                        errorCode != BiometricPrompt.ERROR_USER_CANCELED
-                    ) {
-                        scope.launch { snackbarHost.showSnackbar("Authentication failed: $errString") }
-                    }
-                }
-                override fun onAuthenticationFailed() {
-                    scope.launch { snackbarHost.showSnackbar("Fingerprint not recognized") }
                 }
             }
         )
@@ -339,11 +317,10 @@ fun SettingsScreen(
                         .fillMaxWidth()
                         .padding(horizontal = 20.dp, vertical = 20.dp)
                 ) {
-                    Icon(
-                        Icons.Outlined.Security,
+                    Image(
+                        painter = painterResource(id = R.drawable.icon),
                         contentDescription = null,
-                        tint = CyanPrimary,
-                        modifier = Modifier.size(40.dp)
+                        modifier = Modifier.size(56.dp)
                     )
                     Spacer(Modifier.height(8.dp))
                     Text(
@@ -886,19 +863,12 @@ fun SettingsScreen(
                             )
                         },
                         title = "Developer mode",
-                        subtitle = if (devOptionsEnabled) "On — fingerprint required to disable" else "Off — fingerprint required to enable"
+                        subtitle = if (devOptionsEnabled) "On" else "Off"
                     ) {
                         Switch(
                             checked = devOptionsEnabled,
                             onCheckedChange = {
-                                pendingDevToggleValue = !devOptionsEnabled
-                                val promptInfo = BiometricPrompt.PromptInfo.Builder()
-                                    .setTitle(if (devOptionsEnabled) "Disable developer mode" else "Enable developer mode")
-                                    .setSubtitle("Authenticate to continue")
-                                    .setNegativeButtonText("Cancel")
-                                    .setAllowedAuthenticators(BIOMETRIC_STRONG)
-                                    .build()
-                                devToggleBiometricPrompt.authenticate(promptInfo)
+                                scope.launch { prefs.setDevOptionsEnabled(!devOptionsEnabled) }
                             },
                             colors = SwitchDefaults.colors(
                                 checkedThumbColor = CyanPrimary,
