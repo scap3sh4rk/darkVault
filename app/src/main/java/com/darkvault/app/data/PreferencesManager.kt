@@ -44,6 +44,10 @@ class PreferencesManager(private val context: Context) {
         private val KEY_THUMBNAILS_ENABLED = booleanPreferencesKey("thumbnails_enabled")
         // Screenshot toggle (debug only; defaults to false so FLAG_SECURE is always on in production)
         val KEY_SCREENSHOT_ENABLED = booleanPreferencesKey("dev_screenshot_enabled")
+        // Developer mode kill switch (debug only; defaults to true)
+        private val KEY_DEV_OPTIONS_ENABLED = booleanPreferencesKey("dev_options_enabled")
+        // App font preference
+        private val KEY_FONT = stringPreferencesKey("app_font")
     }
 
     // ── Auth ──────────────────────────────────────────────────────────────
@@ -188,6 +192,20 @@ class PreferencesManager(private val context: Context) {
 
     suspend fun saveScreenshotEnabled(enabled: Boolean) {
         context.dataStore.edit { it[KEY_SCREENSHOT_ENABLED] = enabled }
+    }
+
+    // ── Developer mode toggle (debug only) ───────────────────────────────────
+    val devOptionsEnabled: Flow<Boolean> = context.dataStore.data.map { it[KEY_DEV_OPTIONS_ENABLED] ?: true }
+
+    suspend fun setDevOptionsEnabled(enabled: Boolean) {
+        context.dataStore.edit { it[KEY_DEV_OPTIONS_ENABLED] = enabled }
+    }
+
+    // ── Font preference ───────────────────────────────────────────────────────
+    val appFont: Flow<String> = context.dataStore.data.map { it[KEY_FONT] ?: "inter" }
+
+    suspend fun setAppFont(key: String) {
+        context.dataStore.edit { it[KEY_FONT] = key }
     }
 
     // ── Reset ─────────────────────────────────────────────────────────────
