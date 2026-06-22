@@ -452,6 +452,7 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
             try {
                 val password = String(cipher.doFinal(creds.second), Charsets.UTF_8)
                 _biometricAutoLaunch.value = false
+                _sessionPasswordEntered = true
                 // In AppLocked mode the DEK is still in memory — setActiveSession restores the
                 // password reference and we go straight to Home with no Drive call needed.
                 // resetSessionTimer=false: the session clock keeps running from last password entry
@@ -706,10 +707,10 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
 
         val client = DriveApiClient(getApplication(), account)
         var lastError: String? = null
-        repeat(3) { attempt ->
+        var succeeded = false
+        for (attempt in 0 until 3) {
             try {
-                val full = client.downloadVaultKeyFull(folderId)
-                    ?: return@repeat
+                val full = client.downloadVaultKeyFull(folderId) ?: continue
                 val oldBundle = VaultKeyBundle.fromJson(full.json)
 
                 val currentKek = CryptoManager.deriveKey(currentPassword, oldBundle.kekSalt).encoded
@@ -718,7 +719,7 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
                 } catch (e: javax.crypto.AEADBadTagException) {
                     java.util.Arrays.fill(currentKek, 0)
                     lastError = "Current password does not match vault.key — it may have been changed from another device"
-                    return@repeat
+                    break
                 } finally {
                     java.util.Arrays.fill(currentKek, 0)
                 }
@@ -737,8 +738,8 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
                 val updated = client.updateVaultKeyInPlace(newBundle.toJson(), full.fileId, full.modifiedTime)
                 if (updated) {
                     VaultSession.dek = dek
-                    lastError = null
-                    return@repeat
+                    succeeded = true
+                    break
                 }
                 Log.w(TAG, "vault.key conflict on attempt $attempt — retrying")
                 lastError = "vault.key was modified concurrently. Please try again."
@@ -747,7 +748,7 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
                 lastError = e.message
             }
         }
-        if (lastError != null) return@withContext PasswordChangeResult.Error(lastError!!)
+        if (!succeeded) return@withContext PasswordChangeResult.Error(lastError ?: "Password change failed")
 
         val (newHash, newSalt) = CryptoManager.hashPassword(newPassword)
         prefs.savePasswordHash(newHash, newSalt)
@@ -804,6 +805,7 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
                     prefs.setHasVaultKey(folderId)
                     prefs.clearFailedAttempts()
                     VaultSession.dek = dek
+                    _sessionPasswordEntered = true
                     setActiveSession(newPassword)
                     _authState.value = AuthState.Home
                     return@withContext PasswordChangeResult.Success
