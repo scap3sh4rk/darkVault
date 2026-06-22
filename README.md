@@ -1,6 +1,4 @@
-# darkVault
-
-**Your data, your drive, your rules.**
+<img width="1050" height="326" alt="darkVAult" src="https://github.com/user-attachments/assets/e4337d89-3262-4be3-8078-6f9dc76f5103" />
 
 darkVault is a security-first Android application designed to turn your Google Drive into a high-security, encrypted vault. In an era where data breaches are common, darkVault ensures that your most sensitive files—photos, videos, and documents—remain completely private, even from the cloud provider itself.
 
@@ -59,7 +57,7 @@ darkVault features a sleek, **Cyberpunk-inspired UI** with high-contrast cyan ac
 
 ---
 
-## 🚀 Getting Started
+## Getting Started
 1.  Sign in with your Google Account.
 2.  Set a strong Master Password.
 3.  **Crucial:** Save your Recovery Key in a safe place!
