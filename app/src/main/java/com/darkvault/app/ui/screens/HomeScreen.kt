@@ -203,6 +203,9 @@ fun HomeScreen(
     var showRenameDialog by remember { mutableStateOf<VaultFile?>(null) }
     var renameText by remember { mutableStateOf("") }
     var textPreviewFile by remember { mutableStateOf<VaultFile?>(null) }
+    var videoPreviewFile by remember { mutableStateOf<VaultFile?>(null) }
+    var audioPreviewFile by remember { mutableStateOf<VaultFile?>(null) }
+    var pdfPreviewFile by remember { mutableStateOf<VaultFile?>(null) }
 
     // Task 6 — breadcrumb expansion state
     var breadcrumbExpanded by remember { mutableStateOf(false) }
@@ -726,13 +729,17 @@ fun HomeScreen(
                                                         RecentFileCard(
                                                             file = file,
                                                             onClick = {
-                                                                val pwd = password; val acc = currentAccount
-                                                                if (HomeViewModel.isImageMime(file.originalMimeType)) {
-                                                                    previewFile = file
-                                                                } else if (pwd != null && acc != null) {
-                                                                    homeViewModel.downloadAndDecrypt(file, pwd, acc)
-                                                                } else {
-                                                                    scope.launch { snackbarHostState.showSnackbar("Vault is locked") }
+                                                                when (previewKind(file.originalMimeType)) {
+                                                                    PreviewKind.IMAGE -> previewFile = file
+                                                                    PreviewKind.VIDEO -> videoPreviewFile = file
+                                                                    PreviewKind.AUDIO -> audioPreviewFile = file
+                                                                    PreviewKind.PDF -> pdfPreviewFile = file
+                                                                    PreviewKind.TEXT -> textPreviewFile = file
+                                                                    PreviewKind.NONE -> {
+                                                                        val pwd = password; val acc = currentAccount
+                                                                        if (pwd != null && acc != null) homeViewModel.downloadAndDecrypt(file, pwd, acc)
+                                                                        else scope.launch { snackbarHostState.showSnackbar("Vault is locked") }
+                                                                    }
                                                                 }
                                                             }
                                                         )
@@ -751,8 +758,17 @@ fun HomeScreen(
                                                     onToggleSelect = if (isSelectionMode) ({ homeViewModel.toggleSelection(item.id) }) else null
                                                 )
                                             } else {
-                                                val canImagePreview = HomeViewModel.isImageMime(item.originalMimeType)
-                                                val canTextPreview = isTextMime(item.originalMimeType)
+                                                val kind = previewKind(item.originalMimeType)
+                                                val openPreview: () -> Unit = {
+                                                    when (kind) {
+                                                        PreviewKind.IMAGE -> previewFile = item
+                                                        PreviewKind.VIDEO -> videoPreviewFile = item
+                                                        PreviewKind.AUDIO -> audioPreviewFile = item
+                                                        PreviewKind.PDF -> pdfPreviewFile = item
+                                                        PreviewKind.TEXT -> textPreviewFile = item
+                                                        PreviewKind.NONE -> showFileInfo = item
+                                                    }
+                                                }
                                                 VaultFileCard(
                                                     file = item,
                                                     onDownload = {
@@ -761,13 +777,8 @@ fun HomeScreen(
                                                         else scope.launch { snackbarHostState.showSnackbar("Vault is locked") }
                                                     },
                                                     onDelete = { fileToDelete = item },
-                                                    onPreview = if (canImagePreview) ({ previewFile = item }) else null,
-                                                    onClick = when {
-                                                        isSelectionMode -> null
-                                                        canImagePreview -> ({ previewFile = item })
-                                                        canTextPreview -> ({ textPreviewFile = item })
-                                                        else -> null
-                                                    },
+                                                    onPreview = if (kind != PreviewKind.NONE) openPreview else null,
+                                                    onClick = if (!isSelectionMode) openPreview else null,
                                                     onLongPress = if (!isSelectionMode) ({ longPressFile = item }) else null,
                                                     isSelected = item.id in selectedIds,
                                                     onToggleSelect = if (isSelectionMode) ({ homeViewModel.toggleSelection(item.id) }) else null,
@@ -798,10 +809,13 @@ fun HomeScreen(
                                                     when {
                                                         isSelectionMode -> homeViewModel.toggleSelection(item.id)
                                                         item.isFolder -> homeViewModel.openFolder(item)
-                                                        HomeViewModel.isImageMime(item.originalMimeType) -> previewFile = item
-                                                        else -> {
-                                                            val pwd = password; val acc = currentAccount
-                                                            if (pwd != null && acc != null) homeViewModel.downloadAndDecrypt(item, pwd, acc)
+                                                        else -> when (previewKind(item.originalMimeType)) {
+                                                            PreviewKind.IMAGE -> previewFile = item
+                                                            PreviewKind.VIDEO -> videoPreviewFile = item
+                                                            PreviewKind.AUDIO -> audioPreviewFile = item
+                                                            PreviewKind.PDF -> pdfPreviewFile = item
+                                                            PreviewKind.TEXT -> textPreviewFile = item
+                                                            PreviewKind.NONE -> showFileInfo = item
                                                         }
                                                     }
                                                 },
@@ -1022,6 +1036,42 @@ fun HomeScreen(
         )
     }
 
+    // ── Video preview dialog ───────────────────────────────────────────────────
+
+    videoPreviewFile?.let { file ->
+        VideoPreviewDialog(
+            file = file,
+            homeViewModel = homeViewModel,
+            password = password,
+            account = currentAccount,
+            onDismiss = { videoPreviewFile = null }
+        )
+    }
+
+    // ── Audio preview dialog ───────────────────────────────────────────────────
+
+    audioPreviewFile?.let { file ->
+        AudioPreviewDialog(
+            file = file,
+            homeViewModel = homeViewModel,
+            password = password,
+            account = currentAccount,
+            onDismiss = { audioPreviewFile = null }
+        )
+    }
+
+    // ── PDF preview dialog ─────────────────────────────────────────────────────
+
+    pdfPreviewFile?.let { file ->
+        PdfPreviewDialog(
+            file = file,
+            homeViewModel = homeViewModel,
+            password = password,
+            account = currentAccount,
+            onDismiss = { pdfPreviewFile = null }
+        )
+    }
+
     // ── Long-press quick action bottom sheet ──────────────────────────────────────
     longPressFile?.let { file ->
         AlertDialog(
@@ -1030,6 +1080,19 @@ fun HomeScreen(
             title = { Text(file.originalName, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis) },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    val previewAction: (() -> Unit)? = when (previewKind(file.originalMimeType)) {
+                        PreviewKind.IMAGE -> { { previewFile = file; longPressFile = null } }
+                        PreviewKind.VIDEO -> { { videoPreviewFile = file; longPressFile = null } }
+                        PreviewKind.AUDIO -> { { audioPreviewFile = file; longPressFile = null } }
+                        PreviewKind.PDF -> { { pdfPreviewFile = file; longPressFile = null } }
+                        PreviewKind.TEXT -> { { textPreviewFile = file; longPressFile = null } }
+                        PreviewKind.NONE -> null
+                    }
+                    previewAction?.let { action ->
+                        TextButton(onClick = action, modifier = Modifier.fillMaxWidth()) {
+                            Text("Preview", color = CyanPrimary)
+                        }
+                    }
                     TextButton(
                         onClick = {
                             longPressFile = null
@@ -1375,9 +1438,25 @@ private fun ImagePreviewDialog(
                     error != null -> Text(error!!, color = MaterialTheme.colorScheme.error)
                     imageBytes != null -> {
                         val bmp = remember(imageBytes) {
-                            try {
-                                android.graphics.BitmapFactory.decodeByteArray(imageBytes, 0, imageBytes!!.size)
-                            } catch (_: Exception) { null }
+                            val bytes = imageBytes ?: return@remember null
+                            val mime = file.originalMimeType.lowercase()
+                            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.P &&
+                                (mime == "image/heic" || mime == "image/heif" || mime == "image/avif")) {
+                                try {
+                                    val source = android.graphics.ImageDecoder.createSource(
+                                        java.nio.ByteBuffer.wrap(bytes)
+                                    )
+                                    android.graphics.ImageDecoder.decodeBitmap(source) { decoder, _, _ ->
+                                        decoder.allocator = android.graphics.ImageDecoder.ALLOCATOR_SOFTWARE
+                                    }
+                                } catch (_: Exception) {
+                                    try { android.graphics.BitmapFactory.decodeByteArray(bytes, 0, bytes.size) }
+                                    catch (_: Exception) { null }
+                                }
+                            } else {
+                                try { android.graphics.BitmapFactory.decodeByteArray(bytes, 0, bytes.size) }
+                                catch (_: Exception) { null }
+                            }
                         }
                         if (bmp != null) {
                             val transformState = rememberTransformableState { zoomChange, panChange, _ ->
@@ -1451,10 +1530,25 @@ private fun InfoRow(label: String, value: String) {
 
 private fun isTextMime(mime: String): Boolean =
     mime.startsWith("text/") ||
-    mime == "application/json" ||
-    mime == "application/xml" ||
-    mime == "application/xhtml+xml" ||
-    mime == "application/javascript"
+    mime in setOf(
+        "application/json", "application/xml", "application/xhtml+xml",
+        "application/javascript", "application/x-javascript",
+        "application/typescript", "application/x-sh", "application/x-python-code",
+        "application/x-yaml", "application/yaml", "application/toml",
+        "application/x-httpd-php", "application/x-ruby", "application/graphql",
+        "application/ld+json", "application/manifest+json"
+    )
+
+private enum class PreviewKind { IMAGE, VIDEO, AUDIO, PDF, TEXT, NONE }
+
+private fun previewKind(mime: String): PreviewKind = when {
+    HomeViewModel.isImageMime(mime) -> PreviewKind.IMAGE
+    mime.startsWith("video/") -> PreviewKind.VIDEO
+    mime.startsWith("audio/") -> PreviewKind.AUDIO
+    mime == "application/pdf" -> PreviewKind.PDF
+    isTextMime(mime) -> PreviewKind.TEXT
+    else -> PreviewKind.NONE
+}
 
 // ── Text preview dialog ───────────────────────────────────────────────────────
 

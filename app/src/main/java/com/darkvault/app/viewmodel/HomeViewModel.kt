@@ -740,7 +740,8 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     // ── MIME type helpers ──────────────────────────────────────────────────
 
     companion object {
-        fun isImageMime(mime: String) = mime.startsWith("image/")
+        fun isImageMime(mime: String) = mime.startsWith("image/") ||
+            mime == "image/heic" || mime == "image/heif" || mime == "image/avif"
         fun isVideoMime(mime: String) = mime.startsWith("video/")
         fun isAudioMime(mime: String) = mime.startsWith("audio/")
     }
