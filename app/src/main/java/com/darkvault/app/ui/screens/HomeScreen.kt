@@ -1,6 +1,5 @@
 package com.darkvault.app.ui.screens
 
-import android.app.Activity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
@@ -34,13 +33,13 @@ import androidx.compose.material.icons.outlined.DeleteSweep
 import androidx.compose.material.icons.outlined.Download
 import androidx.compose.material.icons.outlined.FolderZip
 import androidx.compose.material.icons.outlined.InsertDriveFile
+import androidx.compose.material.icons.outlined.Delete
+import androidx.compose.material.icons.outlined.MoreVert
 import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.SelectAll
-import androidx.compose.material.icons.outlined.AccountCircle
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.Sort
-import androidx.compose.material.icons.outlined.SwitchAccount
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -74,7 +73,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -93,6 +94,7 @@ import com.darkvault.app.ui.theme.CyanPrimary
 import com.darkvault.app.ui.theme.VaultBackground
 import com.darkvault.app.ui.theme.VaultOutline
 import com.darkvault.app.ui.theme.VaultSurfaceVariant
+import com.darkvault.app.BuildConfig
 import com.darkvault.app.VaultSession
 import com.darkvault.app.viewmodel.AuthViewModel
 import com.darkvault.app.viewmodel.HomeUiState
@@ -100,8 +102,6 @@ import com.darkvault.app.viewmodel.HomeViewModel
 import com.darkvault.app.viewmodel.OperationState
 import com.google.android.gms.auth.api.signin.GoogleSignIn
 import com.google.android.gms.auth.api.signin.GoogleSignInAccount
-import com.google.android.gms.auth.api.signin.GoogleSignInOptions
-import com.google.android.gms.common.api.Scope
 import kotlinx.coroutines.launch
 
 @Suppress("DEPRECATION")
@@ -110,11 +110,14 @@ import kotlinx.coroutines.launch
 fun HomeScreen(
     authViewModel: AuthViewModel,
     homeViewModel: HomeViewModel = viewModel(),
-    onNavigateToSettings: () -> Unit
+    onNavigateToSettings: () -> Unit,
+    onNavigateToTrash: () -> Unit = {},
+    onNavigateToDebugPanel: () -> Unit = {}
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
+    val clipboardManager = LocalClipboardManager.current
 
     val password by authViewModel.masterPassword.collectAsState()
     val uiState by homeViewModel.uiState.collectAsState()
@@ -132,60 +135,18 @@ fun HomeScreen(
     val recoveryKeyToShow by authViewModel.recoveryKey.collectAsState()
 
     val isSelectionMode = selectedIds.isNotEmpty()
+    val vaultFolderId by authViewModel.vaultFolderId.collectAsState()
 
-    var currentAccount by remember { mutableStateOf(GoogleSignIn.getLastSignedInAccount(context)) }
+    val currentAccount = remember { GoogleSignIn.getLastSignedInAccount(context) }
     var fileToDelete by remember { mutableStateOf<VaultFile?>(null) }
-    var fileToPermDelete by remember { mutableStateOf<VaultFile?>(null) } // Task 3: permanent delete
+    var fileToPermDelete by remember { mutableStateOf<VaultFile?>(null) }
     var showUploadMenu by remember { mutableStateOf(false) }
     var showSortMenu by remember { mutableStateOf(false) }
     var showSearch by remember { mutableStateOf(false) }
     var showDeleteSelected by remember { mutableStateOf(false) }
-    var showAccountMenu by remember { mutableStateOf(false) }
 
-    // Preview state
     var previewFile by remember { mutableStateOf<VaultFile?>(null) }
-
-    val gso = remember {
-        GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
-            .requestEmail()
-            .requestScopes(Scope("https://www.googleapis.com/auth/drive.file"))
-            .build()
-    }
-    val googleClient = remember { GoogleSignIn.getClient(context, gso) }
-
-    val signInLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
-        if (result.resultCode == Activity.RESULT_OK) {
-            GoogleSignIn.getSignedInAccountFromIntent(result.data)
-                .addOnSuccessListener { account ->
-                    // Clear stale DEK so LaunchedEffect reloads it from the new account's vault.key
-                    VaultSession.clearDek()
-                    currentAccount = account
-                    homeViewModel.loadFiles(account)
-                }
-                .addOnFailureListener { e ->
-                    scope.launch { snackbarHostState.showSnackbar("Sign-in failed: ${e.message}") }
-                }
-        }
-    }
-
-    fun disconnectDrive() {
-        currentAccount = null
-        VaultSession.signedInAccount = null
-        VaultSession.clearDek()
-        homeViewModel.clearDriveState()
-        googleClient.signOut()
-    }
-
-    fun switchAccount() {
-        // Clear local Drive state immediately, then sign out and open the account picker
-        currentAccount = null
-        VaultSession.signedInAccount = null
-        VaultSession.clearDek()
-        homeViewModel.clearDriveState()
-        googleClient.signOut().addOnCompleteListener {
-            signInLauncher.launch(googleClient.signInIntent)
-        }
-    }
+    var showMoreMenu by remember { mutableStateOf(false) }
 
     val filePicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
         val acc = currentAccount; val pwd = password
@@ -205,14 +166,13 @@ fun HomeScreen(
         currentAccount?.let { homeViewModel.loadFiles(it) }
     }
 
-    // Wire DEK loading to sign-in: once the vault root folder is known and we're signed in,
-    // load (or create for first-time) the DEK from vault.key. Skip if DEK already in session.
-    LaunchedEffect(currentAccount, folderStack) {
+    // Retry DEK loading when online after an offline unlock (DEK not loaded from vault.key).
+    LaunchedEffect(currentAccount, vaultFolderId) {
         val acc = currentAccount ?: return@LaunchedEffect
-        val rootId = folderStack.firstOrNull()?.id ?: return@LaunchedEffect
+        val folderId = vaultFolderId ?: return@LaunchedEffect
         val pwd = password ?: return@LaunchedEffect
         if (VaultSession.dek == null) {
-            authViewModel.loadOrCreateDek(pwd, rootId, acc)
+            authViewModel.loadOrCreateDek(pwd, folderId, acc)
         }
     }
 
@@ -258,6 +218,14 @@ fun HomeScreen(
                 TextButton(onClick = { authViewModel.clearRecoveryKey() }) {
                     Text("I have saved it", color = CyanPrimary)
                 }
+            },
+            dismissButton = {
+                TextButton(onClick = {
+                    clipboardManager.setText(AnnotatedString(key))
+                    scope.launch { snackbarHostState.showSnackbar("Recovery key copied to clipboard") }
+                }) {
+                    Text("Copy", color = CyanPrimary)
+                }
             }
         )
     }
@@ -299,6 +267,16 @@ fun HomeScreen(
                                             }
                                         }
                                     }
+                                } else {
+                                    currentAccount?.email?.let { email ->
+                                        Text(
+                                            email,
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = VaultOutline,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
+                                    }
                                 }
                             }
                         }
@@ -322,86 +300,74 @@ fun HomeScreen(
                                 Icon(Icons.Outlined.Close, "Cancel selection", tint = CyanPrimary)
                             }
                         } else {
-                            if (currentAccount != null) {
-                                IconButton(onClick = { showSearch = !showSearch }) {
-                                    Icon(if (showSearch) Icons.Outlined.Close else Icons.Outlined.Search, "Search", tint = CyanPrimary)
+                            IconButton(onClick = { showSearch = !showSearch }) {
+                                Icon(if (showSearch) Icons.Outlined.Close else Icons.Outlined.Search, "Search", tint = CyanPrimary)
+                            }
+                            Box {
+                                IconButton(onClick = { showSortMenu = true }) {
+                                    Icon(Icons.Outlined.Sort, "Sort", tint = CyanPrimary)
                                 }
-                                // Task 6: Export backup button
-                                IconButton(onClick = {
-                                    val pwd = password; val acc = currentAccount
-                                    if (pwd != null && acc != null) homeViewModel.exportVaultBackup(pwd, acc)
-                                    else scope.launch { snackbarHostState.showSnackbar("Vault is locked") }
-                                }) {
-                                    Icon(Icons.Outlined.FolderZip, "Export backup", tint = CyanPrimary)
-                                }
-                                Box {
-                                    IconButton(onClick = { showSortMenu = true }) {
-                                        Icon(Icons.Outlined.Sort, "Sort", tint = CyanPrimary)
-                                    }
-                                    DropdownMenu(expanded = showSortMenu, onDismissRequest = { showSortMenu = false }) {
-                                        SortOrder.entries.forEach { order ->
-                                            DropdownMenuItem(
-                                                text = {
-                                                    Text(
-                                                        order.label,
-                                                        color = if (sortOrder == order) CyanPrimary else MaterialTheme.colorScheme.onSurface
-                                                    )
-                                                },
-                                                onClick = {
-                                                    homeViewModel.sortOrder.value = order
-                                                    showSortMenu = false
-                                                }
-                                            )
-                                        }
-                                    }
-                                }
-                                IconButton(onClick = { currentAccount?.let { homeViewModel.loadFiles(it) } }) {
-                                    Icon(Icons.Outlined.Refresh, "Refresh", tint = CyanPrimary)
-                                }
-                                // Account menu
-                                Box {
-                                    IconButton(onClick = { showAccountMenu = true }) {
-                                        Icon(Icons.Outlined.AccountCircle, "Account", tint = CyanPrimary)
-                                    }
-                                    DropdownMenu(
-                                        expanded = showAccountMenu,
-                                        onDismissRequest = { showAccountMenu = false }
-                                    ) {
-                                        // Account email header (non-interactive)
-                                        currentAccount?.email?.let { email ->
-                                            DropdownMenuItem(
-                                                text = {
-                                                    Text(
-                                                        email,
-                                                        style = MaterialTheme.typography.labelSmall,
-                                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                                    )
-                                                },
-                                                onClick = {},
-                                                enabled = false
-                                            )
-                                        }
+                                DropdownMenu(expanded = showSortMenu, onDismissRequest = { showSortMenu = false }) {
+                                    SortOrder.entries.forEach { order ->
                                         DropdownMenuItem(
-                                            text = { Text("Switch account") },
-                                            leadingIcon = { Icon(Icons.Outlined.SwitchAccount, null) },
+                                            text = {
+                                                Text(
+                                                    order.label,
+                                                    color = if (sortOrder == order) CyanPrimary else MaterialTheme.colorScheme.onSurface
+                                                )
+                                            },
                                             onClick = {
-                                                showAccountMenu = false
-                                                switchAccount()
-                                            }
-                                        )
-                                        DropdownMenuItem(
-                                            text = { Text("Disconnect Drive", color = MaterialTheme.colorScheme.error) },
-                                            leadingIcon = { Icon(Icons.Outlined.Close, null, tint = MaterialTheme.colorScheme.error) },
-                                            onClick = {
-                                                showAccountMenu = false
-                                                disconnectDrive()
+                                                homeViewModel.sortOrder.value = order
+                                                showSortMenu = false
                                             }
                                         )
                                     }
                                 }
                             }
-                            IconButton(onClick = onNavigateToSettings) {
-                                Icon(Icons.Outlined.Settings, "Settings", tint = CyanPrimary)
+                            IconButton(onClick = { currentAccount?.let { homeViewModel.loadFiles(it) } }) {
+                                Icon(Icons.Outlined.Refresh, "Refresh", tint = CyanPrimary)
+                            }
+                            Box {
+                                IconButton(onClick = { showMoreMenu = true }) {
+                                    Icon(Icons.Outlined.MoreVert, "More options", tint = CyanPrimary)
+                                }
+                                DropdownMenu(expanded = showMoreMenu, onDismissRequest = { showMoreMenu = false }) {
+                                    DropdownMenuItem(
+                                        text = { Text("Export backup") },
+                                        leadingIcon = { Icon(Icons.Outlined.FolderZip, null) },
+                                        onClick = {
+                                            showMoreMenu = false
+                                            val pwd = password; val acc = currentAccount
+                                            if (pwd != null && acc != null) homeViewModel.exportVaultBackup(pwd, acc)
+                                            else scope.launch { snackbarHostState.showSnackbar("Vault is locked") }
+                                        }
+                                    )
+                                    DropdownMenuItem(
+                                        text = { Text("View trash") },
+                                        leadingIcon = { Icon(Icons.Outlined.Delete, null) },
+                                        onClick = {
+                                            showMoreMenu = false
+                                            onNavigateToTrash()
+                                        }
+                                    )
+                                    DropdownMenuItem(
+                                        text = { Text("Settings") },
+                                        leadingIcon = { Icon(Icons.Outlined.Settings, null) },
+                                        onClick = {
+                                            showMoreMenu = false
+                                            onNavigateToSettings()
+                                        }
+                                    )
+                                    if (BuildConfig.DEBUG) {
+                                        DropdownMenuItem(
+                                            text = { Text("Developer Options") },
+                                            onClick = {
+                                                showMoreMenu = false
+                                                onNavigateToDebugPanel()
+                                            }
+                                        )
+                                    }
+                                }
                             }
                         }
                     },
@@ -448,12 +414,20 @@ fun HomeScreen(
                         DropdownMenuItem(
                             text = { Text("Upload files") },
                             leadingIcon = { Icon(Icons.Outlined.InsertDriveFile, null) },
-                            onClick = { showUploadMenu = false; filePicker.launch(arrayOf("*/*")) }
+                            onClick = {
+                                showUploadMenu = false
+                                authViewModel.suppressNextLock()
+                                filePicker.launch(arrayOf("*/*"))
+                            }
                         )
                         DropdownMenuItem(
                             text = { Text("Upload folder") },
                             leadingIcon = { Icon(Icons.Outlined.CreateNewFolder, null) },
-                            onClick = { showUploadMenu = false; folderPicker.launch(null) }
+                            onClick = {
+                                showUploadMenu = false
+                                authViewModel.suppressNextLock()
+                                folderPicker.launch(null)
+                            }
                         )
                     }
                 }
@@ -495,18 +469,12 @@ fun HomeScreen(
                 }
             }
 
-            if (currentAccount == null) {
-                ConnectDriveSection(
-                    onSignIn = { signInLauncher.launch(googleClient.signInIntent) },
-                    modifier = Modifier.fillMaxSize().padding(24.dp)
-                )
-            } else {
-                // Filter chips
-                FilterChipRow(
-                    selected = filterType,
-                    onSelect = { homeViewModel.filterType.value = it },
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
-                )
+            // Filter chips
+            FilterChipRow(
+                selected = filterType,
+                onSelect = { homeViewModel.filterType.value = it },
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
+            )
 
                 // Task 7: Last synced indicator
                 if (lastSynced > 0) {
@@ -595,7 +563,6 @@ fun HomeScreen(
                                         )
                                     } else {
                                         val canPreview = HomeViewModel.isImageMime(item.originalMimeType)
-                                        val onPreviewAction: (() -> Unit)? = if (canPreview) ({ previewFile = item }) else null
                                         VaultFileCard(
                                             file = item,
                                             onDownload = {
@@ -604,7 +571,8 @@ fun HomeScreen(
                                                 else scope.launch { snackbarHostState.showSnackbar("Vault is locked") }
                                             },
                                             onDelete = { fileToDelete = item },
-                                            onPreview = onPreviewAction,
+                                            onPreview = if (canPreview) ({ previewFile = item }) else null,
+                                            onClick = if (canPreview && !isSelectionMode) ({ previewFile = item }) else null,
                                             isSelected = item.id in selectedIds,
                                             onToggleSelect = if (isSelectionMode) ({ homeViewModel.toggleSelection(item.id) }) else null
                                         )
@@ -625,7 +593,6 @@ fun HomeScreen(
                     }
                     else -> Unit
                 }
-            }
         }
     }
 
@@ -757,27 +724,6 @@ private fun RecentFileCard(
                 overflow = TextOverflow.Ellipsis
             )
         }
-    }
-}
-
-// ── Connect Drive section ──────────────────────────────────────────────────────
-
-@Composable
-private fun ConnectDriveSection(onSignIn: () -> Unit, modifier: Modifier = Modifier) {
-    Column(
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center,
-        modifier = modifier
-    ) {
-        Text("Connect Google Drive", style = MaterialTheme.typography.headlineSmall, color = MaterialTheme.colorScheme.onBackground)
-        Spacer(Modifier.height(12.dp))
-        Text(
-            "darkVault stores encrypted files in your Drive.\nOnly you can decrypt them.",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-        Spacer(Modifier.height(32.dp))
-        CyberButton("Connect Google Drive", onClick = onSignIn, modifier = Modifier.fillMaxWidth())
     }
 }
 

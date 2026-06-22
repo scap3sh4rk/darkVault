@@ -87,6 +87,7 @@ object CryptoManager {
     }
 
     fun encryptWithDek(input: InputStream, output: OutputStream, dek: ByteArray) {
+        val t0 = System.currentTimeMillis()
         val compressed = ByteArrayOutputStream()
         GZIPOutputStream(compressed).use { gz -> input.copyTo(gz) }
         val compressedBytes = compressed.toByteArray()
@@ -95,12 +96,22 @@ object CryptoManager {
             output.write(VERSION_DEK_GCM.toInt())
             output.write(payload)
             output.flush()
+            if (android.os.Build.VERSION.SDK_INT >= 0) { // always true — keeps ref to BuildConfig
+                if (com.darkvault.app.BuildConfig.DEBUG) {
+                    com.darkvault.app.debug.DeveloperOptionsManager.recordCryptoOp(
+                        "encryptWithDek",
+                        compressedBytes.size.toLong(),
+                        System.currentTimeMillis() - t0
+                    )
+                }
+            }
         } finally {
             Arrays.fill(compressedBytes, 0)
         }
     }
 
     fun decrypt(input: InputStream, output: OutputStream, password: String, dek: ByteArray? = null) {
+        val t0 = System.currentTimeMillis()
         val firstByte = input.read()
         if (firstByte == -1) throw IOException("Empty vault file")
 
@@ -154,6 +165,13 @@ object CryptoManager {
                     Arrays.fill(iv, 0); Arrays.fill(salt, 0)
                 }
             }
+        }
+        if (com.darkvault.app.BuildConfig.DEBUG) {
+            com.darkvault.app.debug.DeveloperOptionsManager.recordCryptoOp(
+                "decrypt",
+                0L, // input size not known at this point
+                System.currentTimeMillis() - t0
+            )
         }
     }
 

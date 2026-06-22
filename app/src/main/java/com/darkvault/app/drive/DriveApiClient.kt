@@ -47,6 +47,9 @@ class DriveApiClient(
                 return block()
             } catch (e: Exception) {
                 attempt++
+                if (com.darkvault.app.BuildConfig.DEBUG) {
+                    com.darkvault.app.debug.DeveloperOptionsManager.onRetryAttempt(attempt)
+                }
                 if (attempt >= maxAttempts) throw e
                 val message = e.message ?: ""
                 if (!message.contains("429") && !message.contains("500") && !message.contains("503")) throw e
@@ -58,6 +61,30 @@ class DriveApiClient(
                 delayMs = minOf(delayMs * 2, 30_000L)
             }
         }
+    }
+
+    /**
+     * Executes an OkHttp call and records diagnostics in debug builds.
+     * Also injects fake 429 errors when requested by DeveloperOptionsManager.
+     */
+    private fun okHttpExecuteWithDiag(request: okhttp3.Request, endpoint: String): okhttp3.Response {
+        if (com.darkvault.app.BuildConfig.DEBUG) {
+            val mgr = com.darkvault.app.debug.DeveloperOptionsManager
+            if (mgr.inject429.value) {
+                mgr.inject429.value = false
+                error("Simulated 429 Too Many Requests")
+            }
+        }
+        val t0 = System.currentTimeMillis()
+        val response = http.newCall(request).execute()
+        if (com.darkvault.app.BuildConfig.DEBUG) {
+            com.darkvault.app.debug.DeveloperOptionsManager.recordDriveCall(
+                endpoint,
+                response.code,
+                System.currentTimeMillis() - t0
+            )
+        }
+        return response
     }
 
     // ── Folder management ──────────────────────────────────────────────────
@@ -154,12 +181,13 @@ class DriveApiClient(
             val t = token()
             val q = java.net.URLEncoder.encode("'$folderId' in parents and trashed=false", "UTF-8")
             val fields = "files(id,name,size,createdTime,modifiedTime,mimeType,appProperties)"
-            val resp = http.newCall(
+            val resp = okHttpExecuteWithDiag(
                 Request.Builder()
                     .url("https://www.googleapis.com/drive/v3/files?q=$q&fields=$fields&orderBy=name")
                     .addHeader("Authorization", "Bearer $t")
-                    .build()
-            ).execute()
+                    .build(),
+                "listItems"
+            )
 
             if (!resp.isSuccessful) {
                 error("listItems failed: ${resp.code}")
@@ -208,6 +236,42 @@ class DriveApiClient(
 
     // Kept for compatibility with existing callers
     suspend fun listFiles(folderId: String): List<VaultFile> = listItems(folderId)
+
+    /** Lists vault files (and folders) inside [folderId] that have been moved to Drive trash. */
+    suspend fun listTrashedVaultFiles(folderId: String): List<VaultFile> = withRetry {
+        withContext(Dispatchers.IO) {
+            val t = token()
+            val q = java.net.URLEncoder.encode("'$folderId' in parents and trashed=true", "UTF-8")
+            val fields = "files(id,name,size,createdTime,modifiedTime,mimeType,appProperties)"
+            val resp = http.newCall(
+                Request.Builder()
+                    .url("https://www.googleapis.com/drive/v3/files?q=$q&fields=$fields&orderBy=name")
+                    .addHeader("Authorization", "Bearer $t")
+                    .build()
+            ).execute()
+            if (!resp.isSuccessful) error("listTrashedVaultFiles failed: ${resp.code}")
+            val body = gson.fromJson(resp.body!!.string(), JsonObject::class.java)
+            val files = body.getAsJsonArray("files") ?: return@withContext emptyList()
+            files.mapNotNull { el ->
+                val obj = el.asJsonObject
+                val id = obj.get("id")?.asString ?: return@mapNotNull null
+                val name = obj.get("name")?.asString ?: return@mapNotNull null
+                val mimeType = obj.get("mimeType")?.asString ?: ""
+                val createdTime = obj.get("createdTime")?.asString ?: ""
+                val modifiedTime = obj.get("modifiedTime")?.asString ?: ""
+                if (mimeType == "application/vnd.google-apps.folder") {
+                    VaultFile(id = id, name = name, originalName = name, originalMimeType = mimeType,
+                        size = 0L, createdTime = createdTime, modifiedTime = modifiedTime, isFolder = true)
+                } else {
+                    val appProps = obj.getAsJsonObject("appProperties") ?: return@mapNotNull null
+                    val originalName = appProps.get("originalName")?.asString ?: return@mapNotNull null
+                    val originalMime = appProps.get("originalMimeType")?.asString ?: "application/octet-stream"
+                    VaultFile(id = id, name = name, originalName = originalName, originalMimeType = originalMime,
+                        size = obj.get("size")?.asLong ?: 0L, createdTime = createdTime, modifiedTime = modifiedTime, isFolder = false)
+                }
+            }
+        }
+    }
 
     // ── Duplicate / rename detection ───────────────────────────────────────
 
@@ -396,12 +460,13 @@ class DriveApiClient(
     ): ByteArray = withRetry {
         withContext(Dispatchers.IO) {
             val t = token()
-            val resp = http.newCall(
+            val resp = okHttpExecuteWithDiag(
                 Request.Builder()
                     .url("https://www.googleapis.com/drive/v3/files/$fileId?alt=media")
                     .addHeader("Authorization", "Bearer $t")
-                    .build()
-            ).execute()
+                    .build(),
+                "downloadFile/$fileId"
+            )
             if (!resp.isSuccessful) error("Download failed: ${resp.code}")
 
             val body = resp.body ?: error("Empty download response")

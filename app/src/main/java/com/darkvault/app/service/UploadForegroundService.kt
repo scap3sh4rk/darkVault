@@ -63,6 +63,12 @@ class UploadForegroundService : Service() {
 
             val client = DriveApiClient(this@UploadForegroundService, account)
 
+            // Debug diagnostics tracking
+            val activeJobIds = mutableListOf<String>()
+            val activeFileNames = mutableListOf<String>()
+            var failedCount = 0
+            var lastFailedError: String? = null
+
             while (UploadState.queue.isNotEmpty()) {
                 val job = UploadState.queue.poll() ?: break
                 UploadState.queueSize.value = UploadState.queue.size
@@ -73,7 +79,21 @@ class UploadForegroundService : Service() {
                     continue
                 }
 
+                activeJobIds.add(job.id)
+                activeFileNames.add(job.originalName)
+                if (com.darkvault.app.BuildConfig.DEBUG) {
+                    com.darkvault.app.debug.DeveloperOptionsManager.updateUploadDiagnostics(
+                        activeJobIds.toList(), activeFileNames.toList(), failedCount, lastFailedError
+                    )
+                }
+
                 try {
+                    // Fault injection: simulate failure if requested
+                    if (com.darkvault.app.BuildConfig.DEBUG &&
+                        com.darkvault.app.debug.DeveloperOptionsManager.simulateUploadFailure.value) {
+                        com.darkvault.app.debug.DeveloperOptionsManager.simulateUploadFailure.value = false
+                        throw Exception("Simulated upload failure (debug injection)")
+                    }
                     // Idempotent check — skip if this job was already completed on Drive
                     if (client.fileExistsByClientId(job.id, job.folderId)) {
                         UploadState.events.emit(UploadEvent.Completed(job.id, job.originalName))
@@ -132,6 +152,8 @@ class UploadForegroundService : Service() {
                     }
 
                     UploadState.active.value = null
+                    activeJobIds.remove(job.id)
+                    activeFileNames.remove(job.originalName)
 
                     if (wasRenamed) {
                         UploadState.events.emit(UploadEvent.Renamed(job.id, job.originalName, uploadName))
@@ -140,8 +162,17 @@ class UploadForegroundService : Service() {
 
                 } catch (e: Exception) {
                     UploadState.active.value = null
+                    activeJobIds.remove(job.id)
+                    activeFileNames.remove(job.originalName)
+                    failedCount++
+                    lastFailedError = e.message ?: "Upload failed"
                     UploadState.events.emit(
-                        UploadEvent.Failed(job.id, job.originalName, e.message ?: "Upload failed")
+                        UploadEvent.Failed(job.id, job.originalName, lastFailedError!!)
+                    )
+                }
+                if (com.darkvault.app.BuildConfig.DEBUG) {
+                    com.darkvault.app.debug.DeveloperOptionsManager.updateUploadDiagnostics(
+                        activeJobIds.toList(), activeFileNames.toList(), failedCount, lastFailedError
                     )
                 }
             }
