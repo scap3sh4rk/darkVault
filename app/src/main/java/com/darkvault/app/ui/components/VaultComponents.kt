@@ -34,6 +34,7 @@ import androidx.compose.material.icons.outlined.FolderOpen
 import androidx.compose.material.icons.outlined.Image
 import androidx.compose.material.icons.automirrored.outlined.InsertDriveFile
 import androidx.compose.material.icons.outlined.LockOpen
+import androidx.compose.material.icons.outlined.MoreVert
 import androidx.compose.material.icons.outlined.MusicNote
 import androidx.compose.material.icons.outlined.PauseCircleOutline
 import androidx.compose.material.icons.outlined.PictureAsPdf
@@ -193,6 +194,7 @@ fun VaultFileCard(
     onDownload: () -> Unit,
     onDelete: () -> Unit,
     onPreview: (() -> Unit)? = null,
+    onMoreActions: (() -> Unit)? = null,
     onLongPress: (() -> Unit)? = null,
     isSelected: Boolean = false,
     onToggleSelect: (() -> Unit)? = null,
@@ -293,11 +295,18 @@ fun VaultFileCard(
                     Icon(Icons.Outlined.Preview, "Preview", tint = CyanPrimary.copy(alpha = 0.8f))
                 }
             }
-            IconButton(onClick = onDownload) {
-                Icon(Icons.Outlined.Download, "Decrypt and save", tint = CyanPrimary)
-            }
-            IconButton(onClick = onDelete) {
-                Icon(Icons.Outlined.Delete, "Delete", tint = MaterialTheme.colorScheme.error)
+            if (onToggleSelect == null) {
+                IconButton(onClick = onDownload) {
+                    Icon(Icons.Outlined.Download, "Decrypt and save", tint = CyanPrimary)
+                }
+                IconButton(onClick = onDelete) {
+                    Icon(Icons.Outlined.Delete, "Delete", tint = MaterialTheme.colorScheme.error)
+                }
+                if (onMoreActions != null) {
+                    IconButton(onClick = onMoreActions) {
+                        Icon(Icons.Outlined.MoreVert, "More actions", tint = CyanPrimary.copy(alpha = 0.6f))
+                    }
+                }
             }
         }
     }
@@ -310,6 +319,7 @@ fun VaultFolderCard(
     onDelete: () -> Unit,
     isSelected: Boolean = false,
     onToggleSelect: (() -> Unit)? = null,
+    onLongPress: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     val borderColor = if (isSelected) CyanPrimary else VaultOutline
@@ -321,7 +331,10 @@ fun VaultFolderCard(
         modifier = modifier
             .fillMaxWidth()
             .border(if (isSelected) 1.5.dp else 1.dp, borderColor, RoundedCornerShape(12.dp))
-            .clickable { if (onToggleSelect != null && isSelected) onToggleSelect() else onOpen() }
+            .combinedClickable(
+                onClick = { if (onToggleSelect != null) onToggleSelect() else onOpen() },
+                onLongClick = { onLongPress?.invoke() }
+            )
     ) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
@@ -363,8 +376,10 @@ fun VaultFolderCard(
                 )
             }
 
-            IconButton(onClick = onDelete) {
-                Icon(Icons.Outlined.Delete, "Delete", tint = MaterialTheme.colorScheme.error)
+            if (onToggleSelect == null) {
+                IconButton(onClick = onDelete) {
+                    Icon(Icons.Outlined.Delete, "Delete", tint = MaterialTheme.colorScheme.error)
+                }
             }
         }
     }

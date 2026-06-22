@@ -23,6 +23,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -59,8 +60,11 @@ import androidx.compose.material.icons.outlined.SelectAll
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.Sort
 import androidx.compose.material.icons.outlined.ViewList
+import androidx.compose.material.icons.outlined.ZoomIn
+import androidx.compose.material.icons.outlined.ZoomOut
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.BadgedBox
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Badge
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.material3.HorizontalDivider
@@ -127,7 +131,6 @@ import com.darkvault.app.ui.components.CyberButton
 import com.darkvault.app.ui.components.EmptySearchState
 import com.darkvault.app.ui.components.EmptyVaultState
 import com.darkvault.app.ui.components.FilterChipRow
-import com.darkvault.app.ui.components.StorageInfoCard
 import com.darkvault.app.ui.components.UploadProgressCard
 import com.darkvault.app.ui.components.VaultFileCard
 import com.darkvault.app.ui.components.VaultFolderCard
@@ -145,6 +148,9 @@ import com.darkvault.app.viewmodel.OperationState
 import com.darkvault.app.viewmodel.ViewLayout
 import com.google.android.gms.auth.api.signin.GoogleSignIn
 import com.google.android.gms.auth.api.signin.GoogleSignInAccount
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -755,7 +761,8 @@ fun HomeScreen(
                                                     onOpen = { homeViewModel.openFolder(item) },
                                                     onDelete = { fileToDelete = item },
                                                     isSelected = item.id in selectedIds,
-                                                    onToggleSelect = if (isSelectionMode) ({ homeViewModel.toggleSelection(item.id) }) else null
+                                                    onToggleSelect = if (isSelectionMode) ({ homeViewModel.toggleSelection(item.id) }) else null,
+                                                    onLongPress = { homeViewModel.toggleSelection(item.id) }
                                                 )
                                             } else {
                                                 val kind = previewKind(item.originalMimeType)
@@ -778,8 +785,9 @@ fun HomeScreen(
                                                     },
                                                     onDelete = { fileToDelete = item },
                                                     onPreview = if (kind != PreviewKind.NONE) openPreview else null,
+                                                    onMoreActions = { longPressFile = item },
                                                     onClick = if (!isSelectionMode) openPreview else null,
-                                                    onLongPress = if (!isSelectionMode) ({ longPressFile = item }) else null,
+                                                    onLongPress = { homeViewModel.toggleSelection(item.id) },
                                                     isSelected = item.id in selectedIds,
                                                     onToggleSelect = if (isSelectionMode) ({ homeViewModel.toggleSelection(item.id) }) else null,
                                                     showThumbnail = showThumbnails,
@@ -831,20 +839,42 @@ fun HomeScreen(
                         }
                     }
 
-                    // Storage info at bottom
-                    storageInfo?.let { info ->
-                        StorageInfoCard(
-                            usedByVault = info.usedByVaultBytes,
-                            driveTotalUsed = info.driveTotalUsedBytes,
-                            driveLimit = info.driveLimitBytes,
-                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
-                        )
-                    }
                 }
                 else -> Unit
             }
             } // end inner Column
             } // end PullToRefreshBox
+
+            // Minimal storage capsule at bottom — no text, just a thin fill bar
+            storageInfo?.let { info ->
+                if (info.driveLimitBytes > 0) {
+                    val driveFraction = (info.driveTotalUsedBytes.toFloat() / info.driveLimitBytes).coerceIn(0f, 1f)
+                    val vaultFraction = (info.usedByVaultBytes.toFloat() / info.driveLimitBytes).coerceIn(0f, 1f)
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 40.dp, vertical = 6.dp)
+                            .height(4.dp)
+                            .clip(RoundedCornerShape(2.dp))
+                            .background(VaultOutline.copy(alpha = 0.25f))
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxHeight()
+                                .fillMaxWidth(driveFraction)
+                                .clip(RoundedCornerShape(2.dp))
+                                .background(CyanPrimary.copy(alpha = 0.35f))
+                        )
+                        Box(
+                            modifier = Modifier
+                                .fillMaxHeight()
+                                .fillMaxWidth(vaultFraction)
+                                .clip(RoundedCornerShape(2.dp))
+                                .background(CyanPrimary)
+                        )
+                    }
+                }
+            }
         }
     }
 
@@ -1421,78 +1451,143 @@ private fun ImagePreviewDialog(
         loading = false
     }
 
-    AlertDialog(
+    Dialog(
         onDismissRequest = onDismiss,
-        title = {
-            Text(
-                file.originalName,
-                style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.onSurface,
-                maxLines = 1
-            )
-        },
-        text = {
-            Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxWidth().height(350.dp)) {
-                when {
-                    loading -> CircularProgressIndicator(color = CyanPrimary, strokeCap = StrokeCap.Round)
-                    error != null -> Text(error!!, color = MaterialTheme.colorScheme.error)
-                    imageBytes != null -> {
-                        val bmp = remember(imageBytes) {
-                            val bytes = imageBytes ?: return@remember null
-                            val mime = file.originalMimeType.lowercase()
-                            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.P &&
-                                (mime == "image/heic" || mime == "image/heif" || mime == "image/avif")) {
-                                try {
-                                    val source = android.graphics.ImageDecoder.createSource(
-                                        java.nio.ByteBuffer.wrap(bytes)
-                                    )
-                                    android.graphics.ImageDecoder.decodeBitmap(source) { decoder, _, _ ->
-                                        decoder.allocator = android.graphics.ImageDecoder.ALLOCATOR_SOFTWARE
+        properties = DialogProperties(usePlatformDefaultWidth = false)
+    ) {
+        Surface(
+            modifier = Modifier.fillMaxSize(),
+            color = Color.Black
+        ) {
+            Column(modifier = Modifier.fillMaxSize()) {
+                // Title bar
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(start = 16.dp, top = 8.dp, end = 4.dp, bottom = 8.dp)
+                ) {
+                    Text(
+                        file.originalName,
+                        modifier = Modifier.weight(1f),
+                        color = Color.White,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        style = MaterialTheme.typography.titleSmall
+                    )
+                    if (!loading && error == null) {
+                        Text(
+                            "${(scale * 100).toInt()}%",
+                            color = Color.White.copy(alpha = 0.6f),
+                            style = MaterialTheme.typography.bodySmall,
+                            modifier = Modifier.padding(end = 8.dp)
+                        )
+                    }
+                    IconButton(onClick = onDismiss) {
+                        Icon(Icons.Outlined.Close, "Close", tint = Color.White)
+                    }
+                }
+
+                // Image area
+                Box(
+                    contentAlignment = Alignment.Center,
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxWidth()
+                ) {
+                    when {
+                        loading -> CircularProgressIndicator(color = CyanPrimary, strokeCap = StrokeCap.Round)
+                        error != null -> Text(
+                            error!!,
+                            color = MaterialTheme.colorScheme.error,
+                            modifier = Modifier.padding(16.dp),
+                            textAlign = TextAlign.Center
+                        )
+                        imageBytes != null -> {
+                            val bmp = remember(imageBytes) {
+                                val bytes = imageBytes ?: return@remember null
+                                val mime = file.originalMimeType.lowercase()
+                                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.P &&
+                                    (mime == "image/heic" || mime == "image/heif" || mime == "image/avif")) {
+                                    try {
+                                        val source = android.graphics.ImageDecoder.createSource(
+                                            java.nio.ByteBuffer.wrap(bytes)
+                                        )
+                                        android.graphics.ImageDecoder.decodeBitmap(source) { decoder, _, _ ->
+                                            decoder.allocator = android.graphics.ImageDecoder.ALLOCATOR_SOFTWARE
+                                        }
+                                    } catch (_: Exception) {
+                                        try { android.graphics.BitmapFactory.decodeByteArray(bytes, 0, bytes.size) }
+                                        catch (_: Exception) { null }
                                     }
-                                } catch (_: Exception) {
+                                } else {
                                     try { android.graphics.BitmapFactory.decodeByteArray(bytes, 0, bytes.size) }
                                     catch (_: Exception) { null }
                                 }
+                            }
+                            if (bmp != null) {
+                                val transformState = rememberTransformableState { zoomChange, panChange, _ ->
+                                    scale = (scale * zoomChange).coerceIn(1f, 8f)
+                                    offset += panChange
+                                }
+                                androidx.compose.foundation.Image(
+                                    bitmap = bmp.asImageBitmap(),
+                                    contentDescription = file.originalName,
+                                    contentScale = ContentScale.Fit,
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .graphicsLayer(
+                                            scaleX = scale,
+                                            scaleY = scale,
+                                            translationX = offset.x,
+                                            translationY = offset.y
+                                        )
+                                        .transformable(state = transformState)
+                                        .pointerInput(Unit) {
+                                            detectTapGestures(onDoubleTap = {
+                                                if (scale > 1f) {
+                                                    scale = 1f
+                                                    offset = Offset.Zero
+                                                } else {
+                                                    scale = 2.5f
+                                                }
+                                            })
+                                        }
+                                )
                             } else {
-                                try { android.graphics.BitmapFactory.decodeByteArray(bytes, 0, bytes.size) }
-                                catch (_: Exception) { null }
+                                Text("Cannot decode image", color = MaterialTheme.colorScheme.error)
                             }
                         }
-                        if (bmp != null) {
-                            val transformState = rememberTransformableState { zoomChange, panChange, _ ->
-                                scale = (scale * zoomChange).coerceIn(1f, 5f)
-                                offset += panChange
-                            }
-                            androidx.compose.foundation.Image(
-                                bitmap = bmp.asImageBitmap(),
-                                contentDescription = file.originalName,
-                                contentScale = ContentScale.Fit,
-                                modifier = Modifier
-                                    .fillMaxSize()
-                                    .graphicsLayer(
-                                        scaleX = scale,
-                                        scaleY = scale,
-                                        translationX = offset.x,
-                                        translationY = offset.y
-                                    )
-                                    .transformable(state = transformState)
-                                    .pointerInput(Unit) {
-                                        detectTapGestures(onDoubleTap = {
-                                            scale = 1f
-                                            offset = Offset.Zero
-                                        })
-                                    }
-                            )
-                        } else {
-                            Text("Cannot decode image", color = MaterialTheme.colorScheme.error)
+                    }
+                }
+
+                // Zoom controls — only when image is loaded
+                if (!loading && error == null && imageBytes != null) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(Color.Black)
+                            .padding(horizontal = 8.dp, vertical = 4.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        IconButton(onClick = {
+                            scale = (scale / 1.4f).coerceAtLeast(1f)
+                            if (scale <= 1f) { scale = 1f; offset = Offset.Zero }
+                        }) {
+                            Icon(Icons.Outlined.ZoomOut, "Zoom out", tint = Color.White)
+                        }
+                        TextButton(onClick = { scale = 1f; offset = Offset.Zero }) {
+                            Text("Reset", color = CyanPrimary, style = MaterialTheme.typography.labelMedium)
+                        }
+                        IconButton(onClick = { scale = (scale * 1.4f).coerceAtMost(8f) }) {
+                            Icon(Icons.Outlined.ZoomIn, "Zoom in", tint = Color.White)
                         }
                     }
                 }
             }
-        },
-        confirmButton = { TextButton(onClick = onDismiss) { Text("Close") } },
-        containerColor = MaterialTheme.colorScheme.surfaceVariant
-    )
+        }
+    }
 }
 
 // ── Shimmer skeleton card ─────────────────────────────────────────────────────

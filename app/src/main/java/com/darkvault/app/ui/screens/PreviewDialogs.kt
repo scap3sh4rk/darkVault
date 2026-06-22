@@ -5,6 +5,8 @@ import android.media.MediaPlayer
 import android.os.ParcelFileDescriptor
 import android.widget.MediaController
 import android.widget.VideoView
+import androidx.compose.foundation.gestures.rememberTransformableState
+import androidx.compose.foundation.gestures.transformable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -18,11 +20,12 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.MusicNote
+import androidx.compose.material.icons.outlined.ZoomIn
+import androidx.compose.material.icons.outlined.ZoomOut
 import androidx.compose.material.icons.outlined.PauseCircleOutline
 import androidx.compose.material.icons.outlined.PlayCircleOutline
 import androidx.compose.material3.AlertDialog
@@ -46,7 +49,10 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -358,6 +364,8 @@ internal fun PdfPreviewDialog(
     var tempFile by remember { mutableStateOf<File?>(null) }
     var pages by remember { mutableStateOf<List<android.graphics.Bitmap>>(emptyList()) }
     var totalPageCount by remember { mutableStateOf(0) }
+    var scale by remember { mutableStateOf(1f) }
+    var offset by remember { mutableStateOf(Offset.Zero) }
 
     LaunchedEffect(file.id) {
         if (password == null || account == null) {
@@ -385,10 +393,10 @@ internal fun PdfPreviewDialog(
             val maxPages = minOf(renderer.pageCount, 20)
             for (i in 0 until maxPages) {
                 val page = renderer.openPage(i)
-                val scale = renderWidth.toFloat() / page.width
+                val pageScale = renderWidth.toFloat() / page.width
                 val bmp = android.graphics.Bitmap.createBitmap(
                     renderWidth,
-                    (page.height * scale).toInt(),
+                    (page.height * pageScale).toInt(),
                     android.graphics.Bitmap.Config.ARGB_8888
                 )
                 bmp.eraseColor(android.graphics.Color.WHITE)
@@ -412,6 +420,11 @@ internal fun PdfPreviewDialog(
         }
     }
 
+    val transformState = rememberTransformableState { zoomChange, panChange, _ ->
+        scale = (scale * zoomChange).coerceIn(1f, 4f)
+        offset += panChange
+    }
+
     Dialog(
         onDismissRequest = onDismiss,
         properties = DialogProperties(usePlatformDefaultWidth = false)
@@ -424,6 +437,7 @@ internal fun PdfPreviewDialog(
             color = MaterialTheme.colorScheme.surface
         ) {
             Column {
+                // Header
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     modifier = Modifier
@@ -439,7 +453,7 @@ internal fun PdfPreviewDialog(
                     )
                     if (!loading && error == null && totalPageCount > 0) {
                         Text(
-                            "${pages.size} of $totalPageCount pages",
+                            "${pages.size}/${totalPageCount}p  ${(scale * 100).toInt()}%",
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -449,8 +463,14 @@ internal fun PdfPreviewDialog(
                     }
                 }
                 HorizontalDivider()
+
+                // Zoomable content area
                 Box(
-                    modifier = Modifier.weight(1f),
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxWidth()
+                        .clipToBounds()
+                        .transformable(state = transformState),
                     contentAlignment = Alignment.Center
                 ) {
                     when {
@@ -473,29 +493,63 @@ internal fun PdfPreviewDialog(
                             "No pages",
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
-                        else -> LazyColumn(
-                            contentPadding = PaddingValues(16.dp),
-                            verticalArrangement = Arrangement.spacedBy(8.dp),
-                            modifier = Modifier.fillMaxSize()
+                        else -> Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .graphicsLayer {
+                                    scaleX = scale
+                                    scaleY = scale
+                                    translationX = offset.x
+                                    translationY = offset.y
+                                    transformOrigin = androidx.compose.ui.graphics.TransformOrigin(0.5f, 0f)
+                                },
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
-                            items(pages.size) { i ->
+                            Spacer(Modifier.height(8.dp))
+                            pages.forEachIndexed { i, bmp ->
                                 androidx.compose.foundation.Image(
-                                    bitmap = pages[i].asImageBitmap(),
+                                    bitmap = bmp.asImageBitmap(),
                                     contentDescription = "Page ${i + 1}",
                                     contentScale = ContentScale.FillWidth,
                                     modifier = Modifier.fillMaxWidth()
                                 )
-                                if (i == pages.size - 1 && totalPageCount > pages.size) {
-                                    Spacer(Modifier.height(8.dp))
-                                    Text(
-                                        "Showing first ${pages.size} of $totalPageCount pages",
-                                        style = MaterialTheme.typography.labelSmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        modifier = Modifier.fillMaxWidth(),
-                                        textAlign = TextAlign.Center
-                                    )
-                                }
                             }
+                            if (totalPageCount > pages.size) {
+                                Spacer(Modifier.height(4.dp))
+                                Text(
+                                    "Showing first ${pages.size} of $totalPageCount pages",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+                                    textAlign = TextAlign.Center
+                                )
+                            }
+                            Spacer(Modifier.height(8.dp))
+                        }
+                    }
+                }
+
+                // Zoom controls — only when pages are loaded
+                if (!loading && error == null && pages.isNotEmpty()) {
+                    HorizontalDivider()
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 8.dp, vertical = 4.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        IconButton(onClick = {
+                            scale = (scale / 1.3f).coerceAtLeast(1f)
+                            if (scale <= 1f) { scale = 1f; offset = Offset.Zero }
+                        }) {
+                            Icon(Icons.Outlined.ZoomOut, "Zoom out", tint = MaterialTheme.colorScheme.onSurface)
+                        }
+                        TextButton(onClick = { scale = 1f; offset = Offset.Zero }) {
+                            Text("Reset", color = CyanPrimary, style = MaterialTheme.typography.labelMedium)
+                        }
+                        IconButton(onClick = { scale = (scale * 1.3f).coerceAtMost(4f) }) {
+                            Icon(Icons.Outlined.ZoomIn, "Zoom in", tint = MaterialTheme.colorScheme.onSurface)
                         }
                     }
                 }
