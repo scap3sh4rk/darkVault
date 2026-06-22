@@ -6,6 +6,7 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.Image as ComposeImage
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -63,12 +64,14 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.darkvault.app.R
 import com.darkvault.app.model.FilterType
 import com.darkvault.app.model.VaultFile
 import com.darkvault.app.ui.theme.CyanPrimary
@@ -163,25 +166,30 @@ fun CyberButton(
 @Composable
 fun VaultLogo(modifier: Modifier = Modifier) {
     val pulse by rememberInfiniteTransition(label = "pulse").animateFloat(
-        initialValue = 0.6f,
+        initialValue = 0.8f,
         targetValue = 1f,
-        animationSpec = infiniteRepeatable(tween(1800), RepeatMode.Reverse),
+        animationSpec = infiniteRepeatable(tween(2000), RepeatMode.Reverse),
         label = "alpha"
     )
     Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = modifier) {
         Box(
             contentAlignment = Alignment.Center,
             modifier = Modifier
-                .size(80.dp)
-                .clip(RoundedCornerShape(20.dp))
-                .background(Brush.radialGradient(listOf(CyanPrimary.copy(alpha = pulse * 0.3f), VaultSurfaceVariant)))
-                .border(1.dp, Brush.linearGradient(listOf(CyanPrimary.copy(alpha = pulse), VaultOutline)), RoundedCornerShape(20.dp))
+                .size(100.dp)
+                .clip(RoundedCornerShape(24.dp))
+                .background(Brush.radialGradient(listOf(CyanPrimary.copy(alpha = 0.1f), Color.Transparent)))
+                .border(1.dp, CyanPrimary.copy(alpha = pulse * 0.5f), RoundedCornerShape(24.dp))
+                .padding(8.dp)
         ) {
-            Icon(Icons.Outlined.LockOpen, "darkVault", tint = CyanPrimary.copy(alpha = pulse), modifier = Modifier.size(40.dp))
+            ComposeImage(
+                painter = painterResource(id = R.drawable.ic_vault_logo),
+                contentDescription = "darkVault",
+                modifier = Modifier.fillMaxSize()
+            )
         }
-        Spacer(Modifier.height(12.dp))
+        Spacer(Modifier.height(16.dp))
         Text("darkVault", style = MaterialTheme.typography.headlineMedium, color = MaterialTheme.colorScheme.onBackground, fontFamily = FontFamily.Monospace)
-        Text("AES-256 ENCRYPTED", style = MaterialTheme.typography.labelSmall, color = CyanPrimary.copy(alpha = 0.7f), letterSpacing = 3.sp)
+        Text("SECURE CLOUD STORAGE", style = MaterialTheme.typography.labelSmall, color = CyanPrimary.copy(alpha = 0.7f), letterSpacing = 3.sp)
     }
 }
 
@@ -191,8 +199,8 @@ fun VaultLogo(modifier: Modifier = Modifier) {
 @Composable
 fun VaultFileCard(
     file: VaultFile,
-    onDownload: () -> Unit,
-    onDelete: () -> Unit,
+    onDownload: () -> Unit = {},
+    onDelete: () -> Unit = {},
     onPreview: (() -> Unit)? = null,
     onMoreActions: (() -> Unit)? = null,
     onLongPress: (() -> Unit)? = null,
@@ -249,18 +257,14 @@ fun VaultFileCard(
                 contentAlignment = Alignment.Center,
                 modifier = Modifier.size(40.dp).clip(RoundedCornerShape(10.dp)).background(VaultBackground)
             ) {
-                if (showThumbnail && HomeViewModel.isImageMime(file.originalMimeType)) {
-                    VaultThumbnailImage(
-                        file = file,
-                        password = thumbnailPassword,
-                        account = thumbnailAccount,
-                        showThumbnails = true,
-                        iconSize = 20.dp,
-                        modifier = Modifier.fillMaxSize()
-                    )
-                } else {
-                    Icon(fileTypeIcon(file.originalName, file.originalMimeType), null, tint = CyanPrimary, modifier = Modifier.size(20.dp))
-                }
+                VaultThumbnailImage(
+                    file = file,
+                    password = thumbnailPassword,
+                    account = thumbnailAccount,
+                    showThumbnails = showThumbnail,
+                    iconSize = 20.dp,
+                    modifier = Modifier.fillMaxSize()
+                )
             }
 
             Spacer(Modifier.width(12.dp))
@@ -290,22 +294,16 @@ fun VaultFileCard(
                 }
             }
 
-            if (onPreview != null) {
+            // In selection mode: show preview shortcut for previewable files
+            if (onToggleSelect != null && onPreview != null) {
                 IconButton(onClick = onPreview) {
                     Icon(Icons.Outlined.Preview, "Preview", tint = CyanPrimary.copy(alpha = 0.8f))
                 }
             }
-            if (onToggleSelect == null) {
-                IconButton(onClick = onDownload) {
-                    Icon(Icons.Outlined.Download, "Decrypt and save", tint = CyanPrimary)
-                }
-                IconButton(onClick = onDelete) {
-                    Icon(Icons.Outlined.Delete, "Delete", tint = MaterialTheme.colorScheme.error)
-                }
-                if (onMoreActions != null) {
-                    IconButton(onClick = onMoreActions) {
-                        Icon(Icons.Outlined.MoreVert, "More actions", tint = CyanPrimary.copy(alpha = 0.6f))
-                    }
+            // Normal mode: single 3-dot menu keeps the card minimal
+            if (onToggleSelect == null && onMoreActions != null) {
+                IconButton(onClick = onMoreActions) {
+                    Icon(Icons.Outlined.MoreVert, "More actions", tint = CyanPrimary.copy(alpha = 0.6f))
                 }
             }
         }
@@ -316,7 +314,8 @@ fun VaultFileCard(
 fun VaultFolderCard(
     folder: VaultFile,
     onOpen: () -> Unit,
-    onDelete: () -> Unit,
+    onDelete: () -> Unit = {},
+    onMoreActions: (() -> Unit)? = null,
     isSelected: Boolean = false,
     onToggleSelect: (() -> Unit)? = null,
     onLongPress: (() -> Unit)? = null,
@@ -376,9 +375,9 @@ fun VaultFolderCard(
                 )
             }
 
-            if (onToggleSelect == null) {
-                IconButton(onClick = onDelete) {
-                    Icon(Icons.Outlined.Delete, "Delete", tint = MaterialTheme.colorScheme.error)
+            if (onToggleSelect == null && onMoreActions != null) {
+                IconButton(onClick = onMoreActions) {
+                    Icon(Icons.Outlined.MoreVert, "More actions", tint = CyanPrimary.copy(alpha = 0.6f))
                 }
             }
         }
@@ -531,6 +530,14 @@ fun StorageInfoCard(
             if (driveLimit > 0) {
                 Spacer(Modifier.height(6.dp))
                 val fraction = (driveTotalUsed.toFloat() / driveLimit).coerceIn(0f, 1f)
+                Text(
+                    "${(fraction * 100).toInt()}%",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+                    modifier = Modifier.fillMaxWidth(),
+                    textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                )
+                Spacer(Modifier.height(2.dp))
                 LinearProgressIndicator(
                     progress = { fraction },
                     modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(4.dp)),
@@ -642,12 +649,11 @@ fun VaultThumbnailImage(
     modifier: Modifier = Modifier,
     iconSize: androidx.compose.ui.unit.Dp = 24.dp
 ) {
-    val isImageOrVideo = HomeViewModel.isImageMime(file.originalMimeType) ||
-            HomeViewModel.isVideoMime(file.originalMimeType)
-    val canShowThumb = showThumbnails && isImageOrVideo && !file.isFolder &&
+    val mime = file.originalMimeType
+    val canShowThumb = showThumbnails && !file.isFolder &&
             password != null && account != null &&
-            HomeViewModel.isImageMime(file.originalMimeType) &&
-            com.darkvault.app.VaultSession.dek != null
+            com.darkvault.app.VaultSession.dek != null &&
+            (HomeViewModel.isImageMime(mime) || HomeViewModel.isVideoMime(mime) || mime == "application/pdf")
 
     if (canShowThumb) {
         val context = androidx.compose.ui.platform.LocalContext.current

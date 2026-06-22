@@ -104,6 +104,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.rememberTransformableState
 import androidx.compose.foundation.gestures.transformable
@@ -199,7 +200,6 @@ fun HomeScreen(
     var fileToPermDelete by remember { mutableStateOf<VaultFile?>(null) }
     var showUploadMenu by remember { mutableStateOf(false) }
     var showSortMenu by remember { mutableStateOf(false) }
-    var showLayoutMenu by remember { mutableStateOf(false) }
     var showSearch by remember { mutableStateOf(false) }
     var showDeleteSelected by remember { mutableStateOf(false) }
     var previewFile by remember { mutableStateOf<VaultFile?>(null) }
@@ -404,41 +404,28 @@ fun HomeScreen(
                             IconButton(onClick = { currentAccount?.let { homeViewModel.loadFiles(it) } }) {
                                 Icon(Icons.Outlined.Refresh, "Refresh", tint = CyanPrimary)
                             }
-                            // Task 7 — layout toggle
-                            Box {
-                                IconButton(onClick = { showLayoutMenu = true }) {
-                                    Icon(
-                                        when (viewLayout) {
-                                            ViewLayout.LIST -> Icons.Outlined.ViewList
-                                            ViewLayout.GRID2 -> Icons.Outlined.GridView
-                                            ViewLayout.GRID3 -> Icons.Outlined.GridOn
-                                        },
-                                        "View layout", tint = CyanPrimary
-                                    )
-                                }
-                                DropdownMenu(expanded = showLayoutMenu, onDismissRequest = { showLayoutMenu = false }) {
-                                    DropdownMenuItem(
-                                        text = { Text("List view", color = if (viewLayout == ViewLayout.LIST) CyanPrimary else MaterialTheme.colorScheme.onSurface) },
-                                        leadingIcon = { Icon(Icons.Outlined.ViewList, null, tint = if (viewLayout == ViewLayout.LIST) CyanPrimary else MaterialTheme.colorScheme.onSurface) },
-                                        onClick = { homeViewModel.setViewLayout(ViewLayout.LIST); showLayoutMenu = false }
-                                    )
-                                    DropdownMenuItem(
-                                        text = { Text("Grid (2 columns)", color = if (viewLayout == ViewLayout.GRID2) CyanPrimary else MaterialTheme.colorScheme.onSurface) },
-                                        leadingIcon = { Icon(Icons.Outlined.GridView, null, tint = if (viewLayout == ViewLayout.GRID2) CyanPrimary else MaterialTheme.colorScheme.onSurface) },
-                                        onClick = { homeViewModel.setViewLayout(ViewLayout.GRID2); showLayoutMenu = false }
-                                    )
-                                    DropdownMenuItem(
-                                        text = { Text("Grid (3 columns)", color = if (viewLayout == ViewLayout.GRID3) CyanPrimary else MaterialTheme.colorScheme.onSurface) },
-                                        leadingIcon = { Icon(Icons.Outlined.GridOn, null, tint = if (viewLayout == ViewLayout.GRID3) CyanPrimary else MaterialTheme.colorScheme.onSurface) },
-                                        onClick = { homeViewModel.setViewLayout(ViewLayout.GRID3); showLayoutMenu = false }
-                                    )
-                                }
-                            }
                             Box {
                                 IconButton(onClick = { showMoreMenu = true }) {
                                     Icon(Icons.Outlined.MoreVert, "More options", tint = CyanPrimary)
                                 }
                                 DropdownMenu(expanded = showMoreMenu, onDismissRequest = { showMoreMenu = false }) {
+                                    // Layout options at top of menu
+                                    DropdownMenuItem(
+                                        text = { Text("List view", color = if (viewLayout == ViewLayout.LIST) CyanPrimary else MaterialTheme.colorScheme.onSurface) },
+                                        leadingIcon = { Icon(Icons.Outlined.ViewList, null, tint = if (viewLayout == ViewLayout.LIST) CyanPrimary else MaterialTheme.colorScheme.onSurface) },
+                                        onClick = { homeViewModel.setViewLayout(ViewLayout.LIST); showMoreMenu = false }
+                                    )
+                                    DropdownMenuItem(
+                                        text = { Text("Grid (2 columns)", color = if (viewLayout == ViewLayout.GRID2) CyanPrimary else MaterialTheme.colorScheme.onSurface) },
+                                        leadingIcon = { Icon(Icons.Outlined.GridView, null, tint = if (viewLayout == ViewLayout.GRID2) CyanPrimary else MaterialTheme.colorScheme.onSurface) },
+                                        onClick = { homeViewModel.setViewLayout(ViewLayout.GRID2); showMoreMenu = false }
+                                    )
+                                    DropdownMenuItem(
+                                        text = { Text("Grid (3 columns)", color = if (viewLayout == ViewLayout.GRID3) CyanPrimary else MaterialTheme.colorScheme.onSurface) },
+                                        leadingIcon = { Icon(Icons.Outlined.GridOn, null, tint = if (viewLayout == ViewLayout.GRID3) CyanPrimary else MaterialTheme.colorScheme.onSurface) },
+                                        onClick = { homeViewModel.setViewLayout(ViewLayout.GRID3); showMoreMenu = false }
+                                    )
+                                    HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
                                     DropdownMenuItem(
                                         text = { Text("Export backup") },
                                         leadingIcon = { Icon(Icons.Outlined.FolderZip, null) },
@@ -734,20 +721,29 @@ fun HomeScreen(
                                                     items(recentItems, key = { "recent_${it.id}" }) { file ->
                                                         RecentFileCard(
                                                             file = file,
+                                                            isSelected = file.id in selectedIds,
+                                                            showThumbnail = showThumbnails,
+                                                            thumbnailPassword = password,
+                                                            thumbnailAccount = currentAccount,
                                                             onClick = {
-                                                                when (previewKind(file.originalMimeType)) {
-                                                                    PreviewKind.IMAGE -> previewFile = file
-                                                                    PreviewKind.VIDEO -> videoPreviewFile = file
-                                                                    PreviewKind.AUDIO -> audioPreviewFile = file
-                                                                    PreviewKind.PDF -> pdfPreviewFile = file
-                                                                    PreviewKind.TEXT -> textPreviewFile = file
-                                                                    PreviewKind.NONE -> {
-                                                                        val pwd = password; val acc = currentAccount
-                                                                        if (pwd != null && acc != null) homeViewModel.downloadAndDecrypt(file, pwd, acc)
-                                                                        else scope.launch { snackbarHostState.showSnackbar("Vault is locked") }
+                                                                if (isSelectionMode) {
+                                                                    homeViewModel.toggleSelection(file.id)
+                                                                } else {
+                                                                    when (previewKind(file.originalMimeType)) {
+                                                                        PreviewKind.IMAGE -> previewFile = file
+                                                                        PreviewKind.VIDEO -> videoPreviewFile = file
+                                                                        PreviewKind.AUDIO -> audioPreviewFile = file
+                                                                        PreviewKind.PDF -> pdfPreviewFile = file
+                                                                        PreviewKind.TEXT -> textPreviewFile = file
+                                                                        PreviewKind.NONE -> {
+                                                                            val pwd = password; val acc = currentAccount
+                                                                            if (pwd != null && acc != null) homeViewModel.downloadAndDecrypt(file, pwd, acc)
+                                                                            else scope.launch { snackbarHostState.showSnackbar("Vault is locked") }
+                                                                        }
                                                                     }
                                                                 }
-                                                            }
+                                                            },
+                                                            onLongPress = { homeViewModel.toggleSelection(file.id) }
                                                         )
                                                     }
                                                 }
@@ -760,6 +756,7 @@ fun HomeScreen(
                                                     folder = item,
                                                     onOpen = { homeViewModel.openFolder(item) },
                                                     onDelete = { fileToDelete = item },
+                                                    onMoreActions = { longPressFile = item },
                                                     isSelected = item.id in selectedIds,
                                                     onToggleSelect = if (isSelectionMode) ({ homeViewModel.toggleSelection(item.id) }) else null,
                                                     onLongPress = { homeViewModel.toggleSelection(item.id) }
@@ -773,7 +770,7 @@ fun HomeScreen(
                                                         PreviewKind.AUDIO -> audioPreviewFile = item
                                                         PreviewKind.PDF -> pdfPreviewFile = item
                                                         PreviewKind.TEXT -> textPreviewFile = item
-                                                        PreviewKind.NONE -> showFileInfo = item
+                                                        PreviewKind.NONE -> longPressFile = item
                                                     }
                                                 }
                                                 VaultFileCard(
@@ -786,7 +783,13 @@ fun HomeScreen(
                                                     onDelete = { fileToDelete = item },
                                                     onPreview = if (kind != PreviewKind.NONE) openPreview else null,
                                                     onMoreActions = { longPressFile = item },
-                                                    onClick = if (!isSelectionMode) openPreview else null,
+                                                    onClick = {
+                                                        if (isSelectionMode) {
+                                                            homeViewModel.toggleSelection(item.id)
+                                                        } else {
+                                                            openPreview()
+                                                        }
+                                                    },
                                                     onLongPress = { homeViewModel.toggleSelection(item.id) },
                                                     isSelected = item.id in selectedIds,
                                                     onToggleSelect = if (isSelectionMode) ({ homeViewModel.toggleSelection(item.id) }) else null,
@@ -823,11 +826,12 @@ fun HomeScreen(
                                                             PreviewKind.AUDIO -> audioPreviewFile = item
                                                             PreviewKind.PDF -> pdfPreviewFile = item
                                                             PreviewKind.TEXT -> textPreviewFile = item
-                                                            PreviewKind.NONE -> showFileInfo = item
+                                                            PreviewKind.NONE -> longPressFile = item
                                                         }
                                                     }
                                                 },
                                                 onLongPress = { homeViewModel.toggleSelection(item.id) },
+                                                onMoreActions = { longPressFile = item },
                                                 showThumbnail = showThumbnails,
                                                 thumbnailPassword = password,
                                                 thumbnailAccount = currentAccount
@@ -1123,14 +1127,16 @@ fun HomeScreen(
                             Text("Preview", color = CyanPrimary)
                         }
                     }
-                    TextButton(
-                        onClick = {
-                            longPressFile = null
-                            val pwd = password; val acc = currentAccount
-                            if (pwd != null && acc != null) homeViewModel.downloadAndDecrypt(file, pwd, acc)
-                        },
-                        modifier = Modifier.fillMaxWidth()
-                    ) { Text("Download", color = CyanPrimary) }
+                    if (!file.isFolder) {
+                        TextButton(
+                            onClick = {
+                                longPressFile = null
+                                val pwd = password; val acc = currentAccount
+                                if (pwd != null && acc != null) homeViewModel.downloadAndDecrypt(file, pwd, acc)
+                            },
+                            modifier = Modifier.fillMaxWidth()
+                        ) { Text("Download", color = CyanPrimary) }
+                    }
                     TextButton(
                         onClick = { showFileInfo = file; longPressFile = null },
                         modifier = Modifier.fillMaxWidth()
@@ -1166,8 +1172,8 @@ fun HomeScreen(
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     InfoRow("Name", file.originalName)
-                    InfoRow("Type", file.originalMimeType)
-                    InfoRow("Size", com.darkvault.app.ui.components.formatSize(file.size))
+                    InfoRow("Type", if (file.isFolder) "Folder" else file.originalMimeType)
+                    if (!file.isFolder) InfoRow("Size", com.darkvault.app.ui.components.formatSize(file.size))
                     if (file.modifiedTime.isNotEmpty()) InfoRow("Modified", file.modifiedTime.take(10))
                     if (file.createdTime.isNotEmpty()) InfoRow("Uploaded", file.createdTime.take(10))
                     InfoRow("Drive ID", file.id)
@@ -1283,6 +1289,7 @@ private fun BreadcrumbRow(
 
 // ── Task 7 — Grid item composable ─────────────────────────────────────────────
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun VaultGridItem(
     item: VaultFile,
@@ -1291,6 +1298,7 @@ private fun VaultGridItem(
     isSelectionMode: Boolean,
     onTap: () -> Unit,
     onLongPress: () -> Unit,
+    onMoreActions: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
     showThumbnail: Boolean = false,
     thumbnailPassword: String? = null,
@@ -1299,6 +1307,8 @@ private fun VaultGridItem(
     val iconSize = if (columns == 2) 40.dp else 28.dp
     val borderColor = if (isSelected) CyanPrimary else VaultOutline
     val borderWidth = if (isSelected) 1.5.dp else 1.dp
+    // Fixed text area heights prevent uneven rows when file names differ in length
+    val textAreaHeight = if (columns == 2) 52.dp else 20.dp
 
     Card(
         shape = RoundedCornerShape(12.dp),
@@ -1308,14 +1318,17 @@ private fun VaultGridItem(
         modifier = modifier
             .fillMaxWidth()
             .border(borderWidth, borderColor, RoundedCornerShape(12.dp))
-            .clickable(onClick = onTap)
+            .combinedClickable(
+                onClick = onTap,
+                onLongClick = onLongPress
+            )
     ) {
         Box {
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 modifier = Modifier.padding(if (columns == 2) 8.dp else 4.dp)
             ) {
-                // Thumbnail / icon area (Task 4)
+                // Thumbnail / icon area
                 Box(
                     contentAlignment = Alignment.Center,
                     modifier = Modifier
@@ -1324,55 +1337,70 @@ private fun VaultGridItem(
                         .clip(RoundedCornerShape(8.dp))
                         .background(VaultBackground)
                 ) {
-                    if (showThumbnail && !item.isFolder && HomeViewModel.isImageMime(item.originalMimeType)) {
-                        VaultThumbnailImage(
-                            file = item,
-                            password = thumbnailPassword,
-                            account = thumbnailAccount,
-                            showThumbnails = true,
-                            iconSize = iconSize,
-                            modifier = Modifier.fillMaxSize()
-                        )
-                    } else {
-                        Icon(
-                            if (item.isFolder) Icons.Outlined.Folder
-                            else fileTypeIcon(item.originalName, item.originalMimeType),
-                            null,
-                            tint = if (item.isFolder) CyanPrimary else CyanPrimary.copy(alpha = 0.7f),
-                            modifier = Modifier.size(iconSize)
-                        )
-                    }
+                    VaultThumbnailImage(
+                        file = item,
+                        password = thumbnailPassword,
+                        account = thumbnailAccount,
+                        showThumbnails = showThumbnail,
+                        iconSize = iconSize,
+                        modifier = Modifier.fillMaxSize()
+                    )
                 }
                 Spacer(Modifier.height(4.dp))
-                Text(
-                    item.originalName,
-                    style = if (columns == 2) MaterialTheme.typography.bodySmall else MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    maxLines = if (columns == 2) 2 else 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-                if (columns == 2 && !item.isFolder) {
-                    Text(
-                        com.darkvault.app.ui.components.formatSize(item.size),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+                // Fixed-height text area so every card in a row is the same height
+                Box(
+                    modifier = Modifier.fillMaxWidth().height(textAreaHeight),
+                    contentAlignment = Alignment.TopStart
+                ) {
+                    Column {
+                        Text(
+                            item.originalName,
+                            style = if (columns == 2) MaterialTheme.typography.bodySmall else MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            maxLines = if (columns == 2) 2 else 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        if (columns == 2 && !item.isFolder) {
+                            Text(
+                                com.darkvault.app.ui.components.formatSize(item.size),
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
                 }
             }
             // Selection overlay
-            if (isSelected) {
+            if (isSelectionMode) {
                 Box(
                     contentAlignment = Alignment.Center,
                     modifier = Modifier
-                        .size(24.dp)
+                        .size(28.dp)
                         .align(Alignment.TopEnd)
                         .padding(4.dp)
                 ) {
+                    if (isSelected) {
+                        Icon(Icons.Outlined.CheckCircle, null, tint = CyanPrimary, modifier = Modifier.size(24.dp))
+                    } else {
+                        Box(Modifier.size(20.dp).border(1.5.dp, VaultOutline, CircleShape))
+                    }
+                }
+            } else if (onMoreActions != null) {
+                // 3-dot action button — only visible outside selection mode
+                Box(
+                    contentAlignment = Alignment.Center,
+                    modifier = Modifier
+                        .size(28.dp)
+                        .align(Alignment.TopEnd)
+                        .clip(RoundedCornerShape(bottomStart = 8.dp, topEnd = 12.dp))
+                        .background(VaultBackground.copy(alpha = 0.7f))
+                        .clickable { onMoreActions() }
+                ) {
                     Icon(
-                        Icons.Outlined.CheckCircle,
-                        null,
-                        tint = CyanPrimary,
-                        modifier = Modifier.size(20.dp)
+                        Icons.Outlined.MoreVert,
+                        "More actions",
+                        tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f),
+                        modifier = Modifier.size(14.dp)
                     )
                 }
             }
@@ -1382,19 +1410,30 @@ private fun VaultGridItem(
 
 // ── Recent file card ──────────────────────────────────────────────────────────
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun RecentFileCard(
     file: VaultFile,
+    isSelected: Boolean = false,
     onClick: () -> Unit,
-    modifier: Modifier = Modifier
+    onLongPress: () -> Unit,
+    modifier: Modifier = Modifier,
+    showThumbnail: Boolean = false,
+    thumbnailPassword: String? = null,
+    thumbnailAccount: com.google.android.gms.auth.api.signin.GoogleSignInAccount? = null
 ) {
     Card(
         shape = RoundedCornerShape(10.dp),
-        colors = CardDefaults.cardColors(containerColor = VaultSurfaceVariant),
+        colors = CardDefaults.cardColors(
+            containerColor = if (isSelected) CyanPrimary.copy(alpha = 0.08f) else VaultSurfaceVariant
+        ),
         modifier = modifier
             .width(100.dp)
-            .border(1.dp, VaultOutline, RoundedCornerShape(10.dp))
-            .clickable(onClick = onClick)
+            .border(if (isSelected) 1.5.dp else 1.dp, if (isSelected) CyanPrimary else VaultOutline, RoundedCornerShape(10.dp))
+            .combinedClickable(
+                onClick = onClick,
+                onLongClick = onLongPress
+            )
     ) {
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
@@ -1403,14 +1442,17 @@ private fun RecentFileCard(
             Box(
                 contentAlignment = Alignment.Center,
                 modifier = Modifier
-                    .size(36.dp)
-                    .background(VaultBackground, RoundedCornerShape(8.dp))
+                    .size(64.dp)
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(VaultBackground)
             ) {
-                Icon(
-                    fileTypeIcon(file.originalName, file.originalMimeType),
-                    null,
-                    tint = CyanPrimary,
-                    modifier = Modifier.size(20.dp)
+                VaultThumbnailImage(
+                    file = file,
+                    password = thumbnailPassword,
+                    account = thumbnailAccount,
+                    showThumbnails = showThumbnail,
+                    iconSize = 24.dp,
+                    modifier = Modifier.fillMaxSize()
                 )
             }
             Spacer(Modifier.height(6.dp))
