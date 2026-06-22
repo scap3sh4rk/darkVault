@@ -48,7 +48,8 @@ fun DarkVaultNavGraph(authViewModel: AuthViewModel) {
         val targetRoute = when (authState) {
             is AuthState.Init,
             is AuthState.CheckingVault,
-            is AuthState.SignIn -> ROUTE_SIGNIN
+            is AuthState.SignIn,
+            is AuthState.NeedsConsent -> ROUTE_SIGNIN
             is AuthState.Setup -> ROUTE_SETUP
             is AuthState.Unlock,
             is AuthState.AppLocked -> ROUTE_UNLOCK

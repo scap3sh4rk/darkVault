@@ -13,6 +13,7 @@ import com.darkvault.app.data.PreferencesManager
 import com.darkvault.app.drive.DriveApiClient
 import com.darkvault.app.drive.VaultKeyFull
 import com.darkvault.app.model.VaultKeyBundle
+import com.google.android.gms.auth.UserRecoverableAuthException
 import com.google.android.gms.auth.api.signin.GoogleSignIn
 import com.google.android.gms.auth.api.signin.GoogleSignInAccount
 import kotlinx.coroutines.Dispatchers
@@ -39,6 +40,13 @@ sealed class AuthState {
     /** DEK retained in memory; biometric gates UI only — no Drive call needed to resume. */
     object AppLocked : AuthState()
     object Home : AuthState()
+    /**
+     * Google token call returned UserRecoverableAuthException — user signed in but
+     * has not granted the drive.file scope (or consent was revoked).
+     * [consentIntent] should be launched so the user can approve the scope,
+     * then [retryAfterConsent] re-runs the vault check.
+     */
+    data class NeedsConsent(val consentIntent: android.content.Intent) : AuthState()
 }
 
 class AuthViewModel(application: Application) : AndroidViewModel(application) {
@@ -122,6 +130,9 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
 
     private suspend fun checkVaultOnDrive(account: GoogleSignInAccount) {
         _authState.value = AuthState.CheckingVault
+        // Set early so retryAfterConsent() can find the account even if the
+        // Drive token call throws before we reach the assignment below.
+        _pendingAccount = account
         withContext(Dispatchers.IO) {
             try {
                 val client = DriveApiClient(getApplication(), account)
@@ -129,7 +140,6 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
                 val folderId = client.ensureVaultFolder(savedFolderId)
                 prefs.saveVaultFolderId(folderId)
                 _pendingFolderId = folderId
-                _pendingAccount = account
 
                 val vaultKeyExists = client.downloadVaultKey(folderId) != null
                 if (vaultKeyExists) {
@@ -138,6 +148,17 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
                 } else {
                     _authState.value = AuthState.Setup
                 }
+            } catch (e: UserRecoverableAuthException) {
+                // User is signed in but the drive.file scope has not been granted
+                // (or was revoked). Surface the recovery intent so the UI can prompt.
+                Log.w(TAG, "Drive consent missing — prompting user to grant access", e)
+                val recoveryIntent = e.intent
+                if (recoveryIntent != null) {
+                    _authState.value = AuthState.NeedsConsent(recoveryIntent)
+                } else {
+                    // No recovery intent — fall back to full sign-in flow.
+                    _authState.value = AuthState.SignIn
+                }
             } catch (e: Exception) {
                 Log.w(TAG, "Vault check failed (offline?) — using local state", e)
                 _pendingFolderId = prefs.vaultKeyFolderId.first()
@@ -145,6 +166,18 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
                 _authState.value = if (setupDone) AuthState.Unlock else AuthState.Setup
             }
         }
+    }
+
+    /**
+     * Called after the user completes the Google consent screen launched from
+     * [AuthState.NeedsConsent]. Re-runs the vault check with the already-known account.
+     */
+    fun retryAfterConsent() {
+        val account = _pendingAccount ?: run {
+            _authState.value = AuthState.SignIn
+            return
+        }
+        viewModelScope.launch { checkVaultOnDrive(account) }
     }
 
     /**
