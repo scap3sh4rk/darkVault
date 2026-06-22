@@ -182,7 +182,7 @@ fun VaultLogo(modifier: Modifier = Modifier) {
                 .padding(8.dp)
         ) {
             ComposeImage(
-                painter = painterResource(id = R.drawable.ic_vault_logo),
+                painter = painterResource(id = R.drawable.icon),
                 contentDescription = "darkVault",
                 modifier = Modifier.fillMaxSize()
             )
