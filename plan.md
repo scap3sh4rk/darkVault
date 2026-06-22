@@ -13,20 +13,20 @@
 - [x] All developer options gated behind BuildConfig.DEBUG — zero impact on release build
 
 ## Agent 2: Security Audit Agent
-- [ ] Audit report written to `audit/SECURITY_AUDIT.md`
-- [ ] Workflow bugs identified and listed with file+line references
-- [ ] Security bugs identified and listed with CVSS score estimate
-- [ ] DEK/KEK flow traced end-to-end for logic errors
-- [ ] Brute-force lockout logic verified
-- [ ] vault.key optimistic concurrency race condition checked
-- [ ] FLAG_SECURE verified on all Activities
-- [ ] Clipboard hygiene checked (recovery key copy)
-- [ ] Intent/export path traversal checked
-- [ ] Drive token refresh flow checked for race conditions
-- [ ] Upload cancel/pause state machine audited
-- [ ] Trash/restore idempotency checked
-- [ ] No plaintext written to disk at any point verified
-- [ ] All findings written to `audit/SECURITY_AUDIT.md` with priority: CRITICAL / HIGH / MEDIUM / LOW
+- [x] Audit report written to `audit/SECURITY_AUDIT.md`
+- [x] Workflow bugs identified and listed with file+line references
+- [x] Security bugs identified and listed with CVSS score estimate
+- [x] DEK/KEK flow traced end-to-end for logic errors
+- [x] Brute-force lockout logic verified
+- [x] vault.key optimistic concurrency race condition checked
+- [x] FLAG_SECURE verified on all Activities
+- [x] Clipboard hygiene checked (recovery key copy)
+- [x] Intent/export path traversal checked
+- [x] Drive token refresh flow checked for race conditions
+- [x] Upload cancel/pause state machine audited
+- [x] Trash/restore idempotency checked
+- [x] No plaintext written to disk at any point verified
+- [x] All findings written to `audit/SECURITY_AUDIT.md` with priority: CRITICAL / HIGH / MEDIUM / LOW
 
 ## Agent 3: Patch Agent
 - [ ] Every CRITICAL finding patched
