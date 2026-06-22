@@ -32,6 +32,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import com.darkvault.app.R
 import com.darkvault.app.ui.components.CyberButton
 import com.darkvault.app.ui.components.VaultLogo
 import com.darkvault.app.ui.theme.CyanPrimary
@@ -112,22 +113,6 @@ fun SignInScreen(viewModel: AuthViewModel) {
         Spacer(modifier = Modifier.weight(0.35f))
 
         VaultLogo()
-
-        Spacer(modifier = Modifier.height(32.dp))
-
-        Text(
-            "darkVault",
-            style = MaterialTheme.typography.headlineMedium,
-            color = MaterialTheme.colorScheme.onBackground
-        )
-
-        Spacer(modifier = Modifier.height(8.dp))
-
-        Text(
-            "Encrypted personal backup",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
 
         Spacer(modifier = Modifier.height(56.dp))
 

@@ -588,6 +588,35 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     /**
+     * Full teardown after a successful password change.
+     *
+     * changePassword() already zeroed VaultSession.dek and VaultSession.masterPassword on the IO
+     * thread. This method handles the ViewModel-level state on Main and deletes the now-orphaned
+     * Android Keystore biometric key (DataStore credentials were already cleared by changePassword).
+     *
+     * Must NOT call setActiveSession — the user must re-authenticate with the new password.
+     */
+    fun lockAfterPasswordChange() {
+        // Synchronous: clear all ViewModel state on the calling thread (Main)
+        autoLockJob?.cancel()
+        sessionTimeoutJob?.cancel()
+        sessionTimeoutJob = null
+        _sessionExpiresAtMs = 0L
+        // Belt-and-suspenders: also clear VaultSession here in case IO thread raced
+        VaultSession.clearDek()
+        VaultSession.masterPassword = null
+        _masterPassword.value = null
+        _biometricAutoLaunch.value = false
+        _sessionPasswordEntered = false
+        _authState.value = AuthState.Unlock
+        // Delete the orphaned Keystore key async (DataStore creds already wiped)
+        viewModelScope.launch(Dispatchers.IO) {
+            BiometricKeyManager.deleteKey()
+            if (com.darkvault.app.BuildConfig.DEBUG) emitDebugDiagnostics()
+        }
+    }
+
+    /**
      * Called from UnlockScreen when user taps "Use master password instead" while in AppLocked.
      * Clears DEK so they go through the full password + Drive path.
      */
@@ -723,9 +752,12 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
         val (newHash, newSalt) = CryptoManager.hashPassword(newPassword)
         prefs.savePasswordHash(newHash, newSalt)
         prefs.clearFailedAttempts()
-        // Bug 5B fix: clear stale biometric credentials that encoded the old password
+        // Clear biometric DataStore credentials (old encrypted-password blob is now stale)
         prefs.clearBiometricCredentials()
-        setActiveSession(newPassword)
+        // Atomically wipe in-memory secrets before returning — caller must call
+        // lockAfterPasswordChange() to finish the ViewModel-level teardown on Main.
+        VaultSession.clearDek()
+        VaultSession.masterPassword = null
         PasswordChangeResult.Success
     }
 
