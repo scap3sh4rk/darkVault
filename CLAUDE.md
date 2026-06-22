@@ -46,18 +46,32 @@ darkVault is a personal encrypted backup client for Google Drive. Files are encr
 ## Screens & Navigation
 ```
 App Start
-  └─ DataStore: isSetupDone?
-       No ──► SetupScreen (set master password → Google sign-in optional)
-       Yes ──► UnlockScreen (enter master password)
-                └─► HomeScreen
-                      ├─ Files tab (list Drive vault files, upload FAB)
-                      └─ Vault Info / Settings
+  └─ AuthViewModel.initializeAuth()
+       No Google account ──► SignInScreen (Google OAuth)
+       Account found ──► CheckingVault (spinner) ──► SetupScreen or UnlockScreen
+
+  UnlockScreen (enter master password; biometric offered only after password entered this session)
+    └─► HomeScreen
+          ├─ Files list (vault files, folders, recents, search/filter/sort)
+          ├─ More (⋮) menu → Export backup | View Trash | Settings
+          └─ FAB → Upload files / Upload folder
+
+  SettingsScreen ← from HomeScreen More menu
+  TrashScreen    ← from HomeScreen More menu ("View trash")
 ```
 
 ## Password Strategy
 - Master password **never stored**; only PBKDF2-derived hash+salt (Base64 in DataStore) for verification
 - Password kept in `AuthViewModel` (Activity-scoped, cleared on process death → forces re-unlock)
-- ViewModel cleared → user redirected to UnlockScreen
+- `_sessionPasswordEntered` (in-memory flag): must type password at least once per process lifetime before biometric is offered
+
+## Settings Screen Sections
+| Section | Contents |
+|---------|----------|
+| Security | Biometric toggle, Auto-lock timer, Lock Now |
+| Password | Change password, Rotate recovery key |
+| Account | Signed-in email (read-only), Switch account (requires password confirm) |
+| Previews | Image preview toggle, Video preview toggle |
 
 ## Google Drive Setup (user must do manually)
 1. Google Cloud Console → create project
@@ -69,10 +83,13 @@ App Start
 ## Drive Operations
 All via Drive REST API v3 with OkHttp + Bearer token from `GoogleAuthUtil.getToken()`:
 - `ensureVaultFolder()` — find or create `darkVault/` folder
-- `listFiles(folderId)` — list `.vault` files with appProperties
+- `listItems(folderId)` — list `.vault` files + sub-folders (trashed=false)
+- `listTrashedVaultFiles(folderId)` — list trashed items in vault folder (trashed=true)
 - `uploadEncryptedFile(name, bytes, folderId)` — multipart upload
 - `downloadFile(fileId)` — download encrypted bytes
-- `deleteFile(fileId)` — delete
+- `trashFile(fileId)` — soft delete (PATCH trashed:true)
+- `restoreFile(fileId)` — restore from trash (PATCH trashed:false)
+- `deleteFile(fileId)` — permanent delete
 
 ## Phase 2: Password Manager (planned, not yet implemented)
 - Separate encrypted JSON blob: `passwords.vault` in the same Drive folder
@@ -108,7 +125,7 @@ All via Drive REST API v3 with OkHttp + Bearer token from `GoogleAuthUtil.getTok
 - **Image preview**: In-memory decrypt + `BitmapFactory` decode, never writes plaintext to disk
 - **Search / filter / sort**: Real-time search, `FilterType` chips, `SortOrder` dropdown
 - **Batch operations**: Multi-select mode for bulk delete
-- **Biometric unlock (persistent)**: Android Keystore key + `BiometricPrompt.CryptoObject` pattern; persists across process restarts
+- **Biometric unlock**: Android Keystore key + `BiometricPrompt.CryptoObject` pattern; persists across process restarts
 - **Settings screen**: Biometric toggle (enroll/revoke), auto-lock timer, image/video preview toggles
 - **Auto-lock timer**: Locks vault after N minutes in background (via `onPause`/`onResume`)
 - **appProperties truncation**: All values capped at 100 chars to stay within Drive's 124-byte limit
@@ -120,13 +137,12 @@ All via Drive REST API v3 with OkHttp + Bearer token from `GoogleAuthUtil.getTok
 - **Constant-time password verify**: `MessageDigest.isEqual()` prevents timing side-channels
 - **Key zeroing**: All key bytes, IVs, and salts zeroed via `Arrays.fill()` after use; PBKDF2 spec cleared with `clearPassword()`
 - **Brute-force protection**: Exponential backoff on failed unlock attempts (30s, 60s, 120s… up to 30 min cap); persisted in DataStore across restarts
-- **Auto-lock biometric fix**: NavGraph navigates back to UnlockScreen on lock; `LaunchedEffect(Unit)` auto-triggers biometric on fresh composition
 
 ### Envelope Encryption (DEK/KEK)
 - **VaultKeyManager**: Generates/wraps/unwraps 256-bit DEK using AES-256-GCM; formats/parses recovery key as dash-separated hex
 - **VaultKeyBundle**: JSON-serializable bundle with `kekSalt`, `dekWrappedByKek`, `dekWrappedByRecovery`; stored as `vault.key` on Drive
 - **vault.key on Drive**: First unlock generates DEK + recovery key, wraps both, uploads to Drive; subsequent unlocks download and unwrap
-- **Recovery key**: Shown once at setup via `AuthViewModel.recoveryKey` StateFlow; formatted as 8-group hex for offline storage
+- **Recovery key**: Shown once at setup via `AuthViewModel.recoveryKey` StateFlow; formatted as 8-group hex for offline storage; copy button on display dialog
 - **Re-keying ready**: Password change = re-derive KEK, re-wrap DEK, re-upload vault.key — no file re-encryption needed
 - **Multi-version decrypt**: Handles v0x00 (legacy), v0x02 (per-file PBKDF2), v0x03 (DEK-based) transparently
 - **VaultSession.clearDek()**: Zeros and nulls DEK bytes on lock
@@ -138,16 +154,41 @@ All via Drive REST API v3 with OkHttp + Bearer token from `GoogleAuthUtil.getTok
 - **Soft delete / trash**: Delete moves files to Drive trash (`PATCH {"trashed":true}`); permanent delete available separately
 - **Rate limiting**: Drive API calls retry up to 4× with exponential backoff (1s→2s→4s→…→30s cap) on 429/500/503 errors
 - **Recents section**: Top 8 most-recently-modified files shown as horizontal scroll row at vault root
-- **Batch download**: Multi-select + download button decrypts and saves all selected files to external storage
-- **Export/backup**: Downloads and decrypts all vault files to a timestamped local folder
+- **Batch download**: Multi-select + download button decrypts and saves all selected files to `Downloads/darkVault-loc/`
+- **Export/backup**: Downloads and decrypts all vault files to `Downloads/darkVault-loc/`
 - **Last synced indicator**: Shows "just now / N min ago / Nh ago" below filter chips after each refresh
+
+## Implemented Features (v4)
+
+### UI / UX
+- **Signed-in account in title**: Google account email shown as subtitle under "darkVault" at vault root (replaced by breadcrumb when in sub-folder)
+- **Toolbar trimmed**: HomeScreen top bar shows Search, Sort, Refresh + More (⋮) overflow. More contains: Export backup, View trash, Settings. Account button removed.
+- **Image tap-to-preview**: Tapping an image file card opens the in-memory preview dialog immediately; explicit Preview icon button also retained
+- **NavGraph-level HomeViewModel**: `HomeViewModel` hoisted to `DarkVaultNavGraph` so state is shared between `HomeScreen` and `TrashScreen`
+
+### Security & Account
+- **Two-tier lock model** (v5):
+  - **Vault lock** (master password): unlocks DEK from Drive on first use; DEK held in `VaultSession.dek` for the process lifetime; required on fresh launch / after reboot / after manual "Lock Now"
+  - **App lock** (biometric): when biometric is enabled and `_sessionPasswordEntered=true`, going to background → `AuthState.AppLocked`; DEK is **retained** in memory; biometric re-gates the UI only — no Drive call needed; sessions persist until process death (reboot)
+  - Manual "Lock Now" always clears DEK and `_sessionPasswordEntered` → full vault lock
+  - On process restart: `_sessionPasswordEntered=false` → only master password is offered (no biometric until password typed)
+  - `suppressNextLock()` suppresses the next `onAppBackground()` lock — called before file/folder picker launches to prevent spurious locks
+- **Session timeout**: configurable timer (Never / 30 min / 1 hr / 2 hr / 4 hr / 8 hr / 24 hr / Custom) that forces master password re-entry after the set duration, regardless of biometric; timer starts on password entry, is not reset by biometric unlocks, fires even in foreground; belt-and-suspenders `onAppForeground()` check catches expiry if process was frozen while backgrounded
+- **Switch account security check**: Settings → Account → Switch requires master password re-entry (verified against stored hash) before signing out; prevents accidental account switches
+- **Recovery key copy**: Copy-to-clipboard button on initial recovery key display dialog (HomeScreen) and on rotated key display (SettingsScreen)
+- **Recovery key rotation**: Settings → Password → Rotate: verifies current password, generates new recovery key, re-wraps DEK with new key, re-uploads vault.key with optimistic-concurrency retry; invalidates old recovery key immediately
+
+### File Management
+- **View Trash screen** (`TrashScreen.kt`): Dedicated screen listing all trashed vault files. Per-item actions: Restore (untrash) or Delete Permanently. Refreshes list after each action. Reached via HomeScreen More (⋮) → View trash.
+- **Downloads directory**: All single-file downloads, batch downloads, and export backup now save decrypted files to `Downloads/darkVault-loc/` using `MediaStore.Downloads` on Android 10+ (no permission needed); falls back to app-private downloads folder on Android 8–9.
 
 ## Known Architectural Debt (updated)
 
-The following items from the previous debt list are now resolved:
+The following items are now resolved:
 - ~~Envelope encryption / re-keying~~ — Implemented via DEK/KEK split with VaultKeyBundle
-- ~~Recovery key~~ — Implemented, shown once at setup
+- ~~Recovery key~~ — Implemented: shown at setup, copyable, rotatable from Settings
 - ~~Rate limiting~~ — Implemented with exponential backoff (1s→30s cap) on 429/500/503
+- ~~Auto-lock biometric~~ — Replaced by session-gated two-tier biometric (v4)
 
 Still outstanding:
 - **Chunked streaming AEAD**: Single-shot AES-GCM still loads whole file into RAM (OOM on large videos)
@@ -157,8 +198,24 @@ Still outstanding:
 - **KDF upgrade**: PBKDF2 at 100k iterations; Argon2id would be stronger but requires external dep
 - **AAD on GCM**: File-level additional authenticated data not yet bound to metadata
 - **WorkManager background sync**: Upload retry on next launch uses foreground service only
-- **Clipboard hygiene**: Needed when Phase 2 password manager is implemented
+- **Clipboard hygiene**: Needed when Phase 2 password manager is implemented (recovery key copy already uses `ClipboardManager` correctly)
 - **Schema versioning for passwords.vault**: Needed for Phase 2
+- ~~**DEK reload on biometric re-auth**~~ — Fixed in v5: biometric app lock retains DEK; no Drive call on resume
+- **Upload FAB while DEK null** (LOW-003): Brief window after offline unlock where upload uses v0.02 PBKDF2 instead of DEK. Deferred UI fix.
+- **VaultKeyBundle manual JSON parser** (LOW-004): Fragile string parser; accepted risk; Gson migration is future hardening.
+- **Brute-force lockout counter integrity** (LOW-002): DataStore is plaintext on disk; root access can reset counter. Accepted risk.
+
+### Resolved (Agent 3 patches — 2026-06-22)
+- ~~**KEK heap lingering in exception paths**~~ (HIGH-001, MEDIUM-002) — KEK now zeroed in `finally` blocks in `tryUnlockWithVaultKey` and `loadOrCreateDek`; covers all exception paths including `IllegalBlockSizeException`
+- ~~**Path traversal via originalName on pre-Q**~~ (HIGH-002) — `saveToDownloads()` now sanitizes filename (strips separators, illegal chars, control chars; truncates to 200 chars; blank fallback)
+- ~~**Switch Account dialog has no brute-force lockout**~~ (HIGH-003) — UI-level 5-attempt counter added; button disabled after limit; resets on dialog dismiss
+- ~~**data_extraction_rules.xml unconfigured**~~ (HIGH-004) — DataStore excluded from both cloud-backup and device-transfer on Android 12+
+- ~~**encBytes not zeroed after upload**~~ (MEDIUM-001) — `finally { Arrays.fill(encBytes, 0) }` wraps the resumable-upload session in UploadForegroundService
+- ~~**runBlocking on main thread in biometric launch**~~ (MEDIUM-003) — Replaced with `scope.launch { prefs.getBiometricCredentials() }` in UnlockScreen
+- ~~**isMinifyEnabled = false in release**~~ (MEDIUM-004) — R8/ProGuard enabled; `proguard-rules.pro` added; release stubs for debug-only types; Log.d/v stripped in release (LOW-005)
+- ~~**Recovery key clipboard never cleared**~~ (MEDIUM-005) — 60-second delayed clear scheduled in both HomeScreen and SettingsScreen copy handlers
+- ~~**SecureRandom.generateSeed() misuse**~~ (LOW-001) — All calls replaced with `ByteArray(n).also { SecureRandom().nextBytes(it) }` across VaultKeyManager, CryptoManager, AuthViewModel
+- ~~**No explicit network_security_config**~~ (LOW-006) — Created with `cleartextTrafficPermitted="false"` and system CA trust; referenced in AndroidManifest
 
 ## Ideas & Future Notes
 - Offline mode: track upload queue in Room, retry on next launch

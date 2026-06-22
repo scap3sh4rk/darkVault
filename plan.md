@@ -38,13 +38,13 @@
 - [x] Unit tests added for every patched crypto/auth path (JUnit4 + MockK; 28 tests pass)
 
 ## Agent 4: Review Agent
-- [ ] All patches re-verified against original audit findings
-- [ ] No regressions in existing implemented features (per CLAUDE.md v4/v5)
-- [ ] Build compiles clean: `./gradlew assembleDebug` exits 0
-- [ ] All unit tests pass: `./gradlew testDebugUnitTest` exits 0
-- [ ] Review report written to `audit/REVIEW_REPORT.md`
-- [ ] CLAUDE.md updated with resolved architectural debt items
-- [ ] plan.md fully checked off
+- [x] All patches re-verified against original audit findings
+- [x] No regressions in existing implemented features (per CLAUDE.md v4/v5)
+- [x] Build compiles clean: `./gradlew assembleDebug` exits 0
+- [x] All unit tests pass: `./gradlew testDebugUnitTest` exits 0
+- [x] Review report written to `audit/REVIEW_REPORT.md`
+- [x] CLAUDE.md updated with resolved architectural debt items
+- [x] plan.md fully checked off
 
 ## UI/UX Tasks (Post-Backend — DO NOT touch until Review Agent completes)
 - [ ] UnlockScreen: show signed-in email above password field
