@@ -3,6 +3,7 @@ package com.darkvault.app.ui.screens
 import androidx.biometric.BiometricPrompt
 import androidx.biometric.BiometricManager.Authenticators.BIOMETRIC_STRONG
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -20,6 +21,10 @@ import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.automirrored.outlined.ArrowForward
 import androidx.compose.material.icons.outlined.AccountCircle
 import androidx.compose.material.icons.outlined.BugReport
+import androidx.compose.material.icons.outlined.Code
+import androidx.compose.material.icons.outlined.Email
+import androidx.compose.material.icons.outlined.Language
+import androidx.compose.material.icons.outlined.Work
 import androidx.compose.material.icons.outlined.Fingerprint
 import androidx.compose.material.icons.outlined.FolderZip
 import androidx.compose.material.icons.outlined.GridView
@@ -69,6 +74,7 @@ import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.TextUnitType
 import androidx.compose.ui.unit.dp
@@ -81,6 +87,9 @@ import com.darkvault.app.crypto.CryptoManager
 import com.darkvault.app.data.PreferencesManager
 import com.darkvault.app.ui.components.StorageInfoCard
 import com.darkvault.app.ui.components.VaultTextField
+import android.content.Intent
+import android.net.Uri
+import com.darkvault.app.ui.theme.AppFont
 import com.darkvault.app.ui.theme.CyanPrimary
 import com.darkvault.app.ui.theme.VaultBackground
 import com.darkvault.app.ui.theme.VaultError
@@ -169,6 +178,7 @@ fun SettingsScreen(
     val thumbnailsEnabled by prefs.thumbnailsEnabled.collectAsState(initial = true)
     val themeMode by prefs.themeMode.collectAsState(initial = "SYSTEM")
     val viewLayoutPref by prefs.viewLayout.collectAsState(initial = "LIST")
+    val fontKey by prefs.appFont.collectAsState(initial = "inter")
     val failedAttempts by authViewModel.failedAttempts.collectAsState()
     val lockoutUntilMs by authViewModel.lockoutUntilMs.collectAsState()
     // storageInfo is accessed inline via homeViewModel below (avoid conditional collectAsState)
@@ -178,6 +188,7 @@ fun SettingsScreen(
     var sessionTimeoutExpanded by remember { mutableStateOf(false) }
     var themeExpanded by remember { mutableStateOf(false) }
     var layoutExpanded by remember { mutableStateOf(false) }
+    var fontExpanded by remember { mutableStateOf(false) }
     var showCustomTimeoutDialog by remember { mutableStateOf(false) }
     var customTimeoutInput by remember { mutableStateOf("") }
     var customTimeoutError by remember { mutableStateOf<String?>(null) }
@@ -237,6 +248,10 @@ fun SettingsScreen(
         changePwdLoading = false
     }
 
+    val devOptionsEnabled by prefs.devOptionsEnabled.collectAsState(initial = true)
+    // Holds the value to write on biometric success; set before launching the prompt
+    var pendingDevToggleValue by remember { mutableStateOf(true) }
+
     // Biometric prompt for enrollment
     val biometricPrompt = remember(activity) {
         BiometricPrompt(
@@ -255,6 +270,29 @@ fun SettingsScreen(
                 }
                 override fun onAuthenticationFailed() {
                     scope.launch { snackbarHost.showSnackbar("Biometric not recognized") }
+                }
+            }
+        )
+    }
+
+    // Biometric prompt for dev-options toggle — reads pendingDevToggleValue at callback time
+    val devToggleBiometricPrompt = remember(activity) {
+        BiometricPrompt(
+            activity,
+            ContextCompat.getMainExecutor(activity),
+            object : BiometricPrompt.AuthenticationCallback() {
+                override fun onAuthenticationSucceeded(result: BiometricPrompt.AuthenticationResult) {
+                    scope.launch { prefs.setDevOptionsEnabled(pendingDevToggleValue) }
+                }
+                override fun onAuthenticationError(errorCode: Int, errString: CharSequence) {
+                    if (errorCode != BiometricPrompt.ERROR_NEGATIVE_BUTTON &&
+                        errorCode != BiometricPrompt.ERROR_USER_CANCELED
+                    ) {
+                        scope.launch { snackbarHost.showSnackbar("Authentication failed: $errString") }
+                    }
+                }
+                override fun onAuthenticationFailed() {
+                    scope.launch { snackbarHost.showSnackbar("Fingerprint not recognized") }
                 }
             }
         )
@@ -282,6 +320,123 @@ fun SettingsScreen(
                 .verticalScroll(rememberScrollState())
                 .padding(horizontal = 16.dp, vertical = 8.dp)
         ) {
+            // ── DEVELOPER INFO card ───────────────────────────────────────────
+
+            fun openUrl(url: String) {
+                context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+            }
+
+            Card(
+                shape = RoundedCornerShape(16.dp),
+                colors = CardDefaults.cardColors(containerColor = VaultSurfaceVariant),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .border(1.dp, CyanPrimary.copy(alpha = 0.25f), RoundedCornerShape(16.dp))
+            ) {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 20.dp, vertical = 20.dp)
+                ) {
+                    Icon(
+                        Icons.Outlined.Security,
+                        contentDescription = null,
+                        tint = CyanPrimary,
+                        modifier = Modifier.size(40.dp)
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        "darkVault",
+                        style = MaterialTheme.typography.titleLarge,
+                        color = CyanPrimary
+                    )
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        "developed with code & coffee",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                    )
+                    Text(
+                        "by Parthiv Kumar Nikku",
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Spacer(Modifier.height(16.dp))
+                    HorizontalDivider(color = VaultOutline.copy(alpha = 0.2f))
+                    Spacer(Modifier.height(12.dp))
+                    Row(
+                        horizontalArrangement = Arrangement.SpaceEvenly,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        // Portfolio
+                        IconButton(onClick = { openUrl("https://parthivkumarnikku.github.io/portfolio/") }) {
+                            Icon(
+                                Icons.Outlined.Language,
+                                contentDescription = "Portfolio",
+                                tint = CyanPrimary,
+                                modifier = Modifier.size(24.dp)
+                            )
+                        }
+                        // Email
+                        IconButton(onClick = {
+                            context.startActivity(
+                                Intent(Intent.ACTION_SENDTO).apply {
+                                    data = Uri.parse("mailto:parthiv.kumar.Nikku+darkvault@gmail.com")
+                                }
+                            )
+                        }) {
+                            Icon(
+                                Icons.Outlined.Email,
+                                contentDescription = "Email",
+                                tint = CyanPrimary,
+                                modifier = Modifier.size(24.dp)
+                            )
+                        }
+                        // GitHub profile
+                        IconButton(onClick = { openUrl("https://github.com/parthivkumarnikku") }) {
+                            Icon(
+                                Icons.Outlined.Code,
+                                contentDescription = "GitHub",
+                                tint = CyanPrimary,
+                                modifier = Modifier.size(24.dp)
+                            )
+                        }
+                        // LinkedIn
+                        IconButton(onClick = { openUrl("https://www.linkedin.com/in/parthivkumarnikku") }) {
+                            Icon(
+                                Icons.Outlined.Work,
+                                contentDescription = "LinkedIn",
+                                tint = CyanPrimary,
+                                modifier = Modifier.size(24.dp)
+                            )
+                        }
+                        // GitHub Issues / Feedback
+                        IconButton(onClick = { openUrl("https://github.com/parthivkumarnikku/darkVault/issues") }) {
+                            Icon(
+                                Icons.Outlined.BugReport,
+                                contentDescription = "Report issue",
+                                tint = CyanPrimary,
+                                modifier = Modifier.size(24.dp)
+                            )
+                        }
+                    }
+                    Row(
+                        horizontalArrangement = Arrangement.SpaceEvenly,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("Portfolio", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f))
+                        Text("Email",     style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f))
+                        Text("GitHub",   style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f))
+                        Text("LinkedIn", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f))
+                        Text("Feedback", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f))
+                    }
+                }
+            }
+
+            Spacer(Modifier.height(16.dp))
+
             // ── APPEARANCE section (NEW — Task 8, 10) ─────────────────────────
 
             SectionHeader("Appearance")
@@ -347,6 +502,40 @@ fun SettingsScreen(
                                 DropdownMenuItem(
                                     text = { Text(label, color = if (viewLayoutPref == value) CyanPrimary else MaterialTheme.colorScheme.onSurface) },
                                     onClick = { scope.launch { prefs.setViewLayout(value) }; layoutExpanded = false }
+                                )
+                            }
+                        }
+                    }
+                }
+
+                HorizontalDivider(color = VaultOutline.copy(alpha = 0.3f))
+
+                // Font row
+                val currentFont = AppFont.entries.firstOrNull { it.key == fontKey } ?: AppFont.INTER
+                SettingRow(
+                    icon = { Icon(Icons.Outlined.Palette, null, tint = CyanPrimary, modifier = Modifier.size(22.dp)) },
+                    title = "Font",
+                    subtitle = currentFont.label
+                ) {
+                    ExposedDropdownMenuBox(expanded = fontExpanded, onExpandedChange = { fontExpanded = it }) {
+                        OutlinedTextField(
+                            value = currentFont.label,
+                            onValueChange = {},
+                            readOnly = true,
+                            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(fontExpanded) },
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedBorderColor = CyanPrimary,
+                                unfocusedBorderColor = VaultOutline,
+                                focusedTextColor = MaterialTheme.colorScheme.onSurface,
+                                unfocusedTextColor = MaterialTheme.colorScheme.onSurface
+                            ),
+                            modifier = Modifier.menuAnchor().fillMaxWidth(0.52f)
+                        )
+                        ExposedDropdownMenu(expanded = fontExpanded, onDismissRequest = { fontExpanded = false }) {
+                            AppFont.entries.forEach { font ->
+                                DropdownMenuItem(
+                                    text = { Text(font.label, color = if (fontKey == font.key) CyanPrimary else MaterialTheme.colorScheme.onSurface) },
+                                    onClick = { scope.launch { prefs.setAppFont(font.key) }; fontExpanded = false }
                                 )
                             }
                         }
@@ -686,13 +875,52 @@ fun SettingsScreen(
                 SettingsCard {
                     HorizontalDivider(thickness = 1.dp, color = CyanPrimary.copy(alpha = 0.6f))
 
+                    // Kill switch toggle — fingerprint required to change state
                     SettingRow(
-                        icon = { Icon(Icons.Outlined.BugReport, null, tint = VaultError, modifier = Modifier.size(22.dp)) },
-                        title = "Developer options",
-                        subtitle = "Diagnostics, fault injection, log viewer"
+                        icon = {
+                            Icon(
+                                Icons.Outlined.Security,
+                                null,
+                                tint = if (devOptionsEnabled) CyanPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.size(22.dp)
+                            )
+                        },
+                        title = "Developer mode",
+                        subtitle = if (devOptionsEnabled) "On — fingerprint required to disable" else "Off — fingerprint required to enable"
                     ) {
-                        IconButton(onClick = onNavigateToDebugPanel) {
-                            Icon(Icons.AutoMirrored.Outlined.ArrowForward, null, tint = CyanPrimary)
+                        Switch(
+                            checked = devOptionsEnabled,
+                            onCheckedChange = {
+                                pendingDevToggleValue = !devOptionsEnabled
+                                val promptInfo = BiometricPrompt.PromptInfo.Builder()
+                                    .setTitle(if (devOptionsEnabled) "Disable developer mode" else "Enable developer mode")
+                                    .setSubtitle("Authenticate to continue")
+                                    .setNegativeButtonText("Cancel")
+                                    .setAllowedAuthenticators(BIOMETRIC_STRONG)
+                                    .build()
+                                devToggleBiometricPrompt.authenticate(promptInfo)
+                            },
+                            colors = SwitchDefaults.colors(
+                                checkedThumbColor = CyanPrimary,
+                                checkedTrackColor = CyanPrimary.copy(alpha = 0.3f),
+                                uncheckedThumbColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                                uncheckedTrackColor = VaultOutline
+                            )
+                        )
+                    }
+
+                    // Dev options rows — only visible when developer mode is ON
+                    if (devOptionsEnabled) {
+                        HorizontalDivider(thickness = 0.5.dp, color = VaultOutline)
+
+                        SettingRow(
+                            icon = { Icon(Icons.Outlined.BugReport, null, tint = VaultError, modifier = Modifier.size(22.dp)) },
+                            title = "Developer options",
+                            subtitle = "Diagnostics, fault injection, log viewer"
+                        ) {
+                            IconButton(onClick = onNavigateToDebugPanel) {
+                                Icon(Icons.AutoMirrored.Outlined.ArrowForward, null, tint = CyanPrimary)
+                            }
                         }
                     }
                 }
@@ -731,9 +959,12 @@ fun SettingsScreen(
                                 when (result) {
                                     is AuthViewModel.PasswordChangeResult.Success -> {
                                         resetChangePwdDialog()
-                                        authViewModel.lockVault()
-                                        snackbarHost.showSnackbar("Password changed. Please sign in again.")
-                                        onPasswordChanged?.invoke()
+                                        // Show confirmation before tearing down the session so
+                                        // the snackbar is visible while the screen is still active.
+                                        snackbarHost.showSnackbar("Password changed. Re-enter your new password to continue.")
+                                        // Full session wipe — clears memory, Keystore key, and
+                                        // drives navigation to Unlock via authState change.
+                                        authViewModel.lockAfterPasswordChange()
                                     }
                                     is AuthViewModel.PasswordChangeResult.Error -> changePwdError = result.message
                                 }
