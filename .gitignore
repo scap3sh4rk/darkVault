@@ -16,5 +16,9 @@ local.properties
 
 # AI tool files — never commit
 .claude/
+/CLAUDE.md
+/plan.md
+/audit/*
+/design/*
 MEMORY.md
 *.claude.json
