@@ -33,6 +33,10 @@ class UploadForegroundService : Service() {
         const val EXTRA_JOB_ID = "job_id"
     }
 
+    // Thrown from the onProgress callback to abort uploadChunked cleanly.
+    // Caught separately so the job is marked Cancelled, not Failed.
+    private class UploadCancelledException : Exception("Upload cancelled by user")
+
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
 
     override fun onCreate() {
@@ -43,8 +47,16 @@ class UploadForegroundService : Service() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
             ACTION_CANCEL_ALL -> {
+                // Cancel all queued jobs (not yet started)
                 UploadState.queue.forEach { UploadState.cancelledIds.add(it.id) }
-                // Also cancel currently paused jobs
+                // Cancel the currently active upload — it was poll()ed off the queue
+                // so queue.forEach above misses it; wake its resume signal in case it
+                // is paused so the cancel check fires immediately
+                UploadState.active.value?.let { activeUpload ->
+                    UploadState.cancelledIds.add(activeUpload.jobId)
+                    UploadState.resumeSignals[activeUpload.jobId]?.trySend(Unit)
+                }
+                // Unblock any other paused jobs so they see the cancel flag
                 UploadState.pausedIds.toList().forEach { id ->
                     UploadState.cancelledIds.add(id)
                     UploadState.resumeSignals[id]?.trySend(Unit)
@@ -53,6 +65,8 @@ class UploadForegroundService : Service() {
             ACTION_CANCEL_JOB -> {
                 intent.getStringExtra(EXTRA_JOB_ID)?.let { id ->
                     UploadState.cancelledIds.add(id)
+                    // Wake resume channel regardless of pause state so the
+                    // cancel check in onProgress fires at the next chunk boundary
                     UploadState.resumeSignals[id]?.trySend(Unit)
                 }
             }
@@ -237,21 +251,36 @@ class UploadForegroundService : Service() {
                         UploadState.events.emit(UploadEvent.Uploading(job.id, uploadName, 0, total))
 
                         client.uploadChunked(sessionUri, encBytes) { uploaded, t ->
-                            if (job.id !in UploadState.cancelledIds) {
-                                val isPaused = job.id in UploadState.pausedIds
+                            // Cancel check — throw to abort the chunk loop;
+                            // caught below as UploadCancelledException, not as a failure
+                            if (job.id in UploadState.cancelledIds) {
+                                throw UploadCancelledException()
+                            }
+
+                            // Pause check — actually suspend here until resumed or cancelled
+                            if (job.id in UploadState.pausedIds) {
                                 UploadState.active.value = ActiveUpload(
-                                    job.id, uploadName, uploaded, t,
-                                    if (isPaused) "Paused" else "Uploading…",
-                                    isPaused = isPaused,
+                                    job.id, uploadName, uploaded, t, "Paused",
+                                    isPaused = true,
                                     currentIndex = jobsDone + 1, totalInBatch = totalJobs
                                 )
                                 UploadState.events.emit(UploadEvent.Uploading(job.id, uploadName, uploaded, t))
-                                if (!isPaused) updateNotification("Uploading $uploadName", uploaded, t)
-                            }
-                            // Task 5 — check pause flag at chunk boundary
-                            if (job.id in UploadState.pausedIds) {
                                 updateNotificationPaused()
+                                // Block here; unblocked by ACTION_RESUME_ALL or ACTION_CANCEL
+                                UploadState.resumeSignals[job.id]?.receive()
+                                // Re-check cancel after being woken up
+                                if (job.id in UploadState.cancelledIds) {
+                                    throw UploadCancelledException()
+                                }
                             }
+
+                            UploadState.active.value = ActiveUpload(
+                                job.id, uploadName, uploaded, t, "Uploading…",
+                                isPaused = false,
+                                currentIndex = jobsDone + 1, totalInBatch = totalJobs
+                            )
+                            UploadState.events.emit(UploadEvent.Uploading(job.id, uploadName, uploaded, t))
+                            updateNotification("Uploading $uploadName", uploaded, t)
                         }
 
                     } finally {
@@ -269,6 +298,12 @@ class UploadForegroundService : Service() {
                     }
                     UploadState.events.emit(UploadEvent.Completed(job.id, uploadName))
 
+                } catch (e: UploadCancelledException) {
+                    UploadState.active.value = null
+                    activeJobIds.remove(job.id)
+                    activeFileNames.remove(job.originalName)
+                    UploadState.cancelledIds.remove(job.id)
+                    UploadState.events.emit(UploadEvent.Cancelled(job.id, job.originalName))
                 } catch (e: Exception) {
                     UploadState.active.value = null
                     activeJobIds.remove(job.id)
