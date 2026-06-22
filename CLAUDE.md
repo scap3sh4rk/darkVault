@@ -217,9 +217,60 @@ Still outstanding:
 - ~~**SecureRandom.generateSeed() misuse**~~ (LOW-001) — All calls replaced with `ByteArray(n).also { SecureRandom().nextBytes(it) }` across VaultKeyManager, CryptoManager, AuthViewModel
 - ~~**No explicit network_security_config**~~ (LOW-006) — Created with `cleartextTrafficPermitted="false"` and system CA trust; referenced in AndroidManifest
 
+## Implemented Features (v6)
+
+### Performance (Issue 1)
+- **OkHttpClient connection pool**: `DriveApiClient` uses a `companion object { val sharedHttpClient by lazy { ... } }` — single instance shared across all `DriveApiClient` instantiations; prevents per-call thread pool creation and enables HTTP/2 connection reuse
+- **Stale-while-revalidate file list**: `HomeViewModel.folderCache` (Map<folderId→List<VaultFile>>) emits cached data immediately on folder navigation; Drive fetch updates in background; no blank screen on re-entry
+- **Shimmer skeleton loading**: `ShimmerFileCard()` composable shows 8 animated shimmer placeholders while `uiState == HomeUiState.Loading`; replaces blank/spinner state
+- **Pull-to-refresh**: M3 1.4.0 `PullToRefreshBox` wraps file list; swipe-down triggers `homeViewModel.loadFiles(currentAccount)`; indicator visible while refreshing
+
+### File Previews (Issue 2)
+- **Image pinch-to-zoom**: `ImagePreviewDialog` uses `rememberTransformableState { zoomChange, panChange, _ -> ... }` + `transformable()` modifier; `detectTapGestures(onDoubleTap)` resets scale to 1× and offset to Zero
+- **Text preview**: `TextPreviewDialog` — decrypts file in memory, decodes UTF-8, renders in `SelectionContainer { Text(..., fontFamily = FontFamily.Monospace, fontSize = 12.sp) }` inside scrollable `LazyColumn`; max 512 KB (larger files show "File too large for preview"); triggered by tapping `text/*`, `application/json`, `application/xml`, `application/javascript` files
+
+### Brute-force Protection (Issue 4)
+- **5-attempt threshold before lockout**: Attempts 1–4 show "N / 5 incorrect attempts" counter below password field; no lockout until attempt 5
+- **Exponential lockout**: Attempt 5 → 30s; attempt 6 → 60s; attempt 7 → 2m; … cap 30 min
+- **Live countdown**: `LaunchedEffect(lockoutUntilMs)` with `delay(1000L)` loop updates `timeLeftMs` every second; field auto-re-enables when reaches 0; format "M:SS"
+- **Persisted counter**: `failedAttempts` and `lockoutUntilMs` stored in DataStore; survives process kill
+
+### Password Change Auth Flow (Issue 5)
+- **Offline guard**: `changePassword()` returns error immediately if `account == null || folderId == null` — no state split
+- **Drive-before-hash**: Drive `updateVaultKeyInPlace()` called before `prefs.savePasswordHash()` — no window where hash and vault.key are inconsistent
+- **Biometric cleared**: `prefs.clearBiometricCredentials()` called on successful Drive update — stale encrypted password blob invalidated
+- **UI flow**: Success → Snackbar + `authViewModel.lockVault()` → NavGraph routes to UnlockScreen
+
+### Conflict Dialog (Issue 3)
+- **Editable rename**: `OutlinedTextField` pre-filled with `suggestedName`; user can type any name before confirming; sanitized before send
+- **Replace confirmation**: Clicking "Replace existing file" shows a secondary confirmation dialog before sending `ConflictResolution.Replace`
+- **RenameAs variant**: `ConflictResolution.RenameAs(newName)` handled in `UploadForegroundService` — user-chosen name respected
+
+### Screenshot Toggle (Issue 6 — Debug Only)
+- `DebugPanelScreen` has a toggle with master-password confirmation dialog before enabling
+- `PreferencesManager.screenshotEnabled` DataStore key (defaults false)
+- `MainActivity.onResume()` reads `screenshotEnabled` and calls `window.clearFlags(FLAG_SECURE)` or `window.addFlags(FLAG_SECURE)` accordingly
+
+### File Management
+- **Batch download UI**: Multi-select mode shows Download icon with count badge in TopAppBar; calls `homeViewModel.downloadSelected()` for all non-folder selected items; Snackbar with count on completion
+- **Empty state differentiation**: Search/filter active → `EmptySearchState`; vault truly empty → `EmptyVaultState` (distinct illustrated states)
+- **Long-press quick actions**: `combinedClickable(onLongClick)` on `VaultFileCard`; bottom sheet shows Download, Info, Rename, Move to Trash
+- **File info sheet**: Name, type, size, modified, uploaded, Drive ID shown in `AlertDialog`
+- **Rename file**: Long-press → Rename → `OutlinedTextField` dialog → `homeViewModel.renameFile()` → Drive PATCH
+- **New Folder via FAB**: FAB dropdown includes "New folder" option; `AlertDialog` with name field → `homeViewModel.createFolder()`
+- **Sort by Size**: `SortOrder.SIZE_ASC` / `SIZE_DESC` in enum; handled in `displayItems` combine
+
+### UX
+- **Haptic feedback on unlock**: `LaunchedEffect(authState)` fires `view.performHapticFeedback(HapticFeedbackConstants.CONFIRM)` on `AuthState.Home` (API 30+); falls back to `VIRTUAL_KEY`
+- **Signed-in email in UnlockScreen**: Email chip shown above password field in vault-lock mode
+- **Breadcrumb navigation**: LazyRow breadcrumb below TopAppBar when in sub-folder; supports collapse ellipsis for deep paths
+
 ## Ideas & Future Notes
 - Offline mode: track upload queue in Room, retry on next launch
 - File versioning: keep previous `.vault` file as `<name>.vault.bak` on Drive
+- Video preview: decrypt → write to EncryptedFile in app cache → ExoPlayer (delete in finally block)
+- Audio preview: same pattern, MediaPlayer
+- PDF preview: PdfRenderer with temp file, delete in finally block
 - Video thumbnail preview: write to temp file, use `MediaMetadataRetriever`, delete immediately
 - Shared/widget: quick upload from share sheet intent
 - Wear OS companion: unlock via watch

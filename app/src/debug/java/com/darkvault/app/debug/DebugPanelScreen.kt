@@ -108,6 +108,8 @@ fun DebugPanelScreen(navController: NavController) {
             SectionE(mgr, context, scope)
             // Section F — In-App Log Viewer
             SectionF(mgr, context)
+            // Section G — Screenshot Toggle
+            SectionG(context, scope)
             Spacer(Modifier.height(32.dp))
         }
     }
@@ -332,6 +334,84 @@ private fun SectionF(mgr: DeveloperOptionsManager, context: Context) {
                 text = if (logs.isBlank()) "(no logs captured yet — tap Refresh)" else logs,
                 style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),
                 color = Color(0xFF88FF88)
+            )
+        }
+    }
+}
+
+// ── Section G — Screenshot Toggle ─────────────────────────────────────────────
+
+@Composable
+private fun SectionG(context: Context, scope: kotlinx.coroutines.CoroutineScope) {
+    val prefs = remember { com.darkvault.app.data.PreferencesManager(context) }
+    val screenshotEnabled by prefs.screenshotEnabled.collectAsState(initial = false)
+    var showPasswordDialog by remember { mutableStateOf(false) }
+    var passwordInput by remember { mutableStateOf("") }
+    var passwordError by remember { mutableStateOf<String?>(null) }
+
+    ExpandableSection(title = "G — Screenshot Toggle") {
+        DiagRow("FLAG_SECURE", if (!screenshotEnabled) "ACTIVE (screenshots blocked)" else "DISABLED (debug mode)")
+        Spacer(Modifier.height(8.dp))
+        if (screenshotEnabled) {
+            Button(
+                onClick = {
+                    scope.launch {
+                        prefs.saveScreenshotEnabled(false)
+                    }
+                },
+                colors = ButtonDefaults.buttonColors(containerColor = CyanPrimary)
+            ) {
+                Text("Restore FLAG_SECURE")
+            }
+        } else {
+            DangerButton("Allow screenshots (disable FLAG_SECURE)") {
+                passwordInput = ""
+                passwordError = null
+                showPasswordDialog = true
+            }
+        }
+
+        if (showPasswordDialog) {
+            androidx.compose.material3.AlertDialog(
+                onDismissRequest = { showPasswordDialog = false },
+                containerColor = VaultSurfaceVariant,
+                title = { Text("Confirm master password", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface) },
+                text = {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text("Enter your master password to disable screenshot protection (debug only).", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        androidx.compose.material3.OutlinedTextField(
+                            value = passwordInput,
+                            onValueChange = { passwordInput = it; passwordError = null },
+                            label = { Text("Master password") },
+                            visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation(),
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        passwordError?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
+                    }
+                },
+                confirmButton = {
+                    androidx.compose.material3.TextButton(
+                        onClick = {
+                            scope.launch {
+                                val storedPrefs = com.darkvault.app.data.PreferencesManager(context)
+                                val stored = storedPrefs.getPasswordHashAndSalt()
+                                val valid = stored != null && com.darkvault.app.crypto.CryptoManager.verifyPassword(
+                                    passwordInput, stored.first, stored.second
+                                )
+                                if (valid) {
+                                    storedPrefs.saveScreenshotEnabled(true)
+                                    showPasswordDialog = false
+                                } else {
+                                    passwordError = "Incorrect password"
+                                }
+                            }
+                        }
+                    ) { Text("Confirm", color = CyanPrimary) }
+                },
+                dismissButton = {
+                    androidx.compose.material3.TextButton(onClick = { showPasswordDialog = false }) { Text("Cancel") }
+                }
             )
         }
     }

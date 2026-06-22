@@ -26,7 +26,7 @@ import com.darkvault.app.ui.components.VaultTextField
 import com.darkvault.app.viewmodel.AuthViewModel
 
 @Composable
-fun SetupScreen(viewModel: AuthViewModel, onSetupComplete: () -> Unit) {
+fun SetupScreen(viewModel: AuthViewModel) {
     val isLoading by viewModel.isLoading.collectAsState()
 
     var password by remember { mutableStateOf("") }
@@ -97,9 +97,7 @@ fun SetupScreen(viewModel: AuthViewModel, onSetupComplete: () -> Unit) {
         CyberButton(
             text = "Create Vault",
             onClick = {
-                if (validate()) {
-                    viewModel.setup(password, onSetupComplete)
-                }
+                if (validate()) viewModel.setup(password)
             },
             isLoading = isLoading,
             modifier = Modifier.fillMaxWidth()

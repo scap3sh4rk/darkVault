@@ -394,10 +394,19 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
 
     private suspend fun recordFailedAttemptAndError() {
         val attempts = prefs.failedAttempts.first() + 1
-        val shift = minOf(attempts - 1, 30)
-        val backoffMs = minOf(30_000L * (1L shl shift), 30 * 60 * 1000L)
-        prefs.recordFailedAttempt(attempts, System.currentTimeMillis() + backoffMs)
-        _authError.value = "Incorrect password"
+        val backoffMs = computeBackoffMs(attempts)
+        val lockoutUntil = if (backoffMs > 0L) System.currentTimeMillis() + backoffMs else 0L
+        prefs.recordFailedAttempt(attempts, lockoutUntil)
+        _authError.value = if (attempts < 5) {
+            "Incorrect password ($attempts / 5 attempts)"
+        } else {
+            "Incorrect password"
+        }
+    }
+
+    private fun computeBackoffMs(attempts: Int): Long {
+        if (attempts < 5) return 0L
+        return minOf(30_000L * (1L shl (attempts - 5)), 30 * 60 * 1000L)
     }
 
     fun unlockWithBiometricCipher(cipher: Cipher) {
@@ -596,6 +605,13 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
 
     fun clearError() { _authError.value = null }
 
+    suspend fun verifyPasswordOnly(password: String): Boolean {
+        val stored = prefs.getPasswordHashAndSalt() ?: return false
+        return withContext(Dispatchers.Default) {
+            CryptoManager.verifyPassword(password, stored.first, stored.second)
+        }
+    }
+
     fun setAutoLockMinutes(minutes: Int) {
         viewModelScope.launch { prefs.setAutoLockMinutes(minutes) }
     }
@@ -619,56 +635,63 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
             return@withContext PasswordChangeResult.Error("Current password is incorrect")
         }
 
-        if (account != null && folderId != null) {
-            val client = DriveApiClient(getApplication(), account)
-            var lastError: String? = null
-            repeat(3) { attempt ->
-                try {
-                    val full = client.downloadVaultKeyFull(folderId)
-                        ?: return@repeat
-                    val oldBundle = VaultKeyBundle.fromJson(full.json)
-
-                    val currentKek = CryptoManager.deriveKey(currentPassword, oldBundle.kekSalt).encoded
-                    val dek = try {
-                        VaultKeyManager.unwrapDek(oldBundle.dekWrappedByKek, currentKek)
-                    } catch (e: javax.crypto.AEADBadTagException) {
-                        java.util.Arrays.fill(currentKek, 0)
-                        lastError = "Current password does not match vault.key — it may have been changed from another device"
-                        return@repeat
-                    } finally {
-                        java.util.Arrays.fill(currentKek, 0)
-                    }
-
-                    // Fix: LOW-001 — use nextBytes() instead of generateSeed() for cryptographic material
-                    val newKekSalt = ByteArray(16).also { SecureRandom().nextBytes(it) }
-                    val newKek = CryptoManager.deriveKey(newPassword, newKekSalt).encoded
-                    val newBundle = VaultKeyBundle(
-                        version = 1,
-                        kekSalt = newKekSalt,
-                        dekWrappedByKek = VaultKeyManager.wrapDek(dek, newKek),
-                        dekWrappedByRecovery = oldBundle.dekWrappedByRecovery
-                    )
-                    java.util.Arrays.fill(newKek, 0)
-
-                    val updated = client.updateVaultKeyInPlace(newBundle.toJson(), full.fileId, full.modifiedTime)
-                    if (updated) {
-                        VaultSession.dek = dek
-                        lastError = null
-                        return@repeat
-                    }
-                    Log.w(TAG, "vault.key conflict on attempt $attempt — retrying")
-                    lastError = "vault.key was modified concurrently. Please try again."
-                } catch (e: Exception) {
-                    Log.e(TAG, "Failed to re-wrap DEK on attempt $attempt", e)
-                    lastError = e.message
-                }
-            }
-            if (lastError != null) return@withContext PasswordChangeResult.Error(lastError!!)
+        // Bug 5A fix: block offline password change — vault.key cannot be re-keyed without Drive
+        if (account == null || folderId == null) {
+            return@withContext PasswordChangeResult.Error(
+                "Cannot change password while offline — connect to the internet and try again."
+            )
         }
+
+        val client = DriveApiClient(getApplication(), account)
+        var lastError: String? = null
+        repeat(3) { attempt ->
+            try {
+                val full = client.downloadVaultKeyFull(folderId)
+                    ?: return@repeat
+                val oldBundle = VaultKeyBundle.fromJson(full.json)
+
+                val currentKek = CryptoManager.deriveKey(currentPassword, oldBundle.kekSalt).encoded
+                val dek = try {
+                    VaultKeyManager.unwrapDek(oldBundle.dekWrappedByKek, currentKek)
+                } catch (e: javax.crypto.AEADBadTagException) {
+                    java.util.Arrays.fill(currentKek, 0)
+                    lastError = "Current password does not match vault.key — it may have been changed from another device"
+                    return@repeat
+                } finally {
+                    java.util.Arrays.fill(currentKek, 0)
+                }
+
+                // Fix: LOW-001 — use nextBytes() instead of generateSeed() for cryptographic material
+                val newKekSalt = ByteArray(16).also { SecureRandom().nextBytes(it) }
+                val newKek = CryptoManager.deriveKey(newPassword, newKekSalt).encoded
+                val newBundle = VaultKeyBundle(
+                    version = 1,
+                    kekSalt = newKekSalt,
+                    dekWrappedByKek = VaultKeyManager.wrapDek(dek, newKek),
+                    dekWrappedByRecovery = oldBundle.dekWrappedByRecovery
+                )
+                java.util.Arrays.fill(newKek, 0)
+
+                val updated = client.updateVaultKeyInPlace(newBundle.toJson(), full.fileId, full.modifiedTime)
+                if (updated) {
+                    VaultSession.dek = dek
+                    lastError = null
+                    return@repeat
+                }
+                Log.w(TAG, "vault.key conflict on attempt $attempt — retrying")
+                lastError = "vault.key was modified concurrently. Please try again."
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to re-wrap DEK on attempt $attempt", e)
+                lastError = e.message
+            }
+        }
+        if (lastError != null) return@withContext PasswordChangeResult.Error(lastError!!)
 
         val (newHash, newSalt) = CryptoManager.hashPassword(newPassword)
         prefs.savePasswordHash(newHash, newSalt)
         prefs.clearFailedAttempts()
+        // Bug 5B fix: clear stale biometric credentials that encoded the old password
+        prefs.clearBiometricCredentials()
         setActiveSession(newPassword)
         PasswordChangeResult.Success
     }

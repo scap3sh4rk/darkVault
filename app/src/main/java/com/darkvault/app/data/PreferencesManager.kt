@@ -33,6 +33,17 @@ class PreferencesManager(private val context: Context) {
         private val KEY_LOCKOUT_UNTIL_MS = longPreferencesKey("lockout_until_ms")
         private val KEY_HAS_VAULT_KEY = booleanPreferencesKey("has_vault_key")
         private val KEY_VAULT_KEY_FOLDER_ID = stringPreferencesKey("vault_key_folder_id")
+        /** Email of the Google account whose credentials are stored in this DataStore. */
+        private val KEY_LINKED_ACCOUNT = stringPreferencesKey("linked_account_email")
+        private val KEY_SESSION_TIMEOUT_MINUTES = intPreferencesKey("session_timeout_minutes")
+        // Task 8 — theme mode: "SYSTEM" / "DARK" / "LIGHT"
+        private val KEY_THEME_MODE = stringPreferencesKey("theme_mode")
+        // Task 7 — view layout: "LIST" / "GRID2" / "GRID3"
+        private val KEY_VIEW_LAYOUT = stringPreferencesKey("view_layout")
+        // Task 10 — thumbnails toggle (maps to same imagePreview but separate key for clarity)
+        private val KEY_THUMBNAILS_ENABLED = booleanPreferencesKey("thumbnails_enabled")
+        // Screenshot toggle (debug only; defaults to false so FLAG_SECURE is always on in production)
+        val KEY_SCREENSHOT_ENABLED = booleanPreferencesKey("dev_screenshot_enabled")
     }
 
     // ── Auth ──────────────────────────────────────────────────────────────
@@ -136,6 +147,47 @@ class PreferencesManager(private val context: Context) {
             it[KEY_HAS_VAULT_KEY] = true
             it[KEY_VAULT_KEY_FOLDER_ID] = folderId
         }
+    }
+
+    // ── Session timeout ───────────────────────────────────────────────────
+
+    val sessionTimeoutMinutes: Flow<Int> = context.dataStore.data.map { it[KEY_SESSION_TIMEOUT_MINUTES] ?: 0 }
+
+    suspend fun setSessionTimeoutMinutes(minutes: Int) {
+        context.dataStore.edit { it[KEY_SESSION_TIMEOUT_MINUTES] = minutes }
+    }
+
+    // ── Linked Google account ─────────────────────────────────────────────
+
+    val linkedAccountEmail: Flow<String?> = context.dataStore.data.map { it[KEY_LINKED_ACCOUNT] }
+
+    suspend fun saveLinkedAccount(email: String) {
+        context.dataStore.edit { it[KEY_LINKED_ACCOUNT] = email }
+    }
+
+    // ── Theme / layout (Task 8, 7) ────────────────────────────────────────
+
+    val themeMode: Flow<String> = context.dataStore.data.map { it[KEY_THEME_MODE] ?: "SYSTEM" }
+    val viewLayout: Flow<String> = context.dataStore.data.map { it[KEY_VIEW_LAYOUT] ?: "LIST" }
+    val thumbnailsEnabled: Flow<Boolean> = context.dataStore.data.map { it[KEY_THUMBNAILS_ENABLED] ?: true }
+
+    suspend fun setThemeMode(mode: String) {
+        context.dataStore.edit { it[KEY_THEME_MODE] = mode }
+    }
+
+    suspend fun setViewLayout(layout: String) {
+        context.dataStore.edit { it[KEY_VIEW_LAYOUT] = layout }
+    }
+
+    suspend fun setThumbnailsEnabled(enabled: Boolean) {
+        context.dataStore.edit { it[KEY_THUMBNAILS_ENABLED] = enabled }
+    }
+
+    // ── Screenshot (debug only) ──────────────────────────────────────────────
+    val screenshotEnabled: Flow<Boolean> = context.dataStore.data.map { it[KEY_SCREENSHOT_ENABLED] ?: false }
+
+    suspend fun saveScreenshotEnabled(enabled: Boolean) {
+        context.dataStore.edit { it[KEY_SCREENSHOT_ENABLED] = enabled }
     }
 
     // ── Reset ─────────────────────────────────────────────────────────────

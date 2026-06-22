@@ -11,15 +11,23 @@ import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.appcompat.app.AppCompatActivity
+import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.lifecycleScope
+import com.darkvault.app.data.PreferencesManager
 import com.darkvault.app.service.UploadForegroundService
 import com.darkvault.app.ui.navigation.DarkVaultNavGraph
 import com.darkvault.app.ui.theme.DarkVaultTheme
 import com.darkvault.app.viewmodel.AuthViewModel
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
 
 class MainActivity : AppCompatActivity() {
 
     private val authViewModel: AuthViewModel by viewModels()
+    private lateinit var prefs: PreferencesManager
 
     private val notificationPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
@@ -33,8 +41,16 @@ class MainActivity : AppCompatActivity() {
         requestNotificationPermissionIfNeeded()
         observeAppLifecycle()
 
+        prefs = PreferencesManager(this)
+
         setContent {
-            DarkVaultTheme {
+            val themeMode by prefs.themeMode.collectAsState(initial = "SYSTEM")
+            val isDark = when (themeMode) {
+                "DARK" -> true
+                "LIGHT" -> false
+                else -> isSystemInDarkTheme()
+            }
+            DarkVaultTheme(darkTheme = isDark) {
                 DarkVaultNavGraph(authViewModel)
             }
         }
@@ -70,6 +86,15 @@ class MainActivity : AppCompatActivity() {
     override fun onResume() {
         super.onResume()
         authViewModel.onAppForeground()
+        // Apply screenshot flag from DataStore (debug toggle can override FLAG_SECURE)
+        lifecycleScope.launch {
+            val screenshotEnabled = prefs.screenshotEnabled.first()
+            if (screenshotEnabled) {
+                window.clearFlags(android.view.WindowManager.LayoutParams.FLAG_SECURE)
+            } else {
+                window.addFlags(android.view.WindowManager.LayoutParams.FLAG_SECURE)
+            }
+        }
     }
 
     private fun observeAppLifecycle() { /* handled via onPause/onResume */ }

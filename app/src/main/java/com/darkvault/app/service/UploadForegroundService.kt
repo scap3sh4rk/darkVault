@@ -16,6 +16,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.ByteArrayOutputStream
@@ -27,6 +28,8 @@ class UploadForegroundService : Service() {
         const val NOTIF_ID = 1001
         const val ACTION_CANCEL_ALL = "com.darkvault.app.CANCEL_ALL_UPLOADS"
         const val ACTION_CANCEL_JOB = "com.darkvault.app.CANCEL_JOB"
+        const val ACTION_PAUSE_ALL = "com.darkvault.app.PAUSE_ALL_UPLOADS"
+        const val ACTION_RESUME_ALL = "com.darkvault.app.RESUME_ALL_UPLOADS"
         const val EXTRA_JOB_ID = "job_id"
     }
 
@@ -41,12 +44,42 @@ class UploadForegroundService : Service() {
         when (intent?.action) {
             ACTION_CANCEL_ALL -> {
                 UploadState.queue.forEach { UploadState.cancelledIds.add(it.id) }
+                // Also cancel currently paused jobs
+                UploadState.pausedIds.toList().forEach { id ->
+                    UploadState.cancelledIds.add(id)
+                    UploadState.resumeSignals[id]?.trySend(Unit)
+                }
             }
             ACTION_CANCEL_JOB -> {
-                intent.getStringExtra(EXTRA_JOB_ID)?.let { UploadState.cancelledIds.add(it) }
+                intent.getStringExtra(EXTRA_JOB_ID)?.let { id ->
+                    UploadState.cancelledIds.add(id)
+                    UploadState.resumeSignals[id]?.trySend(Unit)
+                }
+            }
+            ACTION_PAUSE_ALL -> {
+                UploadState.active.value?.let { upload ->
+                    if (!UploadState.pausedIds.contains(upload.jobId)) {
+                        UploadState.pausedIds.add(upload.jobId)
+                        if (!UploadState.resumeSignals.containsKey(upload.jobId)) {
+                            UploadState.resumeSignals[upload.jobId] = Channel(capacity = 1)
+                        }
+                        UploadState.pausedCount.value = UploadState.pausedIds.size
+                        UploadState.active.value = upload.copy(isPaused = true)
+                        updateNotificationPaused()
+                    }
+                }
+            }
+            ACTION_RESUME_ALL -> {
+                val ids = UploadState.pausedIds.toList()
+                ids.forEach { id ->
+                    UploadState.pausedIds.remove(id)
+                    UploadState.resumeSignals[id]?.trySend(Unit)
+                }
+                UploadState.pausedCount.value = 0
+                UploadState.active.value = UploadState.active.value?.copy(isPaused = false)
             }
             else -> {
-                startForeground(NOTIF_ID, buildNotification("Preparing…", 0, 0))
+                startForeground(NOTIF_ID, buildNotification("Preparing…", 0, 0, false))
                 processQueue()
             }
         }
@@ -63,11 +96,16 @@ class UploadForegroundService : Service() {
 
             val client = DriveApiClient(this@UploadForegroundService, account)
 
-            // Debug diagnostics tracking
             val activeJobIds = mutableListOf<String>()
             val activeFileNames = mutableListOf<String>()
             var failedCount = 0
             var lastFailedError: String? = null
+
+            // Task 5 — track total/completed for multi-file display
+            val totalJobs = UploadState.queue.size
+            UploadState.totalInQueue.value = totalJobs
+            UploadState.completedInQueue.value = 0
+            var jobsDone = 0
 
             while (UploadState.queue.isNotEmpty()) {
                 val job = UploadState.queue.poll() ?: break
@@ -87,25 +125,78 @@ class UploadForegroundService : Service() {
                     )
                 }
 
+                // Task 5 — create resume signal channel for this job
+                UploadState.resumeSignals[job.id] = Channel(capacity = 1)
+
                 try {
-                    // Fault injection: simulate failure if requested
                     if (com.darkvault.app.BuildConfig.DEBUG &&
                         com.darkvault.app.debug.DeveloperOptionsManager.simulateUploadFailure.value) {
                         com.darkvault.app.debug.DeveloperOptionsManager.simulateUploadFailure.value = false
                         throw Exception("Simulated upload failure (debug injection)")
                     }
-                    // Idempotent check — skip if this job was already completed on Drive
+
+                    // Idempotent check
                     if (client.fileExistsByClientId(job.id, job.folderId)) {
                         UploadState.events.emit(UploadEvent.Completed(job.id, job.originalName))
+                        jobsDone++
+                        UploadState.completedInQueue.value = jobsDone
                         continue
                     }
 
-                    // Rename duplicates instead of skipping
-                    val uploadName = client.findUniqueOriginalName(job.originalName, job.folderId)
+                    // Task 2 — conflict detection (check if originalName exists)
+                    val existingName = client.findExistingOriginalName(job.originalName, job.folderId)
+                    val uploadName: String
+                    if (existingName != null) {
+                        // Conflict: emit event and wait for user resolution
+                        val suggestedName = client.findUniqueOriginalName(job.originalName, job.folderId)
+                        val conflictsAhead = UploadState.queue.count { q ->
+                            client.findExistingOriginalName(q.originalName, q.folderId) != null
+                        }
+                        UploadState.events.emit(
+                            UploadEvent.ConflictDetected(
+                                jobId = job.id,
+                                originalName = job.originalName,
+                                suggestedName = suggestedName,
+                                conflictIndex = 1,
+                                totalConflicts = 1
+                            )
+                        )
+                        // Wait for user resolution
+                        val resolution = try {
+                            UploadState.conflictChannel.receive()
+                        } catch (e: Exception) {
+                            ConflictResolution.Skip
+                        }
+
+                        uploadName = when (resolution) {
+                            is ConflictResolution.Skip -> {
+                                UploadState.events.emit(UploadEvent.Skipped(job.id, job.originalName))
+                                jobsDone++
+                                UploadState.completedInQueue.value = jobsDone
+                                continue
+                            }
+                            is ConflictResolution.Rename -> suggestedName
+                            is ConflictResolution.RenameAs -> resolution.newName.ifBlank { suggestedName }
+                            is ConflictResolution.Replace -> {
+                                // Trash the existing conflicting file
+                                try {
+                                    val existingFileId = client.findFileIdByOriginalName(job.originalName, job.folderId)
+                                    if (existingFileId != null) client.trashFile(existingFileId)
+                                } catch (_: Exception) { /* fail gracefully */ }
+                                job.originalName
+                            }
+                        }
+                    } else {
+                        uploadName = job.originalName
+                    }
+
                     val wasRenamed = uploadName != job.originalName
 
                     // Encrypt
-                    UploadState.active.value = ActiveUpload(job.id, uploadName, 0, job.fileSize, "Encrypting…")
+                    UploadState.active.value = ActiveUpload(
+                        job.id, uploadName, 0, job.fileSize, "Encrypting…",
+                        currentIndex = jobsDone + 1, totalInBatch = totalJobs
+                    )
                     UploadState.events.emit(UploadEvent.Encrypting(job.id, uploadName))
                     updateNotification("Encrypting $uploadName…", 0, 0)
 
@@ -128,38 +219,50 @@ class UploadForegroundService : Service() {
                     }
 
                     try {
-                    val total = encBytes.size.toLong()
+                        val total = encBytes.size.toLong()
 
-                    // Start resumable session — include clientId for idempotency
-                    val sessionUri = client.startResumableSession(
-                        "${uploadName}.vault",
-                        uploadName,
-                        job.mimeType,
-                        job.folderId,
-                        total,
-                        clientId = job.id
-                    )
+                        val sessionUri = client.startResumableSession(
+                            "${uploadName}.vault",
+                            uploadName,
+                            job.mimeType,
+                            job.folderId,
+                            total,
+                            clientId = job.id
+                        )
 
-                    // Upload in chunks
-                    UploadState.active.value = ActiveUpload(job.id, uploadName, 0, total, "Uploading…")
-                    UploadState.events.emit(UploadEvent.Uploading(job.id, uploadName, 0, total))
+                        UploadState.active.value = ActiveUpload(
+                            job.id, uploadName, 0, total, "Uploading…",
+                            currentIndex = jobsDone + 1, totalInBatch = totalJobs
+                        )
+                        UploadState.events.emit(UploadEvent.Uploading(job.id, uploadName, 0, total))
 
-                    client.uploadChunked(sessionUri, encBytes) { uploaded, t ->
-                        if (job.id !in UploadState.cancelledIds) {
-                            UploadState.active.value = ActiveUpload(job.id, uploadName, uploaded, t, "Uploading…")
-                            UploadState.events.emit(UploadEvent.Uploading(job.id, uploadName, uploaded, t))
-                            updateNotification("Uploading $uploadName", uploaded, t)
+                        client.uploadChunked(sessionUri, encBytes) { uploaded, t ->
+                            if (job.id !in UploadState.cancelledIds) {
+                                val isPaused = job.id in UploadState.pausedIds
+                                UploadState.active.value = ActiveUpload(
+                                    job.id, uploadName, uploaded, t,
+                                    if (isPaused) "Paused" else "Uploading…",
+                                    isPaused = isPaused,
+                                    currentIndex = jobsDone + 1, totalInBatch = totalJobs
+                                )
+                                UploadState.events.emit(UploadEvent.Uploading(job.id, uploadName, uploaded, t))
+                                if (!isPaused) updateNotification("Uploading $uploadName", uploaded, t)
+                            }
+                            // Task 5 — check pause flag at chunk boundary
+                            if (job.id in UploadState.pausedIds) {
+                                updateNotificationPaused()
+                            }
                         }
-                    }
 
                     } finally {
-                        // Fix: MEDIUM-001 — zero encBytes after upload completes, fails, or is cancelled
                         java.util.Arrays.fill(encBytes, 0)
                     }
 
                     UploadState.active.value = null
                     activeJobIds.remove(job.id)
                     activeFileNames.remove(job.originalName)
+                    jobsDone++
+                    UploadState.completedInQueue.value = jobsDone
 
                     if (wasRenamed) {
                         UploadState.events.emit(UploadEvent.Renamed(job.id, job.originalName, uploadName))
@@ -175,6 +278,9 @@ class UploadForegroundService : Service() {
                     UploadState.events.emit(
                         UploadEvent.Failed(job.id, job.originalName, lastFailedError!!)
                     )
+                } finally {
+                    UploadState.resumeSignals.remove(job.id)
+                    UploadState.pausedIds.remove(job.id)
                 }
                 if (com.darkvault.app.BuildConfig.DEBUG) {
                     com.darkvault.app.debug.DeveloperOptionsManager.updateUploadDiagnostics(
@@ -190,11 +296,14 @@ class UploadForegroundService : Service() {
     private fun finish() {
         UploadState.active.value = null
         UploadState.queueSize.value = 0
+        UploadState.totalInQueue.value = 0
+        UploadState.completedInQueue.value = 0
+        UploadState.pausedCount.value = 0
         stopForeground(STOP_FOREGROUND_REMOVE)
         stopSelf()
     }
 
-    private fun buildNotification(text: String, uploaded: Long, total: Long): Notification {
+    private fun buildNotification(text: String, uploaded: Long, total: Long, paused: Boolean = false): Notification {
         val openIntent = PendingIntent.getActivity(
             this, 0,
             Intent(this, MainActivity::class.java).apply { flags = Intent.FLAG_ACTIVITY_SINGLE_TOP },
@@ -205,19 +314,36 @@ class UploadForegroundService : Service() {
             Intent(this, UploadForegroundService::class.java).apply { action = ACTION_CANCEL_ALL },
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
         )
+        val pauseIntent = PendingIntent.getService(
+            this, 2,
+            Intent(this, UploadForegroundService::class.java).apply { action = ACTION_PAUSE_ALL },
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+        )
+        val resumeIntent = PendingIntent.getService(
+            this, 3,
+            Intent(this, UploadForegroundService::class.java).apply { action = ACTION_RESUME_ALL },
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+        )
+
+        val notifText = if (text.length > 60) text.take(57) + "…" else text
 
         val builder = NotificationCompat.Builder(this, CHANNEL_ID)
             .setSmallIcon(android.R.drawable.stat_sys_upload)
             .setContentTitle("darkVault Upload")
-            .setContentText(text)
+            .setContentText(notifText)
             .setOngoing(true)
             .setContentIntent(openIntent)
-            .addAction(android.R.drawable.ic_delete, "Cancel", cancelIntent)
+
+        if (paused) {
+            builder.addAction(android.R.drawable.ic_media_play, "Resume", resumeIntent)
+        } else {
+            builder.addAction(android.R.drawable.ic_media_pause, "Pause", pauseIntent)
+        }
+        builder.addAction(android.R.drawable.ic_delete, "Cancel", cancelIntent)
 
         if (total > 0) {
             val pct = ((uploaded.toFloat() / total) * 100).toInt()
-            builder.setProgress(100, pct, false)
-                .setSubText("$pct%")
+            builder.setProgress(100, pct, false).setSubText("$pct%")
         } else {
             builder.setProgress(0, 0, true)
         }
@@ -227,7 +353,18 @@ class UploadForegroundService : Service() {
 
     private fun updateNotification(text: String, uploaded: Long, total: Long) {
         getSystemService(NotificationManager::class.java)
-            .notify(NOTIF_ID, buildNotification(text, uploaded, total))
+            .notify(NOTIF_ID, buildNotification(text, uploaded, total, false))
+    }
+
+    private fun updateNotificationPaused() {
+        val upload = UploadState.active.value
+        getSystemService(NotificationManager::class.java)
+            .notify(NOTIF_ID, buildNotification(
+                "${UploadState.pausedIds.size} upload(s) paused",
+                upload?.uploaded ?: 0L,
+                upload?.total ?: 0L,
+                true
+            ))
     }
 
     private fun ensureChannel() {

@@ -21,11 +21,17 @@ class DriveApiClient(
     private val account: GoogleSignInAccount
 ) {
     private val gson = Gson()
-    private val http = OkHttpClient.Builder()
-        .connectTimeout(30, TimeUnit.SECONDS)
-        .readTimeout(300, TimeUnit.SECONDS)
-        .writeTimeout(300, TimeUnit.SECONDS)
-        .build()
+    private val http = sharedHttpClient
+
+    companion object {
+        val sharedHttpClient: OkHttpClient by lazy {
+            OkHttpClient.Builder()
+                .connectTimeout(30, TimeUnit.SECONDS)
+                .readTimeout(300, TimeUnit.SECONDS)
+                .writeTimeout(300, TimeUnit.SECONDS)
+                .build()
+        }
+    }
 
     private val driveScope = "oauth2:https://www.googleapis.com/auth/drive.file"
 
@@ -294,6 +300,37 @@ class DriveApiClient(
             val body = gson.fromJson(resp.body!!.string(), JsonObject::class.java)
             val files = body.getAsJsonArray("files")
             files != null && files.size() > 0
+        }
+
+    /**
+     * Returns the originalName if it already exists in the folder (for conflict detection),
+     * or null if no conflict.
+     */
+    suspend fun findExistingOriginalName(originalName: String, folderId: String): String? =
+        if (fileExistsByOriginalName(originalName, folderId)) originalName else null
+
+    /**
+     * Returns the Drive file ID of the first file with this originalName, or null.
+     */
+    suspend fun findFileIdByOriginalName(originalName: String, folderId: String): String? =
+        withContext(Dispatchers.IO) {
+            val t = token()
+            val safe = originalName.take(100).replace("'", "\\'")
+            val q = java.net.URLEncoder.encode(
+                "appProperties has { key='originalName' and value='$safe' }" +
+                        " and '$folderId' in parents and trashed=false",
+                "UTF-8"
+            )
+            val resp = http.newCall(
+                Request.Builder()
+                    .url("https://www.googleapis.com/drive/v3/files?q=$q&fields=files(id)")
+                    .addHeader("Authorization", "Bearer $t")
+                    .build()
+            ).execute()
+            if (!resp.isSuccessful) return@withContext null
+            val body = gson.fromJson(resp.body!!.string(), JsonObject::class.java)
+            val files = body.getAsJsonArray("files")
+            if (files != null && files.size() > 0) files[0].asJsonObject.get("id")?.asString else null
         }
 
     /**
@@ -630,6 +667,37 @@ class DriveApiClient(
         ).execute()
         if (!resp.isSuccessful) error("Failed to update vault.key in-place: ${resp.code}")
         true
+    }
+
+    /** Renames a vault file and updates its originalName appProperty. */
+    suspend fun renameFile(fileId: String, newOriginalName: String) = withContext(Dispatchers.IO) {
+        val t = token()
+        val escaped = newOriginalName.replace("\\", "\\\\").replace("\"", "\\\"").take(200)
+        val body = """{"name":"$escaped.vault","appProperties":{"originalName":"$escaped"}}"""
+        val resp = http.newCall(
+            Request.Builder()
+                .url("https://www.googleapis.com/drive/v3/files/$fileId?fields=id")
+                .addHeader("Authorization", "Bearer $t")
+                .method("PATCH", body.toRequestBody("application/json; charset=UTF-8".toMediaType()))
+                .build()
+        ).execute()
+        if (!resp.isSuccessful) throw java.io.IOException("Rename failed: ${resp.code}")
+    }
+
+    /** Creates a new sub-folder (always creates, does not check for existing). */
+    suspend fun createSubFolderAlways(name: String, parentFolderId: String): String = withContext(Dispatchers.IO) {
+        val t = token()
+        val escaped = name.replace("\\", "\\\\").replace("\"", "\\\"")
+        val resp = http.newCall(
+            Request.Builder()
+                .url("https://www.googleapis.com/drive/v3/files?fields=id")
+                .addHeader("Authorization", "Bearer $t")
+                .post("""{"name":"$escaped","mimeType":"application/vnd.google-apps.folder","parents":["$parentFolderId"]}"""
+                    .toRequestBody("application/json; charset=UTF-8".toMediaType()))
+                .build()
+        ).execute()
+        if (!resp.isSuccessful) throw java.io.IOException("Failed to create folder '$name': ${resp.code}")
+        gson.fromJson(resp.body!!.string(), com.google.gson.JsonObject::class.java).get("id").asString
     }
 
     /**

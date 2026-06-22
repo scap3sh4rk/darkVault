@@ -20,6 +20,7 @@ import com.darkvault.app.model.SortOrder
 import com.darkvault.app.model.StorageInfo
 import com.darkvault.app.model.VaultFile
 import com.darkvault.app.service.ActiveUpload
+import com.darkvault.app.service.ConflictResolution
 import com.darkvault.app.service.UploadEvent
 import com.darkvault.app.service.UploadForegroundService
 import com.darkvault.app.service.UploadJob
@@ -38,6 +39,9 @@ import kotlinx.coroutines.withContext
 import java.io.ByteArrayOutputStream
 import java.io.File
 import java.util.UUID
+
+// Task 7 — view layout
+enum class ViewLayout { LIST, GRID2, GRID3 }
 
 // ── UI state models ───────────────────────────────────────────────────────────
 
@@ -93,6 +97,21 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     val filterType = MutableStateFlow(FilterType.ALL)
     val sortOrder = MutableStateFlow(SortOrder.NAME_ASC)
 
+    // Task 7 — view layout (persisted in DataStore)
+    val viewLayout: StateFlow<ViewLayout> = prefs.viewLayout.map { str ->
+        when (str) { "GRID2" -> ViewLayout.GRID2; "GRID3" -> ViewLayout.GRID3; else -> ViewLayout.LIST }
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, ViewLayout.LIST)
+
+    fun setViewLayout(layout: ViewLayout) {
+        viewModelScope.launch { prefs.setViewLayout(layout.name) }
+    }
+
+    // Task 4 — thumbnails enabled toggle (persisted)
+    val thumbnailsEnabled: StateFlow<Boolean> = prefs.thumbnailsEnabled
+        .stateIn(viewModelScope, SharingStarted.Eagerly, true)
+    val imagePreviewEnabled: StateFlow<Boolean> = prefs.imagePreviewEnabled
+        .stateIn(viewModelScope, SharingStarted.Eagerly, true)
+
     // Derived: apply search, filter and sort to raw items
     val displayItems: StateFlow<List<VaultFile>> = combine(
         _rawItems, searchQuery, filterType, sortOrder
@@ -141,6 +160,27 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     // ── Upload state (from foreground service) ─────────────────────────────
     val activeUpload: StateFlow<ActiveUpload?> = UploadState.active
 
+    // Task 5 — pause / resume / cancel
+    fun pauseAllUploads() {
+        val ctx = getApplication<Application>()
+        ctx.startService(Intent(ctx, UploadForegroundService::class.java).apply { action = UploadForegroundService.ACTION_PAUSE_ALL })
+    }
+    fun resumeAllUploads() {
+        val ctx = getApplication<Application>()
+        ctx.startService(Intent(ctx, UploadForegroundService::class.java).apply { action = UploadForegroundService.ACTION_RESUME_ALL })
+    }
+    val uploadIsPaused: StateFlow<Boolean> = UploadState.pausedCount.map { it > 0 }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, false)
+
+    // Task 2 — pending conflict event from upload service
+    private val _pendingConflict = MutableStateFlow<UploadEvent.ConflictDetected?>(null)
+    val pendingConflict: StateFlow<UploadEvent.ConflictDetected?> = _pendingConflict
+
+    fun resolveConflict(resolution: ConflictResolution) {
+        _pendingConflict.value = null
+        viewModelScope.launch { UploadState.conflictChannel.send(resolution) }
+    }
+
     // ── Selected items for batch ops ───────────────────────────────────────
     val selectedIds = MutableStateFlow<Set<String>>(emptySet())
 
@@ -152,6 +192,8 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
 
     private var cachedFolderId: String? = null
     private var cachedAccount: GoogleSignInAccount? = null
+    // In-memory cache per folder ID → list of vault files for stale-while-revalidate
+    private val folderCache = mutableMapOf<String, List<VaultFile>>()
 
     init {
         // Observe upload events from the foreground service
@@ -173,9 +215,13 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                         _operationState.value = OperationState.Failed("Failed to upload \"${event.fileName}\": ${event.reason}")
                     is UploadEvent.Cancelled ->
                         _operationState.value = OperationState.Done("Upload of \"${event.fileName}\" cancelled")
-                    // UploadEvent.Duplicate is kept for backward compat but no longer emitted
                     is UploadEvent.Duplicate ->
                         _operationState.value = OperationState.Done("\"${event.fileName}\" already exists — skipped")
+                    is UploadEvent.Skipped ->
+                        _operationState.value = OperationState.Done("\"${event.fileName}\" skipped")
+                    // Task 2 — surface conflict to UI
+                    is UploadEvent.ConflictDetected ->
+                        _pendingConflict.value = event
                     else -> Unit
                 }
             }
@@ -248,16 +294,25 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
 
     private fun loadItemsForCurrentFolder(account: GoogleSignInAccount) {
         viewModelScope.launch {
-            _uiState.value = HomeUiState.Loading
             val currentId = _folderStack.value.last().id
+            // Stale-while-revalidate: emit cached data immediately so the user sees something
+            val cached = folderCache[currentId]
+            if (cached != null) {
+                _rawItems.value = cached
+                _uiState.value = HomeUiState.Success(cached)
+            } else {
+                _uiState.value = HomeUiState.Loading
+            }
             runCatching {
                 DriveApiClient(getApplication(), account).listItems(currentId)
             }.onSuccess { items ->
+                folderCache[currentId] = items
                 _rawItems.value = items
                 _uiState.value = HomeUiState.Success(items)
-                _lastSyncedMs.value = System.currentTimeMillis() // Task 7
+                _lastSyncedMs.value = System.currentTimeMillis()
             }.onFailure { e ->
-                _uiState.value = HomeUiState.Error(e.message ?: "Failed to load folder")
+                if (cached == null) _uiState.value = HomeUiState.Error(e.message ?: "Failed to load folder")
+                // If we had cached data, keep showing it (don't replace with error)
             }
         }
     }
@@ -611,6 +666,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     fun clearDriveState() {
         cachedAccount = null
         cachedFolderId = null
+        folderCache.clear()
         _rawItems.value = emptyList()
         _uiState.value = HomeUiState.NotSignedIn
         _folderStack.value = emptyList()
@@ -647,6 +703,38 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             it.moveToFirst()
             if (idx >= 0) it.getLong(idx) else 0L
         } ?: 0L
+    }
+
+    fun renameFile(file: VaultFile, newName: String, account: GoogleSignInAccount) {
+        val safeName = newName.replace(Regex("[/\\\\:*?\"<>|\\p{Cntrl}]"), "_").take(200).ifBlank { "file" }
+        viewModelScope.launch(Dispatchers.IO) {
+            runCatching {
+                val client = DriveApiClient(getApplication(), account)
+                client.renameFile(file.id, safeName)
+            }.onSuccess {
+                // Update cache and refresh
+                val currentId = _folderStack.value.lastOrNull()?.id
+                if (currentId != null) folderCache.remove(currentId)
+                loadFiles(account, refreshStorage = false)
+            }.onFailure { e ->
+                _operationState.value = OperationState.Failed("Rename failed: ${e.message}")
+            }
+        }
+    }
+
+    fun createFolder(name: String, parentId: String, account: GoogleSignInAccount) {
+        val safeName = name.replace(Regex("[/\\\\:*?\"<>|\\p{Cntrl}]"), "_").take(200).ifBlank { "folder" }
+        viewModelScope.launch(Dispatchers.IO) {
+            runCatching {
+                val client = DriveApiClient(getApplication(), account)
+                client.ensureSubFolder(safeName, parentId)
+            }.onSuccess {
+                folderCache.remove(parentId)
+                loadFiles(account, refreshStorage = false)
+            }.onFailure { e ->
+                _operationState.value = OperationState.Failed("Create folder failed: ${e.message}")
+            }
+        }
     }
 
     // ── MIME type helpers ──────────────────────────────────────────────────

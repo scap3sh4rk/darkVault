@@ -5,14 +5,17 @@ import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -23,6 +26,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.AudioFile
 import androidx.compose.material.icons.outlined.CheckCircle
+import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Download
 import androidx.compose.material.icons.outlined.Folder
@@ -31,6 +35,7 @@ import androidx.compose.material.icons.outlined.Image
 import androidx.compose.material.icons.automirrored.outlined.InsertDriveFile
 import androidx.compose.material.icons.outlined.LockOpen
 import androidx.compose.material.icons.outlined.MusicNote
+import androidx.compose.material.icons.outlined.PauseCircleOutline
 import androidx.compose.material.icons.outlined.PictureAsPdf
 import androidx.compose.material.icons.outlined.Preview
 import androidx.compose.material.icons.outlined.VideoFile
@@ -181,15 +186,21 @@ fun VaultLogo(modifier: Modifier = Modifier) {
 
 // ── File / folder cards ────────────────────────────────────────────────────────
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun VaultFileCard(
     file: VaultFile,
     onDownload: () -> Unit,
     onDelete: () -> Unit,
     onPreview: (() -> Unit)? = null,
+    onLongPress: (() -> Unit)? = null,
     isSelected: Boolean = false,
     onToggleSelect: (() -> Unit)? = null,
-    modifier: Modifier = Modifier
+    onClick: (() -> Unit)? = null,
+    modifier: Modifier = Modifier,
+    showThumbnail: Boolean = false,
+    thumbnailPassword: String? = null,
+    thumbnailAccount: com.google.android.gms.auth.api.signin.GoogleSignInAccount? = null
 ) {
     val borderColor = if (isSelected) CyanPrimary else VaultOutline
     Card(
@@ -200,7 +211,17 @@ fun VaultFileCard(
         modifier = modifier
             .fillMaxWidth()
             .border(if (isSelected) 1.5.dp else 1.dp, borderColor, RoundedCornerShape(12.dp))
-            .then(if (onToggleSelect != null) Modifier.clickable { onToggleSelect() } else Modifier)
+            .then(when {
+                onToggleSelect != null -> Modifier.combinedClickable(
+                    onClick = { onToggleSelect() },
+                    onLongClick = onLongPress
+                )
+                onClick != null || onLongPress != null -> Modifier.combinedClickable(
+                    onClick = { onClick?.invoke() },
+                    onLongClick = onLongPress
+                )
+                else -> Modifier
+            })
     ) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
@@ -221,12 +242,23 @@ fun VaultFileCard(
                 Spacer(Modifier.width(10.dp))
             }
 
-            // File type icon
+            // Thumbnail or file type icon
             Box(
                 contentAlignment = Alignment.Center,
                 modifier = Modifier.size(40.dp).clip(RoundedCornerShape(10.dp)).background(VaultBackground)
             ) {
-                Icon(fileTypeIcon(file.originalName, file.originalMimeType), null, tint = CyanPrimary, modifier = Modifier.size(20.dp))
+                if (showThumbnail && HomeViewModel.isImageMime(file.originalMimeType)) {
+                    VaultThumbnailImage(
+                        file = file,
+                        password = thumbnailPassword,
+                        account = thumbnailAccount,
+                        showThumbnails = true,
+                        iconSize = 20.dp,
+                        modifier = Modifier.fillMaxSize()
+                    )
+                } else {
+                    Icon(fileTypeIcon(file.originalName, file.originalMimeType), null, tint = CyanPrimary, modifier = Modifier.size(20.dp))
+                }
             }
 
             Spacer(Modifier.width(12.dp))
@@ -348,7 +380,12 @@ fun UploadProgressCard(
     uploaded: Long,
     total: Long,
     onCancel: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    isPaused: Boolean = false,
+    currentIndex: Int = 0,
+    totalInBatch: Int = 0,
+    onPause: (() -> Unit)? = null,
+    onResume: (() -> Unit)? = null
 ) {
     Card(
         shape = RoundedCornerShape(12.dp),
@@ -356,15 +393,33 @@ fun UploadProgressCard(
         modifier = modifier.fillMaxWidth().border(1.dp, CyanPrimary.copy(alpha = 0.4f), RoundedCornerShape(12.dp))
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                CircularProgressIndicator(
-                    modifier = Modifier.size(16.dp),
-                    color = CyanPrimary,
-                    strokeWidth = 2.dp,
-                    strokeCap = StrokeCap.Round
+            // Multi-file queue line (Task 5)
+            if (totalInBatch > 1 && currentIndex > 0) {
+                Text(
+                    "File $currentIndex of $totalInBatch",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(bottom = 4.dp)
                 )
+            }
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                if (isPaused) {
+                    Icon(Icons.Outlined.PauseCircleOutline, null, tint = CyanPrimary, modifier = Modifier.size(16.dp))
+                } else {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(16.dp),
+                        color = CyanPrimary,
+                        strokeWidth = 2.dp,
+                        strokeCap = StrokeCap.Round
+                    )
+                }
                 Spacer(Modifier.width(10.dp))
-                Text(stage, style = MaterialTheme.typography.labelMedium, color = CyanPrimary, modifier = Modifier.weight(1f))
+                Text(
+                    if (isPaused) "Upload paused" else stage,
+                    style = MaterialTheme.typography.labelMedium,
+                    color = CyanPrimary,
+                    modifier = Modifier.weight(1f)
+                )
                 if (total > 0) {
                     Text(
                         "${(progress * 100).toInt()}%",
@@ -408,6 +463,18 @@ fun UploadProgressCard(
             }
             Spacer(Modifier.height(8.dp))
             Row(horizontalArrangement = Arrangement.End, modifier = Modifier.fillMaxWidth()) {
+                // Task 5: Pause / Resume button
+                if (onPause != null && onResume != null) {
+                    if (isPaused) {
+                        androidx.compose.material3.TextButton(onClick = onResume) {
+                            Text("Resume", color = CyanPrimary, style = MaterialTheme.typography.labelMedium)
+                        }
+                    } else {
+                        androidx.compose.material3.TextButton(onClick = onPause) {
+                            Text("Pause", color = CyanPrimary, style = MaterialTheme.typography.labelMedium)
+                        }
+                    }
+                }
                 androidx.compose.material3.TextButton(onClick = onCancel) {
                     Text("Cancel", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.labelMedium)
                 }
@@ -520,6 +587,114 @@ fun EmptyVaultState(modifier: Modifier = Modifier) {
             "Tap + to upload and encrypt a file",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+        )
+    }
+}
+
+@Composable
+fun EmptySearchState(modifier: Modifier = Modifier) {
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center,
+        modifier = modifier.padding(32.dp)
+    ) {
+        Icon(Icons.Outlined.Search, null, tint = VaultOutline, modifier = Modifier.size(64.dp))
+        Spacer(Modifier.height(16.dp))
+        Text("No files match your search", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Spacer(Modifier.height(8.dp))
+        Text(
+            "Try different keywords or clear the filter",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+        )
+    }
+}
+
+// ── Vault thumbnail image (Task 4) ────────────────────────────────────────────
+
+/**
+ * Displays a thumbnail for an encrypted vault file.
+ * Decrypts in memory via Coil + [VaultThumbnailFetcher]; never writes plaintext to disk.
+ * Shows a shimmer placeholder while loading.
+ * Gated by [showThumbnails]; falls back to icon when false or on error.
+ */
+@Composable
+fun VaultThumbnailImage(
+    file: com.darkvault.app.model.VaultFile,
+    password: String?,
+    account: com.google.android.gms.auth.api.signin.GoogleSignInAccount?,
+    showThumbnails: Boolean,
+    modifier: Modifier = Modifier,
+    iconSize: androidx.compose.ui.unit.Dp = 24.dp
+) {
+    val isImageOrVideo = HomeViewModel.isImageMime(file.originalMimeType) ||
+            HomeViewModel.isVideoMime(file.originalMimeType)
+    val canShowThumb = showThumbnails && isImageOrVideo && !file.isFolder &&
+            password != null && account != null &&
+            HomeViewModel.isImageMime(file.originalMimeType) &&
+            com.darkvault.app.VaultSession.dek != null
+
+    if (canShowThumb) {
+        val context = androidx.compose.ui.platform.LocalContext.current
+        val imageLoader = androidx.compose.runtime.remember(context) { buildVaultImageLoader(context) }
+        val request = VaultThumbnailRequest(
+            file = file,
+            password = password!!,
+            account = account!!
+        )
+
+        val infiniteTransition = rememberInfiniteTransition(label = "shimmer")
+        val shimmerAlpha by infiniteTransition.animateFloat(
+            initialValue = 0.2f,
+            targetValue = 0.5f,
+            animationSpec = infiniteRepeatable(tween(900), RepeatMode.Reverse),
+            label = "shimmerAlpha"
+        )
+
+        coil.compose.SubcomposeAsyncImage(
+            model = coil.request.ImageRequest.Builder(context)
+                .data(request)
+                .diskCachePolicy(coil.request.CachePolicy.DISABLED)
+                .crossfade(true)
+                .build(),
+            imageLoader = imageLoader,
+            contentDescription = null,
+            contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+            loading = {
+                // Shimmer placeholder while loading
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(VaultBackground)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(CyanPrimary.copy(alpha = shimmerAlpha))
+                    )
+                }
+            },
+            error = {
+                // Fallback to file type icon on error
+                Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
+                    Icon(
+                        fileTypeIcon(file.originalName, file.originalMimeType),
+                        null,
+                        tint = CyanPrimary.copy(alpha = 0.7f),
+                        modifier = Modifier.size(iconSize)
+                    )
+                }
+            },
+            modifier = modifier
+        )
+    } else {
+        // Fallback: plain icon when thumbnails disabled, file is a video, or DEK is null
+        Icon(
+            if (file.isFolder) Icons.Outlined.Folder
+            else fileTypeIcon(file.originalName, file.originalMimeType),
+            null,
+            tint = if (file.isFolder) CyanPrimary else CyanPrimary.copy(alpha = 0.7f),
+            modifier = Modifier.size(iconSize)
         )
     }
 }
