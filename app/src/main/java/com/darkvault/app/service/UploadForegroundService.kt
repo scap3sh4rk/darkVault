@@ -127,6 +127,7 @@ class UploadForegroundService : Service() {
                         out.toByteArray()
                     }
 
+                    try {
                     val total = encBytes.size.toLong()
 
                     // Start resumable session — include clientId for idempotency
@@ -149,6 +150,11 @@ class UploadForegroundService : Service() {
                             UploadState.events.emit(UploadEvent.Uploading(job.id, uploadName, uploaded, t))
                             updateNotification("Uploading $uploadName", uploaded, t)
                         }
+                    }
+
+                    } finally {
+                        // Fix: MEDIUM-001 — zero encBytes after upload completes, fails, or is cancelled
+                        java.util.Arrays.fill(encBytes, 0)
                     }
 
                     UploadState.active.value = null

@@ -294,10 +294,11 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
             val full = client.downloadVaultKeyFull(folderId) ?: return@withContext UnlockAttemptResult.NETWORK_FALLBACK
 
             val bundle = VaultKeyBundle.fromJson(full.json)
+            // Fix: HIGH-001 — derive kek then wrap its usage in try-finally so it is zeroed on
+            // ALL exception paths, including IllegalBlockSizeException from malformed ciphertext.
             val kek = CryptoManager.deriveKey(password, bundle.kekSalt).encoded
-            return@withContext try {
+            try {
                 val dek = VaultKeyManager.unwrapDek(bundle.dekWrappedByKek, kek)
-                java.util.Arrays.fill(kek, 0)
 
                 val stored = prefs.getPasswordHashAndSalt()
                 if (stored == null || !CryptoManager.verifyPassword(password, stored.first, stored.second)) {
@@ -311,15 +312,17 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
                     com.darkvault.app.debug.DeveloperOptionsManager.onDekUnwrapped(bundle.kekSalt)
                     com.darkvault.app.debug.DeveloperOptionsManager.setVaultKeyPresent(true)
                 }
-                UnlockAttemptResult.SUCCESS
+                return@withContext UnlockAttemptResult.SUCCESS
             } catch (e: javax.crypto.AEADBadTagException) {
-                java.util.Arrays.fill(kek, 0)
                 val stored = prefs.getPasswordHashAndSalt()
-                if (stored != null && CryptoManager.verifyPassword(password, stored.first, stored.second)) {
+                return@withContext if (stored != null && CryptoManager.verifyPassword(password, stored.first, stored.second)) {
                     UnlockAttemptResult.CHANGED_ON_OTHER_DEVICE
                 } else {
                     UnlockAttemptResult.WRONG_PASSWORD
                 }
+            } finally {
+                // Fix: HIGH-001 — zero KEK in all paths (success, AEADBadTagException, any other exception)
+                java.util.Arrays.fill(kek, 0)
             }
         } catch (e: Exception) {
             Log.w(TAG, "Drive-backed auth unavailable, falling back to local hash", e)
@@ -426,7 +429,8 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
             val client = DriveApiClient(getApplication(), account)
             val dek = VaultKeyManager.generateDek()
             val recoveryKey = VaultKeyManager.generateRecoveryKey()
-            val kekSalt = SecureRandom().generateSeed(16)
+            // Fix: LOW-001 — use nextBytes() instead of generateSeed() for cryptographic material
+            val kekSalt = ByteArray(16).also { SecureRandom().nextBytes(it) }
             val kek = CryptoManager.deriveKey(password, kekSalt).encoded
             val bundle = VaultKeyBundle(
                 version = 1,
@@ -460,9 +464,14 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
 
                     if (existingJson != null) {
                         val bundle = VaultKeyBundle.fromJson(existingJson)
+                        // Fix: MEDIUM-002 — wrap kek in try-finally so it is always zeroed
+                        // even when unwrapDek() throws an exception
                         val kek = CryptoManager.deriveKey(password, bundle.kekSalt).encoded
-                        val dek = VaultKeyManager.unwrapDek(bundle.dekWrappedByKek, kek)
-                        java.util.Arrays.fill(kek, 0)
+                        val dek = try {
+                            VaultKeyManager.unwrapDek(bundle.dekWrappedByKek, kek)
+                        } finally {
+                            java.util.Arrays.fill(kek, 0)
+                        }
                         VaultSession.dek = dek
                         Log.d(TAG, "DEK loaded from existing vault.key")
                     } else {
@@ -630,7 +639,8 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
                         java.util.Arrays.fill(currentKek, 0)
                     }
 
-                    val newKekSalt = SecureRandom().generateSeed(16)
+                    // Fix: LOW-001 — use nextBytes() instead of generateSeed() for cryptographic material
+                    val newKekSalt = ByteArray(16).also { SecureRandom().nextBytes(it) }
                     val newKek = CryptoManager.deriveKey(newPassword, newKekSalt).encoded
                     val newBundle = VaultKeyBundle(
                         version = 1,
@@ -687,7 +697,8 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
                     return@withContext PasswordChangeResult.Error(lastError)
                 }
 
-                val newKekSalt = SecureRandom().generateSeed(16)
+                // Fix: LOW-001 — use nextBytes() instead of generateSeed() for cryptographic material
+                val newKekSalt = ByteArray(16).also { SecureRandom().nextBytes(it) }
                 val newKek = CryptoManager.deriveKey(newPassword, newKekSalt).encoded
                 val newBundle = VaultKeyBundle(
                     version = 1,

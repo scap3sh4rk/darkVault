@@ -18,6 +18,7 @@ import androidx.compose.material.icons.outlined.Fingerprint
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -43,27 +44,27 @@ import com.darkvault.app.ui.components.VaultLogo
 import com.darkvault.app.ui.components.VaultTextField
 import com.darkvault.app.ui.theme.CyanPrimary
 import com.darkvault.app.ui.theme.VaultSurfaceVariant
+import com.darkvault.app.viewmodel.AuthState
 import com.darkvault.app.viewmodel.AuthViewModel
 import com.google.android.gms.auth.api.signin.GoogleSignIn
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
 @Composable
-fun UnlockScreen(viewModel: AuthViewModel, onUnlocked: () -> Unit) {
+fun UnlockScreen(viewModel: AuthViewModel) {
     val isLoading by viewModel.isLoading.collectAsState()
     val authError by viewModel.authError.collectAsState()
     val biometricEnabled by viewModel.biometricEnabled.collectAsState()
+    val authState by viewModel.authState.collectAsState()
 
     val context = LocalContext.current
     val activity = context as FragmentActivity
     val prefs = remember { PreferencesManager(context) }
-
     val scope = rememberCoroutineScope()
 
     var password by remember { mutableStateOf("") }
     var biometricError by remember { mutableStateOf<String?>(null) }
 
-    // Recovery key dialog state
     var showRecoveryDialog by remember { mutableStateOf(false) }
     var recoveryKey by remember { mutableStateOf("") }
     var recoveryNewPwd by remember { mutableStateOf("") }
@@ -80,10 +81,11 @@ fun UnlockScreen(viewModel: AuthViewModel, onUnlocked: () -> Unit) {
         recoveryLoading = false
     }
 
+    // AppLocked = DEK is retained in memory, biometric just gates the UI
+    val isAppLocked = authState is AuthState.AppLocked
     val biometricAvailable = remember { BiometricHelper.isAvailable(context) && BiometricKeyManager.keyExists() }
-    val showBiometric = biometricEnabled && biometricAvailable
+    val canUseBiometric = biometricEnabled && biometricAvailable
 
-    // Build the BiometricPrompt with a decryption CryptoObject
     val biometricPrompt = remember(activity) {
         BiometricPrompt(
             activity,
@@ -95,7 +97,7 @@ fun UnlockScreen(viewModel: AuthViewModel, onUnlocked: () -> Unit) {
                         biometricError = "Biometric cipher unavailable"
                         return
                     }
-                    viewModel.unlockWithBiometricCipher(cipher) { onUnlocked() }
+                    viewModel.unlockWithBiometricCipher(cipher)
                 }
 
                 override fun onAuthenticationError(errorCode: Int, errString: CharSequence) {
@@ -113,111 +115,180 @@ fun UnlockScreen(viewModel: AuthViewModel, onUnlocked: () -> Unit) {
         )
     }
 
+    // Fix: MEDIUM-003 — replace runBlocking (blocks main thread, ANR risk) with a coroutine
+    // launched in rememberCoroutineScope() so the DataStore read is non-blocking.
     fun launchBiometric() {
-        try {
-            val creds = runCatching {
-                kotlinx.coroutines.runBlocking { prefs.getBiometricCredentials() }
-            }.getOrNull() ?: run {
-                biometricError = "Biometric credentials not set up"
-                return
+        scope.launch {
+            try {
+                val creds = prefs.getBiometricCredentials() ?: run {
+                    biometricError = "Biometric credentials not set up"
+                    return@launch
+                }
+                val cipher = try {
+                    BiometricKeyManager.getCipherForDecryption(creds.first)
+                } catch (e: Exception) {
+                    biometricError = "Biometric unavailable: ${e.message}"
+                    return@launch
+                }
+                val info = BiometricPrompt.PromptInfo.Builder()
+                    .setTitle("Unlock darkVault")
+                    .setSubtitle("Use your fingerprint to unlock")
+                    .setNegativeButtonText("Use password")
+                    .setAllowedAuthenticators(BIOMETRIC_STRONG)
+                    .build()
+                biometricPrompt.authenticate(info, BiometricPrompt.CryptoObject(cipher))
+            } catch (e: Exception) {
+                biometricError = "Biometric unavailable: ${e.message}"
             }
-            val cipher = BiometricKeyManager.getCipherForDecryption(creds.first)
-            val info = BiometricPrompt.PromptInfo.Builder()
-                .setTitle("Unlock darkVault")
-                .setSubtitle("Use your fingerprint to unlock")
-                .setNegativeButtonText("Use password")
-                .setAllowedAuthenticators(BIOMETRIC_STRONG)
-                .build()
-            biometricPrompt.authenticate(info, BiometricPrompt.CryptoObject(cipher))
-        } catch (e: Exception) {
-            biometricError = "Biometric unavailable: ${e.message}"
         }
+    }
+
+    // Auto-launch biometric on entry when in AppLocked mode
+    LaunchedEffect(Unit) {
+        if (isAppLocked && canUseBiometric) launchBiometric()
     }
 
     LaunchedEffect(authError) {
         if (authError != null) password = ""
     }
 
-    // Auto-launch biometric on first composition (covers normal unlock + post-auto-lock re-navigation)
-    LaunchedEffect(Unit) {
-        if (showBiometric) launchBiometric()
-    }
+    if (isAppLocked) {
+        // ── App-level lock: biometric-first UI ────────────────────────────────
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            modifier = Modifier
+                .fillMaxSize()
+                .background(MaterialTheme.colorScheme.background)
+                .padding(horizontal = 28.dp, vertical = 56.dp)
+        ) {
+            Spacer(modifier = Modifier.weight(0.3f))
 
-    Column(
-        horizontalAlignment = Alignment.CenterHorizontally,
-        modifier = Modifier
-            .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background)
-            .padding(horizontal = 28.dp, vertical = 56.dp)
-    ) {
-        Spacer(modifier = Modifier.weight(0.4f))
+            VaultLogo()
 
-        VaultLogo()
+            Spacer(modifier = Modifier.height(40.dp))
 
-        Spacer(modifier = Modifier.height(48.dp))
+            Text(
+                "darkVault is locked",
+                style = MaterialTheme.typography.headlineSmall,
+                color = MaterialTheme.colorScheme.onBackground
+            )
 
-        Text(
-            "Unlock Vault",
-            style = MaterialTheme.typography.headlineSmall,
-            color = MaterialTheme.colorScheme.onBackground
-        )
+            Spacer(modifier = Modifier.height(56.dp))
 
-        Spacer(modifier = Modifier.height(32.dp))
-
-        VaultTextField(
-            value = password,
-            onValueChange = {
-                password = it
-                if (authError != null) viewModel.clearError()
-            },
-            label = "Master password",
-            isPassword = true,
-            isError = authError != null,
-            errorMessage = authError,
-            modifier = Modifier.fillMaxWidth()
-        )
-
-        Spacer(modifier = Modifier.height(24.dp))
-
-        CyberButton(
-            text = "Unlock",
-            onClick = { if (password.isNotBlank()) viewModel.unlock(password) { onUnlocked() } },
-            enabled = password.isNotBlank(),
-            isLoading = isLoading,
-            modifier = Modifier.fillMaxWidth()
-        )
-
-        if (showBiometric) {
-            Spacer(modifier = Modifier.height(16.dp))
-            TextButton(onClick = { launchBiometric() }) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Outlined.Fingerprint, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(24.dp))
-                    Spacer(Modifier.width(8.dp))
-                    Text("Use fingerprint", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelLarge)
-                }
+            IconButton(
+                onClick = { biometricError = null; launchBiometric() },
+                modifier = Modifier.size(80.dp)
+            ) {
+                Icon(
+                    Icons.Outlined.Fingerprint,
+                    contentDescription = "Unlock with biometric",
+                    tint = CyanPrimary,
+                    modifier = Modifier.size(80.dp)
+                )
             }
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            Text(
+                "Tap to unlock with fingerprint",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
 
             biometricError?.let { err ->
-                Spacer(Modifier.height(4.dp))
-                Text(err, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    err,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error
+                )
             }
+
+            Spacer(modifier = Modifier.height(40.dp))
+
+            TextButton(onClick = { viewModel.revertToVaultLock() }) {
+                Text(
+                    "Use master password instead",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    style = MaterialTheme.typography.bodySmall
+                )
+            }
+
+            Spacer(modifier = Modifier.weight(0.7f))
         }
+    } else {
+        // ── Full vault lock: password-first UI ────────────────────────────────
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            modifier = Modifier
+                .fillMaxSize()
+                .background(MaterialTheme.colorScheme.background)
+                .padding(horizontal = 28.dp, vertical = 56.dp)
+        ) {
+            Spacer(modifier = Modifier.weight(0.4f))
 
-        Spacer(modifier = Modifier.height(24.dp))
+            VaultLogo()
 
-        TextButton(onClick = { showRecoveryDialog = true }) {
-            Text("Forgot password? Use recovery key", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
+            Spacer(modifier = Modifier.height(48.dp))
+
+            Text(
+                "Unlock Vault",
+                style = MaterialTheme.typography.headlineSmall,
+                color = MaterialTheme.colorScheme.onBackground
+            )
+
+            Spacer(modifier = Modifier.height(32.dp))
+
+            VaultTextField(
+                value = password,
+                onValueChange = {
+                    password = it
+                    if (authError != null) viewModel.clearError()
+                },
+                label = "Master password",
+                isPassword = true,
+                isError = authError != null,
+                errorMessage = authError,
+                modifier = Modifier.fillMaxWidth()
+            )
+
+            Spacer(modifier = Modifier.height(24.dp))
+
+            CyberButton(
+                text = "Unlock",
+                onClick = { if (password.isNotBlank()) viewModel.unlock(password) },
+                enabled = password.isNotBlank(),
+                isLoading = isLoading,
+                modifier = Modifier.fillMaxWidth()
+            )
+
+            Spacer(modifier = Modifier.height(24.dp))
+
+            TextButton(onClick = { showRecoveryDialog = true }) {
+                Text(
+                    "Forgot password? Use recovery key",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    style = MaterialTheme.typography.bodySmall
+                )
+            }
+
+            Spacer(modifier = Modifier.weight(0.6f))
         }
-
-        Spacer(modifier = Modifier.weight(0.6f))
     }
 
-    // Recovery key dialog
+    // ── Recovery key dialog ───────────────────────────────────────────────────
+
     if (showRecoveryDialog) {
         AlertDialog(
             onDismissRequest = { resetRecoveryDialog() },
             containerColor = VaultSurfaceVariant,
-            title = { Text("Recover with Recovery Key", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface) },
+            title = {
+                Text(
+                    "Recover with Recovery Key",
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+            },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     Text(
@@ -246,7 +317,11 @@ fun UnlockScreen(viewModel: AuthViewModel, onUnlocked: () -> Unit) {
                         modifier = Modifier.fillMaxWidth()
                     )
                     recoveryError?.let {
-                        Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+                        Text(
+                            it,
+                            color = MaterialTheme.colorScheme.error,
+                            style = MaterialTheme.typography.bodySmall
+                        )
                     }
                 }
             },
@@ -259,34 +334,36 @@ fun UnlockScreen(viewModel: AuthViewModel, onUnlocked: () -> Unit) {
                             recoveryNewPwd.length < 8 -> { recoveryError = "Password must be at least 8 characters"; return@TextButton }
                             recoveryNewPwd != recoveryConfirmPwd -> { recoveryError = "Passwords do not match"; return@TextButton }
                         }
+                        @Suppress("DEPRECATION")
                         val account = GoogleSignIn.getLastSignedInAccount(context)
                         if (account == null) {
-                            recoveryError = "Not signed in to Google. Sign in via the Home screen first."
+                            recoveryError = "Not signed in to Google."
                             return@TextButton
                         }
                         recoveryLoading = true
                         scope.launch {
                             val folderId = prefs.vaultKeyFolderId.first()
                             if (folderId == null) {
-                                recoveryError = "No vault folder found. Make sure you've connected Drive before."
+                                recoveryError = "No vault folder found."
                                 recoveryLoading = false
                                 return@launch
                             }
-                            val result = viewModel.recoverWithRecoveryKey(recoveryKey.trim(), recoveryNewPwd, account, folderId)
+                            val result = viewModel.recoverWithRecoveryKey(
+                                recoveryKey.trim(), recoveryNewPwd, account, folderId
+                            )
                             recoveryLoading = false
                             when (result) {
-                                is AuthViewModel.PasswordChangeResult.Success -> {
-                                    resetRecoveryDialog()
-                                    onUnlocked()
-                                }
-                                is AuthViewModel.PasswordChangeResult.Error -> {
-                                    recoveryError = result.message
-                                }
+                                is AuthViewModel.PasswordChangeResult.Success -> resetRecoveryDialog()
+                                is AuthViewModel.PasswordChangeResult.Error -> recoveryError = result.message
                             }
                         }
                     }
                 ) {
-                    if (recoveryLoading) CircularProgressIndicator(modifier = Modifier.size(16.dp), color = CyanPrimary, strokeWidth = 2.dp)
+                    if (recoveryLoading) CircularProgressIndicator(
+                        modifier = Modifier.size(16.dp),
+                        color = CyanPrimary,
+                        strokeWidth = 2.dp
+                    )
                     else Text("Recover", color = CyanPrimary)
                 }
             },

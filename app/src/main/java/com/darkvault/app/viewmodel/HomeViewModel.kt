@@ -2,8 +2,12 @@ package com.darkvault.app.viewmodel
 
 import android.app.Application
 import android.content.ContentResolver
+import android.content.ContentValues
 import android.content.Intent
 import android.net.Uri
+import android.os.Build
+import android.os.Environment
+import android.provider.MediaStore
 import androidx.documentfile.provider.DocumentFile
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
@@ -139,6 +143,12 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
 
     // ── Selected items for batch ops ───────────────────────────────────────
     val selectedIds = MutableStateFlow<Set<String>>(emptySet())
+
+    // ── Trash ──────────────────────────────────────────────────────────────
+    private val _trashedItems = MutableStateFlow<List<VaultFile>>(emptyList())
+    val trashedItems: StateFlow<List<VaultFile>> = _trashedItems
+    private val _trashLoading = MutableStateFlow(false)
+    val trashLoading: StateFlow<Boolean> = _trashLoading
 
     private var cachedFolderId: String? = null
     private var cachedAccount: GoogleSignInAccount? = null
@@ -364,6 +374,34 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         )
     }
 
+    // ── Download helpers ───────────────────────────────────────────────────
+
+    private fun saveToDownloads(fileName: String, data: ByteArray, mimeType: String): String {
+        val ctx = getApplication<Application>()
+        // Fix: HIGH-002 — sanitize fileName to prevent path traversal on pre-Q Android.
+        // Strip all path separators and illegal filesystem characters, limit to 200 chars.
+        val safeFileName = fileName
+            .replace(Regex("[/\\\\:*?\"<>|\\p{Cntrl}]"), "_")
+            .take(200)
+            .ifBlank { "file" }
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            val values = ContentValues().apply {
+                put(MediaStore.Downloads.DISPLAY_NAME, safeFileName)
+                put(MediaStore.Downloads.MIME_TYPE, mimeType.ifBlank { "application/octet-stream" })
+                put(MediaStore.Downloads.RELATIVE_PATH, "Download/darkVault-loc")
+            }
+            val uri = ctx.contentResolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values)
+                ?: error("MediaStore insert failed")
+            ctx.contentResolver.openOutputStream(uri)!!.use { it.write(data) }
+            "Downloads/darkVault-loc/$safeFileName"
+        } else {
+            val dir = File(ctx.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS), "darkVault-loc")
+            dir.mkdirs()
+            File(dir, safeFileName).also { it.writeBytes(data) }
+            dir.absolutePath + "/$safeFileName"
+        }
+    }
+
     // ── Download ───────────────────────────────────────────────────────────
 
     fun downloadAndDecrypt(
@@ -392,11 +430,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                     out.toByteArray()
                 }
 
-                val destDir = File(getApplication<Application>().getExternalFilesDir(null), "decrypted")
-                destDir.mkdirs()
-                val destFile = File(destDir, file.originalName)
-                destFile.writeBytes(decrypted)
-                destFile.absolutePath
+                saveToDownloads(file.originalName, decrypted, file.originalMimeType)
             }.onSuccess { path ->
                 _operationState.value = OperationState.Done("Saved to $path")
             }.onFailure { e ->
@@ -424,7 +458,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    // Task 5: Batch download selected files
+    // Batch download selected files → Downloads/darkVault-loc
     fun downloadSelected(password: String, account: GoogleSignInAccount) {
         val ids = selectedIds.value.toList()
         val items = _rawItems.value.filter { it.id in ids && !it.isFolder }
@@ -439,17 +473,15 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                     val encBytes = client.downloadFile(file.id)
                     val out = ByteArrayOutputStream()
                     CryptoManager.decrypt(java.io.ByteArrayInputStream(encBytes), out, password, dek)
-                    val destDir = File(getApplication<Application>().getExternalFilesDir(null), "decrypted")
-                    destDir.mkdirs()
-                    File(destDir, file.originalName).writeBytes(out.toByteArray())
+                    saveToDownloads(file.originalName, out.toByteArray(), file.originalMimeType)
                     done++
                 }
             }
-            _operationState.value = OperationState.Done("Downloaded $done of ${items.size} file(s)")
+            _operationState.value = OperationState.Done("Saved $done of ${items.size} file(s) to Downloads/darkVault-loc")
         }
     }
 
-    // Task 6: Export vault backup — decrypt all files to external storage
+    // Export vault backup — decrypt all files to Downloads/darkVault-loc
     fun exportVaultBackup(password: String, account: GoogleSignInAccount) {
         val dek = VaultSession.dek
         viewModelScope.launch {
@@ -458,11 +490,6 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                 _operationState.value = OperationState.Done("Vault is empty — nothing to export")
                 return@launch
             }
-            val exportDir = File(
-                getApplication<Application>().getExternalFilesDir(null),
-                "darkVault_export_${System.currentTimeMillis()}"
-            )
-            exportDir.mkdirs()
             val client = DriveApiClient(getApplication(), account)
             var done = 0
             _operationState.value = OperationState.InProgress("Export", "Exporting 0/${allFiles.size}…")
@@ -471,12 +498,28 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                     val enc = client.downloadFile(file.id)
                     val out = ByteArrayOutputStream()
                     CryptoManager.decrypt(java.io.ByteArrayInputStream(enc), out, password, dek)
-                    File(exportDir, file.originalName).writeBytes(out.toByteArray())
+                    saveToDownloads(file.originalName, out.toByteArray(), file.originalMimeType)
                     done++
                     _operationState.value = OperationState.InProgress("Export", "Exporting $done/${allFiles.size}…")
                 }
             }
-            _operationState.value = OperationState.Done("Exported $done file(s) to ${exportDir.absolutePath}")
+            _operationState.value = OperationState.Done("Exported $done file(s) to Downloads/darkVault-loc")
+        }
+    }
+
+    // Load trashed vault files for the Trash screen
+    fun loadTrashedFiles(account: GoogleSignInAccount) {
+        viewModelScope.launch {
+            _trashLoading.value = true
+            runCatching {
+                val folderId = ensureFolder(DriveApiClient(getApplication(), account))
+                DriveApiClient(getApplication(), account).listTrashedVaultFiles(folderId)
+            }.onSuccess { items ->
+                _trashedItems.value = items
+            }.onFailure {
+                _trashedItems.value = emptyList()
+            }
+            _trashLoading.value = false
         }
     }
 
@@ -577,6 +620,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         searchQuery.value = ""
         filterType.value = FilterType.ALL
         _operationState.value = OperationState.Idle
+        _trashedItems.value = emptyList()
     }
 
     private suspend fun ensureFolder(client: DriveApiClient): String {

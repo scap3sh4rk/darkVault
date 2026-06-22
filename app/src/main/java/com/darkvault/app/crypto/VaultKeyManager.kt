@@ -26,10 +26,12 @@ object VaultKeyManager {
     private const val KEY_BYTES = 32  // 256-bit
 
     /** Generates a fresh random DEK. */
-    fun generateDek(): ByteArray = SecureRandom().generateSeed(KEY_BYTES)
+    // Fix: LOW-001 — use nextBytes() instead of generateSeed() for cryptographic material
+    fun generateDek(): ByteArray = ByteArray(KEY_BYTES).also { SecureRandom().nextBytes(it) }
 
     /** Generates a fresh random Recovery Key (256-bit). */
-    fun generateRecoveryKey(): ByteArray = SecureRandom().generateSeed(KEY_BYTES)
+    // Fix: LOW-001 — use nextBytes() instead of generateSeed() for cryptographic material
+    fun generateRecoveryKey(): ByteArray = ByteArray(KEY_BYTES).also { SecureRandom().nextBytes(it) }
 
     /**
      * Formats a recovery key as a human-readable hex string (64 hex chars, groups of 8).
@@ -54,7 +56,8 @@ object VaultKeyManager {
      * Returns: [12-byte IV][32-byte ciphertext + 16-byte GCM tag] = 60 bytes total.
      */
     fun wrapDek(dek: ByteArray, wrappingKey: ByteArray): ByteArray {
-        val iv = SecureRandom().generateSeed(IV_BYTES)
+        // Fix: LOW-001 — use nextBytes() instead of generateSeed() for cryptographic material
+        val iv = ByteArray(IV_BYTES).also { SecureRandom().nextBytes(it) }
         val cipher = Cipher.getInstance(ALGORITHM)
         cipher.init(Cipher.ENCRYPT_MODE, SecretKeySpec(wrappingKey, "AES"), GCMParameterSpec(GCM_TAG_BITS, iv))
         val wrapped = cipher.doFinal(dek)
@@ -82,7 +85,8 @@ object VaultKeyManager {
      * Returns the vault payload for version 0x03: [12-byte IV][ciphertext + 16-byte GCM tag].
      */
     fun encryptWithDek(plaintext: ByteArray, dek: ByteArray): ByteArray {
-        val iv = SecureRandom().generateSeed(IV_BYTES)
+        // Fix: LOW-001 — use nextBytes() instead of generateSeed() for cryptographic material
+        val iv = ByteArray(IV_BYTES).also { SecureRandom().nextBytes(it) }
         val cipher = Cipher.getInstance(ALGORITHM)
         cipher.init(Cipher.ENCRYPT_MODE, SecretKeySpec(dek, "AES"), GCMParameterSpec(GCM_TAG_BITS, iv))
         val ct = cipher.doFinal(plaintext)

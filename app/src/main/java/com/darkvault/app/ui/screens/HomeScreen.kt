@@ -1,5 +1,6 @@
 package com.darkvault.app.ui.screens
 
+import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
@@ -102,6 +103,7 @@ import com.darkvault.app.viewmodel.HomeViewModel
 import com.darkvault.app.viewmodel.OperationState
 import com.google.android.gms.auth.api.signin.GoogleSignIn
 import com.google.android.gms.auth.api.signin.GoogleSignInAccount
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 @Suppress("DEPRECATION")
@@ -167,6 +169,11 @@ fun HomeScreen(
     }
 
     // Retry DEK loading when online after an offline unlock (DEK not loaded from vault.key).
+    // Fix: LOW-003 — DEK is null when Drive was unavailable at unlock time; attempt to load it
+    // on HomeScreen entry. Upload FAB is still shown during the brief window between arrival on
+    // HomeScreen and successful DEK load; UploadForegroundService falls back to per-file PBKDF2
+    // in that window (v0.02 encryption), resulting in version-mixed vaults.
+    // TODO LOW-003: Disable the upload FAB while VaultSession.dek == null to prevent version mixing.
     LaunchedEffect(currentAccount, vaultFolderId) {
         val acc = currentAccount ?: return@LaunchedEffect
         val folderId = vaultFolderId ?: return@LaunchedEffect
@@ -221,8 +228,18 @@ fun HomeScreen(
             },
             dismissButton = {
                 TextButton(onClick = {
+                    // Fix: MEDIUM-005 — schedule clipboard clearing after 60 seconds
                     clipboardManager.setText(AnnotatedString(key))
-                    scope.launch { snackbarHostState.showSnackbar("Recovery key copied to clipboard") }
+                    scope.launch {
+                        snackbarHostState.showSnackbar("Recovery key copied to clipboard")
+                        delay(60_000L)
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                            @Suppress("DEPRECATION")
+                            clipboardManager.setText(AnnotatedString(""))
+                        } else {
+                            clipboardManager.setText(AnnotatedString(""))
+                        }
+                    }
                 }) {
                     Text("Copy", color = CyanPrimary)
                 }

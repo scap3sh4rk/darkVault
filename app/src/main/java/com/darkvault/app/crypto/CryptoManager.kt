@@ -41,7 +41,8 @@ object CryptoManager {
     }
 
     fun hashPassword(password: String): Pair<ByteArray, ByteArray> {
-        val salt = SecureRandom().generateSeed(SALT_BYTES)
+        // Fix: LOW-001 — use nextBytes() instead of generateSeed() for cryptographic material
+        val salt = ByteArray(SALT_BYTES).also { SecureRandom().nextBytes(it) }
         val key = deriveKey(password, salt)
         val encoded = key.encoded.copyOf()
         return encoded to salt
@@ -61,8 +62,9 @@ object CryptoManager {
      * Kept for reference — new uploads should use [encryptWithDek].
      */
     fun encrypt(input: InputStream, output: OutputStream, password: String) {
-        val salt = SecureRandom().generateSeed(SALT_BYTES)
-        val iv = SecureRandom().generateSeed(IV_BYTES)
+        // Fix: LOW-001 — use nextBytes() instead of generateSeed() for cryptographic material
+        val salt = ByteArray(SALT_BYTES).also { SecureRandom().nextBytes(it) }
+        val iv = ByteArray(IV_BYTES).also { SecureRandom().nextBytes(it) }
         val key = deriveKey(password, salt)
         val keyBytes = key.encoded
         val cipher = Cipher.getInstance(ALGORITHM)
