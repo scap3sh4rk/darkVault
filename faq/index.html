@@ -1,0 +1,1456 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Common questions about darkVault encryption, recovery, and behaviour">
+      
+      
+        <meta name="author" content="Parthiv Kumar Nikku">
+      
+      
+        <link rel="canonical" href="https://scap3sh4rk.github.io/darkVault/faq/">
+      
+      
+        <link rel="prev" href="../threat-model/">
+      
+      
+      
+        
+      
+      
+      <link rel="icon" href="../assets/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.6">
+    
+    
+      
+        <title>FAQ - darkVault</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.484c7ddc.min.css">
+      
+        
+        <link rel="stylesheet" href="../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Inter:300,300i,400,400i,700,700i%7CJetBrains+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Inter";--md-code-font:"JetBrains Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../stylesheets/extra.css">
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  
+<meta property="og:type" content="website" />
+<meta property="og:title" content="FAQ - darkVault" />
+<meta property="og:description" content="Common questions about darkVault encryption, recovery, and behaviour" />
+<meta property="og:image" content="https://scap3sh4rk.github.io/darkVault/assets/images/social/faq.png" />
+<meta property="og:image:type" content="image/png" />
+<meta property="og:image:width" content="1200" />
+<meta property="og:image:height" content="630" />
+<meta property="og:url" content="https://scap3sh4rk.github.io/darkVault/faq/" />
+<meta property="twitter:card" content="summary_large_image" />
+<meta property="twitter:title" content="FAQ - darkVault" />
+<meta property="twitter:description" content="Common questions about darkVault encryption, recovery, and behaviour" />
+<meta property="twitter:image" content="https://scap3sh4rk.github.io/darkVault/assets/images/social/faq.png" />
+</head>
+  
+  
+    
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="slate" data-md-color-primary="custom" data-md-color-accent="custom">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#frequently-asked-questions" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow md-header--lifted" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href=".." title="darkVault" class="md-header__button md-logo" aria-label="darkVault" data-md-component="logo">
+      
+  <img src="../assets/logo.png" alt="logo">
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            darkVault
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              FAQ
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+    
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+          <a href="javascript:void(0)" class="md-search__icon md-icon" title="Share" aria-label="Share" data-clipboard data-clipboard-text="" data-md-component="search-share" tabindex="-1">
+            
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9a3 3 0 0 0-3 3 3 3 0 0 0 3 3c.79 0 1.5-.31 2.04-.81l7.12 4.15c-.05.21-.08.43-.08.66 0 1.61 1.31 2.91 2.92 2.91s2.92-1.3 2.92-2.91A2.92 2.92 0 0 0 18 16.08"/></svg>
+          </a>
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/scap3sh4rk/darkVault" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+  </div>
+  <div class="md-source__repository">
+    scap3sh4rk/darkVault
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+    
+      
+<nav class="md-tabs" aria-label="Tabs" data-md-component="tabs">
+  <div class="md-grid">
+    <ul class="md-tabs__list">
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href=".." class="md-tabs__link">
+        
+  
+  
+    
+  
+  Home
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../user-guide/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  User Guide
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../encryption/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Encryption Architecture
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../threat-model/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Threat Model
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+    
+  
+  
+    <li class="md-tabs__item md-tabs__item--active">
+      <a href="./" class="md-tabs__link">
+        
+  
+  
+    
+  
+  FAQ
+
+      </a>
+    </li>
+  
+
+      
+    </ul>
+  </div>
+</nav>
+    
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+  
+
+
+<nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="darkVault" class="md-nav__button md-logo" aria-label="darkVault" data-md-component="logo">
+      
+  <img src="../assets/logo.png" alt="logo">
+
+    </a>
+    darkVault
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/scap3sh4rk/darkVault" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+  </div>
+  <div class="md-source__repository">
+    scap3sh4rk/darkVault
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../user-guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    User Guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../encryption/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Encryption Architecture
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../threat-model/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Threat Model
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    FAQ
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    FAQ
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#security-encryption" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Security &amp; Encryption
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Security &amp; Encryption">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#1-if-my-google-drive-account-gets-hacked-and-the-attacker-gets-vaultkey-can-they-crack-my-password" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. If my Google Drive account gets hacked and the attacker gets vault.key — can they crack my password?
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#2-if-vaultkey-is-lost-from-google-drive-can-i-still-recover-my-data" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. If vault.key is lost from Google Drive, can I still recover my data?
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#3-does-google-have-access-to-my-files" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. Does Google have access to my files?
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#4-what-encryption-does-darkvault-use" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. What encryption does darkVault use?
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#5-is-there-any-way-to-read-my-files-without-my-password" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5. Is there any way to read my files without my password?
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#6-what-happens-to-my-encryption-key-when-i-lock-the-app" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6. What happens to my encryption key when I lock the app?
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#7-can-someone-brute-force-my-password-directly-in-the-app" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        7. Can someone brute-force my password directly in the app?
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#recovery-key" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Recovery Key
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Recovery Key">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#8-where-should-i-store-my-recovery-key" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        8. Where should I store my Recovery Key?
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#9-i-didnt-save-my-recovery-key-what-can-i-do" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        9. I didn't save my Recovery Key. What can I do?
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#10-does-the-recovery-key-change-if-i-change-my-password" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        10. Does the Recovery Key change if I change my password?
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#vaultkey" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        vault.key
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="vault.key">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#11-what-is-vaultkey-and-should-i-be-worried-about-it" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        11. What is vault.key and should I be worried about it?
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#12-can-i-back-up-vaultkey" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        12. Can I back up vault.key?
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#13-what-if-vaultkey-gets-corrupted" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        13. What if vault.key gets corrupted?
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#biometric-unlock" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Biometric Unlock
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Biometric Unlock">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#14-is-biometric-unlock-less-secure-than-password-unlock" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        14. Is biometric unlock less secure than password unlock?
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#15-what-happens-if-i-add-a-new-fingerprint-to-my-phone" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        15. What happens if I add a new fingerprint to my phone?
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#16-can-i-use-darkvault-without-biometric-unlock" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        16. Can I use darkVault without biometric unlock?
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#app-behaviour" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        App Behaviour
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="App Behaviour">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#17-what-happens-if-i-change-my-google-account" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        17. What happens if I change my Google account?
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#18-what-happens-if-i-use-darkvault-on-a-new-phone" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        18. What happens if I use darkVault on a new phone?
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#19-can-darkvault-work-offline" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        19. Can darkVault work offline?
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#20-are-file-names-private" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        20. Are file names private?
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#security-encryption" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Security &amp; Encryption
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Security &amp; Encryption">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#1-if-my-google-drive-account-gets-hacked-and-the-attacker-gets-vaultkey-can-they-crack-my-password" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. If my Google Drive account gets hacked and the attacker gets vault.key — can they crack my password?
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#2-if-vaultkey-is-lost-from-google-drive-can-i-still-recover-my-data" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. If vault.key is lost from Google Drive, can I still recover my data?
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#3-does-google-have-access-to-my-files" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. Does Google have access to my files?
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#4-what-encryption-does-darkvault-use" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. What encryption does darkVault use?
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#5-is-there-any-way-to-read-my-files-without-my-password" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5. Is there any way to read my files without my password?
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#6-what-happens-to-my-encryption-key-when-i-lock-the-app" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6. What happens to my encryption key when I lock the app?
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#7-can-someone-brute-force-my-password-directly-in-the-app" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        7. Can someone brute-force my password directly in the app?
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#recovery-key" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Recovery Key
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Recovery Key">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#8-where-should-i-store-my-recovery-key" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        8. Where should I store my Recovery Key?
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#9-i-didnt-save-my-recovery-key-what-can-i-do" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        9. I didn't save my Recovery Key. What can I do?
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#10-does-the-recovery-key-change-if-i-change-my-password" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        10. Does the Recovery Key change if I change my password?
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#vaultkey" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        vault.key
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="vault.key">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#11-what-is-vaultkey-and-should-i-be-worried-about-it" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        11. What is vault.key and should I be worried about it?
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#12-can-i-back-up-vaultkey" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        12. Can I back up vault.key?
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#13-what-if-vaultkey-gets-corrupted" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        13. What if vault.key gets corrupted?
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#biometric-unlock" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Biometric Unlock
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Biometric Unlock">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#14-is-biometric-unlock-less-secure-than-password-unlock" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        14. Is biometric unlock less secure than password unlock?
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#15-what-happens-if-i-add-a-new-fingerprint-to-my-phone" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        15. What happens if I add a new fingerprint to my phone?
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#16-can-i-use-darkvault-without-biometric-unlock" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        16. Can I use darkVault without biometric unlock?
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#app-behaviour" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        App Behaviour
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="App Behaviour">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#17-what-happens-if-i-change-my-google-account" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        17. What happens if I change my Google account?
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#18-what-happens-if-i-use-darkvault-on-a-new-phone" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        18. What happens if I use darkVault on a new phone?
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#19-can-darkvault-work-offline" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        19. Can darkVault work offline?
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#20-are-file-names-private" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        20. Are file names private?
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+
+<h1 id="frequently-asked-questions">Frequently Asked Questions<a class="headerlink" href="#frequently-asked-questions" title="Permanent link">&para;</a></h1>
+<hr />
+<h2 id="security-encryption">Security &amp; Encryption<a class="headerlink" href="#security-encryption" title="Permanent link">&para;</a></h2>
+<h3 id="1-if-my-google-drive-account-gets-hacked-and-the-attacker-gets-vaultkey-can-they-crack-my-password">1. If my Google Drive account gets hacked and the attacker gets vault.key — can they crack my password?<a class="headerlink" href="#1-if-my-google-drive-account-gets-hacked-and-the-attacker-gets-vaultkey-can-they-crack-my-password" title="Permanent link">&para;</a></h3>
+<p><strong>Yes, theoretically — but only if your password is weak.</strong></p>
+<p>Here is exactly what happens. When the attacker gets <code>vault.key</code>, they have:</p>
+<ul>
+<li>Your DEK encrypted (wrapped) with a key derived from your password</li>
+<li>A random salt value (<code>kekSalt</code>) used in that derivation</li>
+</ul>
+<p>To read your files, they need to reverse-engineer your master password. The only way to do that is to guess it — trying every possible password in a loop. Each guess requires running PBKDF2 with 100,000 rounds of SHA-256, which is deliberately slow.</p>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>Attacker&#39;s loop:
+</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>  for each candidate_password:
+</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>      kek = PBKDF2(candidate_password, kekSalt, 100,000 iterations)
+</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>      try: dek = AES_GCM_unwrap(dekWrappedByKek, kek)
+</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>      if success: password found — stop
+</span></code></pre></div>
+<p>How long does that take?</p>
+<table>
+<thead>
+<tr>
+<th>Password type</th>
+<th>Time to crack (modern GPU cluster)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>6-digit PIN</td>
+<td>Under 1 second</td>
+</tr>
+<tr>
+<td>8-char common word</td>
+<td>Hours to days</td>
+</tr>
+<tr>
+<td>10-char mixed random</td>
+<td>Months to years</td>
+</tr>
+<tr>
+<td>4-word passphrase</td>
+<td>Billions of years</td>
+</tr>
+<tr>
+<td>Random 128-bit key</td>
+<td>Computationally infeasible</td>
+</tr>
+</tbody>
+</table>
+<p><strong>The bottom line:</strong> <code>vault.key</code> leaking is a real threat. PBKDF2 at 100,000 iterations is the speed bump. Your password is the wall. A strong passphrase (4+ random words) makes this attack practically impossible. A 6-digit PIN makes it trivial.</p>
+<p>Also important: getting <code>vault.key</code> alone is not enough to read your files. The attacker also needs your encrypted <code>.vault</code> files (also on Drive) and must successfully crack your password. Two conditions must both be met.</p>
+<hr />
+<h3 id="2-if-vaultkey-is-lost-from-google-drive-can-i-still-recover-my-data">2. If vault.key is lost from Google Drive, can I still recover my data?<a class="headerlink" href="#2-if-vaultkey-is-lost-from-google-drive-can-i-still-recover-my-data" title="Permanent link">&para;</a></h3>
+<p><strong>It depends on whether <code>vault.key</code> is actually gone or just inaccessible.</strong></p>
+<p>First, understand what <code>vault.key</code> contains: your encrypted DEK — the actual key that encrypts your files — stored in a locked form that your password and Recovery Key can open.</p>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a> Your Recovery Key ──► can unlock dekWrappedByRecovery
+</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>                                   │
+</span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>                                   └── BUT this blob lives INSIDE vault.key
+</span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a>                                       If vault.key is gone, so is the blob
+</span></code></pre></div>
+<p><strong>Scenario table:</strong></p>
+<table>
+<thead>
+<tr>
+<th>Situation</th>
+<th>Outcome</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Forgot password, <code>vault.key</code> still on Drive, have Recovery Key</td>
+<td>✅ Fully recoverable</td>
+</tr>
+<tr>
+<td><code>vault.key</code> deleted from Drive, have Recovery Key</td>
+<td>❌ Permanent loss — Recovery Key has nothing to decrypt</td>
+</tr>
+<tr>
+<td><code>vault.key</code> deleted, have a local backup of <code>vault.key</code></td>
+<td>✅ Re-upload it to the vault folder, then use password or Recovery Key</td>
+</tr>
+<tr>
+<td><code>vault.key</code> deleted, no backup, no Recovery Key</td>
+<td>❌ Permanent loss</td>
+</tr>
+</tbody>
+</table>
+<p><strong>The Recovery Key is a key to a door. If the door (vault.key) is gone, the key is useless.</strong></p>
+<p><strong>What to do right now:</strong> Keep a local backup of <code>vault.key</code>. You can download it from your Google Drive darkVault folder and save it somewhere safe — an external drive, a different cloud service, or a USB stick. It cannot be used to read your files without your master password or Recovery Key.</p>
+<hr />
+<h3 id="3-does-google-have-access-to-my-files">3. Does Google have access to my files?<a class="headerlink" href="#3-does-google-have-access-to-my-files" title="Permanent link">&para;</a></h3>
+<p>No. Files are encrypted on your device before upload. Google only ever receives scrambled bytes — they have no key and no way to unscramble your files. Even if Google's infrastructure was fully compromised, your files would be unreadable without your master password.</p>
+<hr />
+<h3 id="4-what-encryption-does-darkvault-use">4. What encryption does darkVault use?<a class="headerlink" href="#4-what-encryption-does-darkvault-use" title="Permanent link">&para;</a></h3>
+<p>AES-256-GCM — the same algorithm used by the US government for Top Secret data, major cloud providers, and end-to-end encrypted messaging apps. The 256-bit key size means there are 2²⁵⁶ possible keys — more than the number of atoms in the observable universe. The GCM (Galois/Counter Mode) variant also detects any tampering with the ciphertext.</p>
+<hr />
+<h3 id="5-is-there-any-way-to-read-my-files-without-my-password">5. Is there any way to read my files without my password?<a class="headerlink" href="#5-is-there-any-way-to-read-my-files-without-my-password" title="Permanent link">&para;</a></h3>
+<p>Only with the Recovery Key shown at setup. There is no backdoor, no master key, no "forgot password" email — darkVault intentionally has no mechanism to recover your files without one of these two secrets. This is by design: a backdoor that works for you also works for an attacker.</p>
+<hr />
+<h3 id="6-what-happens-to-my-encryption-key-when-i-lock-the-app">6. What happens to my encryption key when I lock the app?<a class="headerlink" href="#6-what-happens-to-my-encryption-key-when-i-lock-the-app" title="Permanent link">&para;</a></h3>
+<p>When you lock the app manually or the auto-lock timer fires without biometric enabled, the DEK (Data Encryption Key) is <strong>zeroed</strong> from RAM — every byte of the 32-byte key array is overwritten with zeros using <code>Arrays.fill(dek, 0)</code>, then the reference is set to null. The key is not recoverable from memory after this point.</p>
+<p>When biometric unlock is enabled and the app locks automatically (e.g., you switch to another app), the DEK remains in RAM but the app enters <code>AppLocked</code> state — a fingerprint is required to resume. The DEK is still cleared when you lock manually.</p>
+<hr />
+<h3 id="7-can-someone-brute-force-my-password-directly-in-the-app">7. Can someone brute-force my password directly in the app?<a class="headerlink" href="#7-can-someone-brute-force-my-password-directly-in-the-app" title="Permanent link">&para;</a></h3>
+<p>No. The app enforces <strong>exponential backoff</strong> on failed unlock attempts:</p>
+<ul>
+<li>After 5 failed attempts: 30-second lockout</li>
+<li>Each additional failure doubles the lockout (30s → 60s → 2 min → 4 min → …)</li>
+<li>Maximum lockout: 30 minutes</li>
+</ul>
+<p>This makes in-app brute-force attacks impractical. Offline attacks against <code>vault.key</code> (see question 1) are not rate-limited, which is why password strength matters more than app-level rate limiting.</p>
+<hr />
+<h2 id="recovery-key">Recovery Key<a class="headerlink" href="#recovery-key" title="Permanent link">&para;</a></h2>
+<h3 id="8-where-should-i-store-my-recovery-key">8. Where should I store my Recovery Key?<a class="headerlink" href="#8-where-should-i-store-my-recovery-key" title="Permanent link">&para;</a></h3>
+<p>Somewhere separate from your Google Drive and your phone. Good options:</p>
+<ul>
+<li>Written on paper, stored in a safe or secure location</li>
+<li>In a different password manager (not the one on your phone)</li>
+<li>On an encrypted USB drive in a physically secure location</li>
+</ul>
+<p><strong>Do not store it in your Google Drive</strong> — if your Drive is compromised (the main attack scenario), the attacker would have both <code>vault.key</code> and your Recovery Key, giving them direct access to your DEK without even needing your password.</p>
+<hr />
+<h3 id="9-i-didnt-save-my-recovery-key-what-can-i-do">9. I didn't save my Recovery Key. What can I do?<a class="headerlink" href="#9-i-didnt-save-my-recovery-key-what-can-i-do" title="Permanent link">&para;</a></h3>
+<p>If you still know your master password, you can rotate the Recovery Key from Settings → Security → Rotate Recovery Key. This generates a new random Recovery Key, re-wraps the DEK with it, and uploads the updated <code>vault.key</code> to Drive. You will be shown the new key once.</p>
+<p>If you have both forgotten your password AND lost your Recovery Key, there is no recovery path. Your files are permanently inaccessible.</p>
+<hr />
+<h3 id="10-does-the-recovery-key-change-if-i-change-my-password">10. Does the Recovery Key change if I change my password?<a class="headerlink" href="#10-does-the-recovery-key-change-if-i-change-my-password" title="Permanent link">&para;</a></h3>
+<p>No. The Recovery Key wraps the DEK independently of the password. When you change your password, only <code>dekWrappedByKek</code> is updated in <code>vault.key</code>. The <code>dekWrappedByRecovery</code> blob (and thus the Recovery Key) stays the same. Your old Recovery Key remains valid after a password change.</p>
+<hr />
+<h2 id="vaultkey">vault.key<a class="headerlink" href="#vaultkey" title="Permanent link">&para;</a></h2>
+<h3 id="11-what-is-vaultkey-and-should-i-be-worried-about-it">11. What is vault.key and should I be worried about it?<a class="headerlink" href="#11-what-is-vaultkey-and-should-i-be-worried-about-it" title="Permanent link">&para;</a></h3>
+<p><code>vault.key</code> is a small JSON file (~200 bytes) stored in your darkVault folder on Google Drive. It contains your encryption key (the DEK) in a locked form — locked with your master password and your Recovery Key.</p>
+<p>You should not delete it, and you should be aware it exists. It is not a file you downloaded — it is the lockbox that holds the key to all your other files. Without it, your encrypted files are permanently unreadable.</p>
+<p>If someone gets <code>vault.key</code>, they cannot immediately read your files. They would need to crack your master password first (see question 1). A strong password makes this attack computationally infeasible.</p>
+<hr />
+<h3 id="12-can-i-back-up-vaultkey">12. Can I back up vault.key?<a class="headerlink" href="#12-can-i-back-up-vaultkey" title="Permanent link">&para;</a></h3>
+<p>Yes, and you should. Download it from your darkVault folder on Google Drive and keep it somewhere safe. By itself, <code>vault.key</code> is useless without your master password or Recovery Key. Keeping a copy protects you against accidental deletion.</p>
+<hr />
+<h3 id="13-what-if-vaultkey-gets-corrupted">13. What if vault.key gets corrupted?<a class="headerlink" href="#13-what-if-vaultkey-gets-corrupted" title="Permanent link">&para;</a></h3>
+<p>If <code>vault.key</code> becomes unreadable (corrupted JSON or truncated file), the app will be unable to unwrap the DEK and you will be locked out of your files. The same recovery path applies as deletion: if you have a backup copy, re-upload it; otherwise, there is no recovery.</p>
+<hr />
+<h2 id="biometric-unlock">Biometric Unlock<a class="headerlink" href="#biometric-unlock" title="Permanent link">&para;</a></h2>
+<h3 id="14-is-biometric-unlock-less-secure-than-password-unlock">14. Is biometric unlock less secure than password unlock?<a class="headerlink" href="#14-is-biometric-unlock-less-secure-than-password-unlock" title="Permanent link">&para;</a></h3>
+<p>No — biometric unlock uses your master password behind the scenes. When you enroll your fingerprint, darkVault encrypts your master password with a key stored in the Android Keystore (a hardware-backed secure element on supported devices). Your fingerprint unlocks the Keystore key, which decrypts the master password, which then works exactly as normal.</p>
+<p>The session timeout clock does NOT reset on biometric unlocks, so you cannot bypass the maximum session limit by repeatedly using your fingerprint.</p>
+<hr />
+<h3 id="15-what-happens-if-i-add-a-new-fingerprint-to-my-phone">15. What happens if I add a new fingerprint to my phone?<a class="headerlink" href="#15-what-happens-if-i-add-a-new-fingerprint-to-my-phone" title="Permanent link">&para;</a></h3>
+<p>The Android Keystore automatically <strong>invalidates</strong> the darkVault biometric key when new biometrics are enrolled. The next time you try biometric unlock, it will fail and you will be asked to re-enroll using your master password. This is intentional — a new fingerprint could belong to someone else who added it without your knowledge.</p>
+<hr />
+<h3 id="16-can-i-use-darkvault-without-biometric-unlock">16. Can I use darkVault without biometric unlock?<a class="headerlink" href="#16-can-i-use-darkvault-without-biometric-unlock" title="Permanent link">&para;</a></h3>
+<p>Yes. Biometric is entirely optional and can be enabled or disabled in Settings at any time. Without it, you enter your master password every time you unlock.</p>
+<hr />
+<h2 id="app-behaviour">App Behaviour<a class="headerlink" href="#app-behaviour" title="Permanent link">&para;</a></h2>
+<h3 id="17-what-happens-if-i-change-my-google-account">17. What happens if I change my Google account?<a class="headerlink" href="#17-what-happens-if-i-change-my-google-account" title="Permanent link">&para;</a></h3>
+<p>Switching Google accounts clears all local state: the stored PBKDF2 hash, salt, biometric credentials, cached vault folder ID, and the in-memory DEK. The app restarts from the sign-in screen. Your files on the old account's Drive are unaffected and accessible if you sign back in.</p>
+<hr />
+<h3 id="18-what-happens-if-i-use-darkvault-on-a-new-phone">18. What happens if I use darkVault on a new phone?<a class="headerlink" href="#18-what-happens-if-i-use-darkvault-on-a-new-phone" title="Permanent link">&para;</a></h3>
+<p>Sign in with your Google account. The app will find <code>vault.key</code> on your Drive, ask for your master password, unwrap the DEK, and you will have access to all your files. No data transfer between phones is required.</p>
+<hr />
+<h3 id="19-can-darkvault-work-offline">19. Can darkVault work offline?<a class="headerlink" href="#19-can-darkvault-work-offline" title="Permanent link">&para;</a></h3>
+<p>Partially. If you have previously unlocked with your password while online, the PBKDF2 hash is cached locally. The app can verify your password offline using this hash. However, it cannot load the DEK (which requires downloading <code>vault.key</code>) or encrypt/decrypt files (which requires the DEK). You can browse the file list if it was cached, but cannot open or upload files while offline.</p>
+<hr />
+<h3 id="20-are-file-names-private">20. Are file names private?<a class="headerlink" href="#20-are-file-names-private" title="Permanent link">&para;</a></h3>
+<p>Currently, no. File names are stored in Google Drive's <code>appProperties</code> field as plaintext (truncated to 100 characters). Google can see your file names. Only the file contents are encrypted. This is a known limitation and is listed as a planned improvement.</p>
+
+
+
+
+
+
+
+  
+  
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+    
+      
+      <nav class="md-footer__inner md-grid" aria-label="Footer" >
+        
+          
+          <a href="../threat-model/" class="md-footer__link md-footer__link--prev" aria-label="Previous: Threat Model">
+            <div class="md-footer__button md-icon">
+              
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+            </div>
+            <div class="md-footer__title">
+              <span class="md-footer__direction">
+                Previous
+              </span>
+              <div class="md-ellipsis">
+                Threat Model
+              </div>
+            </div>
+          </a>
+        
+        
+      </nav>
+    
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+        
+<div class="md-social">
+  
+    
+    
+    
+    
+    <a href="https://github.com/scap3sh4rk/darkVault" target="_blank" rel="noopener" title="darkVault on GitHub" class="md-social__link">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["navigation.tabs", "navigation.tabs.sticky", "navigation.top", "navigation.footer", "search.highlight", "search.suggest", "search.share", "content.code.copy", "content.code.annotate", "toc.follow"], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.79ae519e.min.js"></script>
+      
+    
+  </body>
+</html>

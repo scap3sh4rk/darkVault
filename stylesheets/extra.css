@@ -1,0 +1,277 @@
+/* ── Brand palette ─────────────────────────────────────────── */
+:root,
+[data-md-color-scheme="slate"] {
+  /* Backgrounds */
+  --md-default-bg-color:          #0a0a0a;
+  --md-default-bg-color--light:   #111111;
+  --md-default-bg-color--lighter: #161616;
+  --md-default-bg-color--lightest:#1c1c1c;
+
+  /* Foreground / text */
+  --md-default-fg-color:          rgba(224, 224, 224, 0.87);
+  --md-default-fg-color--light:   rgba(200, 200, 200, 0.60);
+  --md-default-fg-color--lighter: rgba(180, 180, 180, 0.32);
+  --md-default-fg-color--lightest:rgba(160, 160, 160, 0.12);
+
+  /* Brand cyan */
+  --md-primary-fg-color:          #00d4ff;
+  --md-primary-fg-color--light:   #33ddff;
+  --md-primary-fg-color--dark:    #00a3c7;
+  --md-primary-bg-color:          #0a0a0a;
+  --md-primary-bg-color--light:   rgba(10, 10, 10, 0.54);
+
+  --md-accent-fg-color:           #00d4ff;
+  --md-accent-fg-color--transparent: rgba(0, 212, 255, 0.10);
+  --md-accent-bg-color:           #0a0a0a;
+
+  /* Header / nav */
+  --md-header-bg-color:           #0d0d0d;
+
+  /* Code blocks */
+  --md-code-bg-color:             #131313;
+  --md-code-fg-color:             #e0e0e0;
+  --md-code-hl-color:             rgba(0, 212, 255, 0.12);
+
+  /* Typeset */
+  --md-typeset-color:             rgba(224, 224, 224, 0.87);
+  --md-typeset-a-color:           #00d4ff;
+
+  /* Tables */
+  --md-typeset-table-color:       rgba(255, 255, 255, 0.06);
+  --md-typeset-table-color--light:rgba(255, 255, 255, 0.03);
+
+  /* Admonitions */
+  --md-admonition-bg-color:       rgba(255, 255, 255, 0.03);
+
+  /* Scrollbar */
+  --md-scrollbar-color:           #2a2a2a;
+  --md-scrollbar-color--hover:    #3a3a3a;
+
+  /* Footer */
+  --md-footer-bg-color:           #080808;
+  --md-footer-bg-color--dark:     #050505;
+  --md-footer-fg-color:           rgba(200, 200, 200, 0.55);
+  --md-footer-fg-color--light:    rgba(200, 200, 200, 0.38);
+  --md-footer-fg-color--lighter:  rgba(200, 200, 200, 0.20);
+}
+
+/* ── Typography — Inter 18 px, medium/bold ─────────────────── */
+body {
+  font-size: 18px;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+.md-typeset {
+  font-size: 1rem;          /* 18 px base */
+  font-weight: 500;         /* Inter Medium */
+  line-height: 1.75;
+  color: var(--md-typeset-color);
+}
+
+/* Headings — Inter Bold */
+.md-typeset h1,
+.md-typeset h2,
+.md-typeset h3,
+.md-typeset h4,
+.md-typeset h5,
+.md-typeset h6 {
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.md-typeset h1 {
+  font-size: 2rem;
+  color: #00d4ff;
+}
+
+.md-typeset h2 {
+  font-size: 1.5rem;
+  color: #e0e0e0;
+  border-bottom: 1px solid rgba(0, 212, 255, 0.18);
+  padding-bottom: 0.3em;
+}
+
+.md-typeset h3 {
+  font-size: 1.2rem;
+  color: #cccccc;
+}
+
+/* ── Header ────────────────────────────────────────────────── */
+.md-header {
+  background-color: #0d0d0d;
+  border-bottom: 1px solid rgba(0, 212, 255, 0.12);
+  box-shadow: 0 1px 16px rgba(0, 0, 0, 0.6);
+}
+
+.md-header__title {
+  font-weight: 700;
+  font-size: 1.1rem;
+  letter-spacing: -0.01em;
+}
+
+/* Logo sizing */
+.md-header__button.md-logo img,
+.md-header__button.md-logo svg {
+  height: 2rem;
+  width: auto;
+}
+
+/* ── Navigation tabs ───────────────────────────────────────── */
+.md-tabs {
+  background-color: #0d0d0d;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.md-tabs__link {
+  font-weight: 600;
+  font-size: 0.85rem;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  opacity: 0.65;
+}
+
+.md-tabs__link--active,
+.md-tabs__link:hover {
+  color: #00d4ff;
+  opacity: 1;
+}
+
+/* ── Sidebar / nav ─────────────────────────────────────────── */
+.md-nav__title {
+  font-weight: 700;
+  color: #9e9e9e;
+  font-size: 0.75rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.md-nav__link {
+  font-weight: 500;
+  font-size: 0.9rem;
+}
+
+.md-nav__link--active {
+  color: #00d4ff !important;
+  font-weight: 700;
+}
+
+/* ── Search ────────────────────────────────────────────────── */
+.md-search__form {
+  background-color: #161616;
+  border: 1px solid rgba(0, 212, 255, 0.15);
+  border-radius: 6px;
+}
+
+.md-search__input {
+  font-weight: 500;
+  font-size: 0.95rem;
+}
+
+/* ── Code blocks ───────────────────────────────────────────── */
+.md-typeset code {
+  background-color: #131313;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 4px;
+  font-size: 0.88em;
+  padding: 0.1em 0.35em;
+  color: #7dd3fc;
+}
+
+.md-typeset pre > code {
+  background-color: transparent;
+  border: none;
+  padding: 0;
+  color: var(--md-code-fg-color);
+  font-size: 0.85rem;
+  line-height: 1.65;
+}
+
+.highlight {
+  background-color: #101010 !important;
+  border: 1px solid rgba(0, 212, 255, 0.10);
+  border-radius: 8px;
+}
+
+/* ── Tables ────────────────────────────────────────────────── */
+.md-typeset table:not([class]) {
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.md-typeset table:not([class]) th {
+  background-color: rgba(0, 212, 255, 0.08);
+  color: #00d4ff;
+  font-weight: 700;
+  font-size: 0.85rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.md-typeset table:not([class]) tr:hover {
+  background-color: rgba(0, 212, 255, 0.04);
+}
+
+/* ── Blockquotes / callouts ────────────────────────────────── */
+.md-typeset blockquote {
+  border-left: 3px solid #00d4ff;
+  background-color: rgba(0, 212, 255, 0.05);
+  border-radius: 0 6px 6px 0;
+  padding: 0.6em 1em;
+  color: #9e9e9e;
+}
+
+/* ── Links ─────────────────────────────────────────────────── */
+.md-typeset a {
+  color: #00d4ff;
+  text-decoration: none;
+  font-weight: 600;
+}
+
+.md-typeset a:hover {
+  color: #33ddff;
+  text-decoration: underline;
+}
+
+/* ── Footer ────────────────────────────────────────────────── */
+.md-footer {
+  background-color: #080808;
+  border-top: 1px solid rgba(0, 212, 255, 0.10);
+}
+
+/* ── Back-to-top button ────────────────────────────────────── */
+.md-top {
+  background-color: #0d0d0d;
+  border: 1px solid rgba(0, 212, 255, 0.25);
+  color: #00d4ff;
+}
+
+/* ── TOC ───────────────────────────────────────────────────── */
+.md-nav--secondary .md-nav__link--active {
+  color: #00d4ff;
+}
+
+/* ── Horizontal rules ──────────────────────────────────────── */
+.md-typeset hr {
+  border-color: rgba(0, 212, 255, 0.12);
+}
+
+/* ── Scrollbars (webkit) ───────────────────────────────────── */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: #0a0a0a;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #2a2a2a;
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #3a3a3a;
+}
