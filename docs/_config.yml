@@ -1,0 +1,16 @@
+title: darkVault
+description: AES-256-GCM encrypted personal backup for Google Drive
+theme: jekyll-theme-cayman
+show_downloads: false
+
+nav:
+  - title: Home
+    url: /
+  - title: User Guide
+    url: /user-guide
+  - title: Encryption Architecture
+    url: /encryption
+  - title: Threat Model
+    url: /threat-model
+  - title: FAQ
+    url: /faq

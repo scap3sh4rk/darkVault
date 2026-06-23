@@ -1,6 +1,6 @@
 ---
+layout: default
 title: FAQ
-description: Common questions about darkVault encryption, recovery, and behaviour
 ---
 
 # Frequently Asked Questions
@@ -14,7 +14,6 @@ description: Common questions about darkVault encryption, recovery, and behaviou
 **Yes, theoretically — but only if your password is weak.**
 
 Here is exactly what happens. When the attacker gets `vault.key`, they have:
-
 - Your DEK encrypted (wrapped) with a key derived from your password
 - A random salt value (`kekSalt`) used in that derivation
 
@@ -106,7 +105,7 @@ No. The app enforces **exponential backoff** on failed unlock attempts:
 - Each additional failure doubles the lockout (30s → 60s → 2 min → 4 min → …)
 - Maximum lockout: 30 minutes
 
-This makes in-app brute-force attacks impractical. Offline attacks against `vault.key` (see question 1) are not rate-limited, which is why password strength matters more than app-level rate limiting.
+This makes in-app brute-force attacks impractical. Offline attacks against `vault.key` (see the first FAQ) are not rate-limited, which is why password strength matters more than app-level rate limiting.
 
 ---
 
@@ -146,7 +145,7 @@ No. The Recovery Key wraps the DEK independently of the password. When you chang
 
 You should not delete it, and you should be aware it exists. It is not a file you downloaded — it is the lockbox that holds the key to all your other files. Without it, your encrypted files are permanently unreadable.
 
-If someone gets `vault.key`, they cannot immediately read your files. They would need to crack your master password first (see question 1). A strong password makes this attack computationally infeasible.
+If someone gets `vault.key`, they cannot immediately read your files. They would need to crack your master password first (see the first FAQ). A strong password makes this attack computationally infeasible.
 
 ---
 
@@ -206,4 +205,8 @@ Partially. If you have previously unlocked with your password while online, the 
 
 ### 20. Are file names private?
 
-Currently, no. File names are stored in Google Drive's `appProperties` field as plaintext (truncated to 100 characters). Google can see your file names. Only the file contents are encrypted. This is a known limitation and is listed as a planned improvement.
+Currently, no. File names are stored in Google Drive's `appProperties` field as plaintext (truncated to 100 characters). Google can see your file names. Only the file contents are encrypted. This is a known limitation and is listed as planned improvement.
+
+---
+
+[← Threat Model](./threat-model)  |  [Back to Home](./)
