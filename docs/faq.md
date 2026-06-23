@@ -9,7 +9,7 @@ title: FAQ
 
 ## Security & Encryption
 
-### If my Google Drive account gets hacked and the attacker gets vault.key — can they crack my password?
+### 1. If my Google Drive account gets hacked and the attacker gets vault.key — can they crack my password?
 
 **Yes, theoretically — but only if your password is weak.**
 
@@ -43,7 +43,7 @@ Also important: getting `vault.key` alone is not enough to read your files. The 
 
 ---
 
-### If vault.key is lost from Google Drive, can I still recover my data?
+### 2. If vault.key is lost from Google Drive, can I still recover my data?
 
 **It depends on whether `vault.key` is actually gone or just inaccessible.**
 
@@ -71,25 +71,25 @@ First, understand what `vault.key` contains: your encrypted DEK — the actual k
 
 ---
 
-### Does Google have access to my files?
+### 3. Does Google have access to my files?
 
 No. Files are encrypted on your device before upload. Google only ever receives scrambled bytes — they have no key and no way to unscramble your files. Even if Google's infrastructure was fully compromised, your files would be unreadable without your master password.
 
 ---
 
-### What encryption does darkVault use?
+### 4. What encryption does darkVault use?
 
 AES-256-GCM — the same algorithm used by the US government for Top Secret data, major cloud providers, and end-to-end encrypted messaging apps. The 256-bit key size means there are 2²⁵⁶ possible keys — more than the number of atoms in the observable universe. The GCM (Galois/Counter Mode) variant also detects any tampering with the ciphertext.
 
 ---
 
-### Is there any way to read my files without my password?
+### 5. Is there any way to read my files without my password?
 
 Only with the Recovery Key shown at setup. There is no backdoor, no master key, no "forgot password" email — darkVault intentionally has no mechanism to recover your files without one of these two secrets. This is by design: a backdoor that works for you also works for an attacker.
 
 ---
 
-### What happens to my encryption key when I lock the app?
+### 6. What happens to my encryption key when I lock the app?
 
 When you lock the app manually or the auto-lock timer fires without biometric enabled, the DEK (Data Encryption Key) is **zeroed** from RAM — every byte of the 32-byte key array is overwritten with zeros using `Arrays.fill(dek, 0)`, then the reference is set to null. The key is not recoverable from memory after this point.
 
@@ -97,7 +97,7 @@ When biometric unlock is enabled and the app locks automatically (e.g., you swit
 
 ---
 
-### Can someone brute-force my password directly in the app?
+### 7. Can someone brute-force my password directly in the app?
 
 No. The app enforces **exponential backoff** on failed unlock attempts:
 
@@ -111,7 +111,7 @@ This makes in-app brute-force attacks impractical. Offline attacks against `vaul
 
 ## Recovery Key
 
-### Where should I store my Recovery Key?
+### 8. Where should I store my Recovery Key?
 
 Somewhere separate from your Google Drive and your phone. Good options:
 
@@ -123,7 +123,7 @@ Somewhere separate from your Google Drive and your phone. Good options:
 
 ---
 
-### I didn't save my Recovery Key. What can I do?
+### 9. I didn't save my Recovery Key. What can I do?
 
 If you still know your master password, you can rotate the Recovery Key from Settings → Security → Rotate Recovery Key. This generates a new random Recovery Key, re-wraps the DEK with it, and uploads the updated `vault.key` to Drive. You will be shown the new key once.
 
@@ -131,7 +131,7 @@ If you have both forgotten your password AND lost your Recovery Key, there is no
 
 ---
 
-### Does the Recovery Key change if I change my password?
+### 10. Does the Recovery Key change if I change my password?
 
 No. The Recovery Key wraps the DEK independently of the password. When you change your password, only `dekWrappedByKek` is updated in `vault.key`. The `dekWrappedByRecovery` blob (and thus the Recovery Key) stays the same. Your old Recovery Key remains valid after a password change.
 
@@ -139,7 +139,7 @@ No. The Recovery Key wraps the DEK independently of the password. When you chang
 
 ## vault.key
 
-### What is vault.key and should I be worried about it?
+### 11. What is vault.key and should I be worried about it?
 
 `vault.key` is a small JSON file (~200 bytes) stored in your darkVault folder on Google Drive. It contains your encryption key (the DEK) in a locked form — locked with your master password and your Recovery Key.
 
@@ -149,13 +149,13 @@ If someone gets `vault.key`, they cannot immediately read your files. They would
 
 ---
 
-### Can I back up vault.key?
+### 12. Can I back up vault.key?
 
 Yes, and you should. Download it from your darkVault folder on Google Drive and keep it somewhere safe. By itself, `vault.key` is useless without your master password or Recovery Key. Keeping a copy protects you against accidental deletion.
 
 ---
 
-### What if vault.key gets corrupted?
+### 13. What if vault.key gets corrupted?
 
 If `vault.key` becomes unreadable (corrupted JSON or truncated file), the app will be unable to unwrap the DEK and you will be locked out of your files. The same recovery path applies as deletion: if you have a backup copy, re-upload it; otherwise, there is no recovery.
 
@@ -163,7 +163,7 @@ If `vault.key` becomes unreadable (corrupted JSON or truncated file), the app wi
 
 ## Biometric Unlock
 
-### Is biometric unlock less secure than password unlock?
+### 14. Is biometric unlock less secure than password unlock?
 
 No — biometric unlock uses your master password behind the scenes. When you enroll your fingerprint, darkVault encrypts your master password with a key stored in the Android Keystore (a hardware-backed secure element on supported devices). Your fingerprint unlocks the Keystore key, which decrypts the master password, which then works exactly as normal.
 
@@ -171,13 +171,13 @@ The session timeout clock does NOT reset on biometric unlocks, so you cannot byp
 
 ---
 
-### What happens if I add a new fingerprint to my phone?
+### 15. What happens if I add a new fingerprint to my phone?
 
 The Android Keystore automatically **invalidates** the darkVault biometric key when new biometrics are enrolled. The next time you try biometric unlock, it will fail and you will be asked to re-enroll using your master password. This is intentional — a new fingerprint could belong to someone else who added it without your knowledge.
 
 ---
 
-### Can I use darkVault without biometric unlock?
+### 16. Can I use darkVault without biometric unlock?
 
 Yes. Biometric is entirely optional and can be enabled or disabled in Settings at any time. Without it, you enter your master password every time you unlock.
 
@@ -185,25 +185,25 @@ Yes. Biometric is entirely optional and can be enabled or disabled in Settings a
 
 ## App Behaviour
 
-### What happens if I change my Google account?
+### 17. What happens if I change my Google account?
 
 Switching Google accounts clears all local state: the stored PBKDF2 hash, salt, biometric credentials, cached vault folder ID, and the in-memory DEK. The app restarts from the sign-in screen. Your files on the old account's Drive are unaffected and accessible if you sign back in.
 
 ---
 
-### What happens if I use darkVault on a new phone?
+### 18. What happens if I use darkVault on a new phone?
 
 Sign in with your Google account. The app will find `vault.key` on your Drive, ask for your master password, unwrap the DEK, and you will have access to all your files. No data transfer between phones is required.
 
 ---
 
-### Can darkVault work offline?
+### 19. Can darkVault work offline?
 
 Partially. If you have previously unlocked with your password while online, the PBKDF2 hash is cached locally. The app can verify your password offline using this hash. However, it cannot load the DEK (which requires downloading `vault.key`) or encrypt/decrypt files (which requires the DEK). You can browse the file list if it was cached, but cannot open or upload files while offline.
 
 ---
 
-### Are file names private?
+### 20. Are file names private?
 
 Currently, no. File names are stored in Google Drive's `appProperties` field as plaintext (truncated to 100 characters). Google can see your file names. Only the file contents are encrypted. This is a known limitation and is listed as planned improvement.
 
