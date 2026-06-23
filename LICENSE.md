@@ -1,6 +1,6 @@
 # LICENSE: Polyform Noncommercial License 1.0.0
 
-Copyright © 2024 darkVault (scap3sh4rk). All rights reserved.
+Copyright © 2026 darkVault (Parthiv Kumar Nikku). All rights reserved.
 
 ---
 
