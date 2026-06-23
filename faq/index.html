@@ -6,7 +6,7 @@
       <meta charset="utf-8">
       <meta name="viewport" content="width=device-width,initial-scale=1">
       
-        <meta name="description" content="Common questions about darkVault encryption, recovery, and behaviour">
+        <meta name="description" content="AES-256-GCM encrypted personal backup for Google Drive — your files, unreadable to everyone else.">
       
       
         <meta name="author" content="Parthiv Kumar Nikku">
@@ -64,7 +64,7 @@
   
 <meta property="og:type" content="website" />
 <meta property="og:title" content="FAQ - darkVault" />
-<meta property="og:description" content="Common questions about darkVault encryption, recovery, and behaviour" />
+<meta property="og:description" content="AES-256-GCM encrypted personal backup for Google Drive — your files, unreadable to everyone else." />
 <meta property="og:image" content="https://scap3sh4rk.github.io/darkVault/assets/images/social/faq.png" />
 <meta property="og:image:type" content="image/png" />
 <meta property="og:image:width" content="1200" />
@@ -72,7 +72,7 @@
 <meta property="og:url" content="https://scap3sh4rk.github.io/darkVault/faq/" />
 <meta property="twitter:card" content="summary_large_image" />
 <meta property="twitter:title" content="FAQ - darkVault" />
-<meta property="twitter:description" content="Common questions about darkVault encryption, recovery, and behaviour" />
+<meta property="twitter:description" content="AES-256-GCM encrypted personal backup for Google Drive — your files, unreadable to everyone else." />
 <meta property="twitter:image" content="https://scap3sh4rk.github.io/darkVault/assets/images/social/faq.png" />
 </head>
   
@@ -1193,11 +1193,9 @@
 <h2 id="security-encryption">Security &amp; Encryption<a class="headerlink" href="#security-encryption" title="Permanent link">&para;</a></h2>
 <h3 id="1-if-my-google-drive-account-gets-hacked-and-the-attacker-gets-vaultkey-can-they-crack-my-password">1. If my Google Drive account gets hacked and the attacker gets vault.key — can they crack my password?<a class="headerlink" href="#1-if-my-google-drive-account-gets-hacked-and-the-attacker-gets-vaultkey-can-they-crack-my-password" title="Permanent link">&para;</a></h3>
 <p><strong>Yes, theoretically — but only if your password is weak.</strong></p>
-<p>Here is exactly what happens. When the attacker gets <code>vault.key</code>, they have:</p>
-<ul>
-<li>Your DEK encrypted (wrapped) with a key derived from your password</li>
-<li>A random salt value (<code>kekSalt</code>) used in that derivation</li>
-</ul>
+<p>Here is exactly what happens. When the attacker gets <code>vault.key</code>, they have:
+- Your DEK encrypted (wrapped) with a key derived from your password
+- A random salt value (<code>kekSalt</code>) used in that derivation</p>
 <p>To read your files, they need to reverse-engineer your master password. The only way to do that is to guess it — trying every possible password in a loop. Each guess requires running PBKDF2 with 100,000 rounds of SHA-256, which is deliberately slow.</p>
 <div class="language-text highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>Attacker&#39;s loop:
 </span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>  for each candidate_password:
@@ -1297,7 +1295,7 @@
 <li>Each additional failure doubles the lockout (30s → 60s → 2 min → 4 min → …)</li>
 <li>Maximum lockout: 30 minutes</li>
 </ul>
-<p>This makes in-app brute-force attacks impractical. Offline attacks against <code>vault.key</code> (see question 1) are not rate-limited, which is why password strength matters more than app-level rate limiting.</p>
+<p>This makes in-app brute-force attacks impractical. Offline attacks against <code>vault.key</code> (see the first FAQ) are not rate-limited, which is why password strength matters more than app-level rate limiting.</p>
 <hr />
 <h2 id="recovery-key">Recovery Key<a class="headerlink" href="#recovery-key" title="Permanent link">&para;</a></h2>
 <h3 id="8-where-should-i-store-my-recovery-key">8. Where should I store my Recovery Key?<a class="headerlink" href="#8-where-should-i-store-my-recovery-key" title="Permanent link">&para;</a></h3>
@@ -1320,7 +1318,7 @@
 <h3 id="11-what-is-vaultkey-and-should-i-be-worried-about-it">11. What is vault.key and should I be worried about it?<a class="headerlink" href="#11-what-is-vaultkey-and-should-i-be-worried-about-it" title="Permanent link">&para;</a></h3>
 <p><code>vault.key</code> is a small JSON file (~200 bytes) stored in your darkVault folder on Google Drive. It contains your encryption key (the DEK) in a locked form — locked with your master password and your Recovery Key.</p>
 <p>You should not delete it, and you should be aware it exists. It is not a file you downloaded — it is the lockbox that holds the key to all your other files. Without it, your encrypted files are permanently unreadable.</p>
-<p>If someone gets <code>vault.key</code>, they cannot immediately read your files. They would need to crack your master password first (see question 1). A strong password makes this attack computationally infeasible.</p>
+<p>If someone gets <code>vault.key</code>, they cannot immediately read your files. They would need to crack your master password first (see the first FAQ). A strong password makes this attack computationally infeasible.</p>
 <hr />
 <h3 id="12-can-i-back-up-vaultkey">12. Can I back up vault.key?<a class="headerlink" href="#12-can-i-back-up-vaultkey" title="Permanent link">&para;</a></h3>
 <p>Yes, and you should. Download it from your darkVault folder on Google Drive and keep it somewhere safe. By itself, <code>vault.key</code> is useless without your master password or Recovery Key. Keeping a copy protects you against accidental deletion.</p>
@@ -1350,7 +1348,9 @@
 <p>Partially. If you have previously unlocked with your password while online, the PBKDF2 hash is cached locally. The app can verify your password offline using this hash. However, it cannot load the DEK (which requires downloading <code>vault.key</code>) or encrypt/decrypt files (which requires the DEK). You can browse the file list if it was cached, but cannot open or upload files while offline.</p>
 <hr />
 <h3 id="20-are-file-names-private">20. Are file names private?<a class="headerlink" href="#20-are-file-names-private" title="Permanent link">&para;</a></h3>
-<p>Currently, no. File names are stored in Google Drive's <code>appProperties</code> field as plaintext (truncated to 100 characters). Google can see your file names. Only the file contents are encrypted. This is a known limitation and is listed as a planned improvement.</p>
+<p>Currently, no. File names are stored in Google Drive's <code>appProperties</code> field as plaintext (truncated to 100 characters). Google can see your file names. Only the file contents are encrypted. This is a known limitation and is listed as planned improvement.</p>
+<hr />
+<p><a href="./threat-model">← Threat Model</a>  |  <a href="./">Back to Home</a></p>
 
 
 

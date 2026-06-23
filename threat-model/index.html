@@ -6,7 +6,7 @@
       <meta charset="utf-8">
       <meta name="viewport" content="width=device-width,initial-scale=1">
       
-        <meta name="description" content="What darkVault protects against, attack resistance, known limitations, and architectural debt">
+        <meta name="description" content="AES-256-GCM encrypted personal backup for Google Drive — your files, unreadable to everyone else.">
       
       
         <meta name="author" content="Parthiv Kumar Nikku">
@@ -66,7 +66,7 @@
   
 <meta property="og:type" content="website" />
 <meta property="og:title" content="Threat Model - darkVault" />
-<meta property="og:description" content="What darkVault protects against, attack resistance, known limitations, and architectural debt" />
+<meta property="og:description" content="AES-256-GCM encrypted personal backup for Google Drive — your files, unreadable to everyone else." />
 <meta property="og:image" content="https://scap3sh4rk.github.io/darkVault/assets/images/social/threat-model.png" />
 <meta property="og:image:type" content="image/png" />
 <meta property="og:image:width" content="1200" />
@@ -74,7 +74,7 @@
 <meta property="og:url" content="https://scap3sh4rk.github.io/darkVault/threat-model/" />
 <meta property="twitter:card" content="summary_large_image" />
 <meta property="twitter:title" content="Threat Model - darkVault" />
-<meta property="twitter:description" content="What darkVault protects against, attack resistance, known limitations, and architectural debt" />
+<meta property="twitter:description" content="AES-256-GCM encrypted personal backup for Google Drive — your files, unreadable to everyone else." />
 <meta property="twitter:image" content="https://scap3sh4rk.github.io/darkVault/assets/images/social/threat-model.png" />
 </head>
   
@@ -1063,17 +1063,13 @@
 <h2 id="3-threat-analysis">3. Threat Analysis<a class="headerlink" href="#3-threat-analysis" title="Permanent link">&para;</a></h2>
 <h3 id="t1-google-drive-account-compromised">T1 — Google Drive Account Compromised<a class="headerlink" href="#t1-google-drive-account-compromised" title="Permanent link">&para;</a></h3>
 <p><strong>Scenario:</strong> Attacker gains full access to the victim's Google Drive.</p>
-<p><strong>What the attacker has:</strong></p>
-<ul>
-<li>All <code>.vault</code> files (AES-256-GCM ciphertext)</li>
-<li><code>vault.key</code> containing <code>kekSalt</code>, <code>dekWrappedByKek</code>, <code>dekWrappedByRecovery</code></li>
-</ul>
-<p><strong>What the attacker must do to read files:</strong></p>
-<ol>
-<li>Brute-force the master password offline using <code>vault.key</code></li>
-<li>Each guess requires: <code>PBKDF2(guess, kekSalt, 100,000 iterations)</code> → attempt AES-GCM unwrap</li>
-<li>Success is confirmed by GCM auth tag acceptance (no false positives)</li>
-</ol>
+<p><strong>What the attacker has:</strong>
+- All <code>.vault</code> files (AES-256-GCM ciphertext)
+- <code>vault.key</code> containing <code>kekSalt</code>, <code>dekWrappedByKek</code>, <code>dekWrappedByRecovery</code></p>
+<p><strong>What the attacker must do to read files:</strong>
+1. Brute-force the master password offline using <code>vault.key</code>
+2. Each guess requires: <code>PBKDF2(guess, kekSalt, 100,000 iterations)</code> → attempt AES-GCM unwrap
+3. Success is confirmed by GCM auth tag acceptance (no false positives)</p>
 <p><strong>Attack cost (offline brute-force):</strong></p>
 <div class="language-text highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>Password entropy vs. cracking resistance @ ~200,000 guesses/sec (GPU cluster):
 </span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>
@@ -1089,23 +1085,19 @@
 <h3 id="t2-device-theft-no-screen-lock-bypass">T2 — Device Theft (No Screen Lock Bypass)<a class="headerlink" href="#t2-device-theft-no-screen-lock-bypass" title="Permanent link">&para;</a></h3>
 <p><strong>Scenario:</strong> Device is stolen while app is locked or not running.</p>
 <p><strong>What the attacker has:</strong> Physical access to the Android device.</p>
-<p><strong>Protected by:</strong></p>
-<ul>
-<li>DEK is zeroed from RAM on full vault lock (<code>Arrays.fill(dek, 0)</code>)</li>
-<li>Master password is never written to DataStore</li>
-<li>DataStore contents (PBKDF2 hash, biometric blob) are app-private, OS-enforced</li>
-</ul>
+<p><strong>Protected by:</strong>
+- DEK is zeroed from RAM on full vault lock (<code>Arrays.fill(dek, 0)</code>)
+- Master password is never written to DataStore
+- DataStore contents (PBKDF2 hash, biometric blob) are app-private, OS-enforced</p>
 <p><strong>Outcome:</strong> No secrets recoverable without screen-lock bypass. Attacker must brute-force master password (same as T1 but without <code>vault.key</code>, so they also need Drive access).</p>
 <hr />
 <h3 id="t3-device-theft-app-in-applocked-state">T3 — Device Theft (App in AppLocked State)<a class="headerlink" href="#t3-device-theft-app-in-applocked-state" title="Permanent link">&para;</a></h3>
 <p><strong>Scenario:</strong> Device is stolen while app is in AppLocked state (biometric gate active — DEK still in RAM).</p>
 <p><strong>What the attacker has:</strong> Process memory containing the DEK.</p>
-<p><strong>Mitigations:</strong></p>
-<ul>
-<li>AppLocked UI blocks all file operations; fingerprint is required to resume</li>
-<li>Full process kill (force-stop, reboot) clears RAM → DEK gone</li>
-<li>Android's full-disk encryption protects RAM snapshots in storage</li>
-</ul>
+<p><strong>Mitigations:</strong>
+- AppLocked UI blocks all file operations; fingerprint is required to resume
+- Full process kill (force-stop, reboot) clears RAM → DEK gone
+- Android's full-disk encryption protects RAM snapshots in storage</p>
 <p><strong>Residual risk:</strong> A sophisticated attacker with cold-boot attack capability or kernel exploit could extract the DEK from RAM. This is an accepted trade-off for biometric convenience; users who prefer maximum security should disable biometric unlock.</p>
 <hr />
 <h3 id="t4-network-interception-mitm">T4 — Network Interception (MITM)<a class="headerlink" href="#t4-network-interception-mitm" title="Permanent link">&para;</a></h3>
@@ -1115,12 +1107,10 @@
 <hr />
 <h3 id="t5-malicious-app-android-sandbox-escape">T5 — Malicious App / Android Sandbox Escape<a class="headerlink" href="#t5-malicious-app-android-sandbox-escape" title="Permanent link">&para;</a></h3>
 <p><strong>Scenario:</strong> A malicious app on the same device attempts to read darkVault's data.</p>
-<p><strong>Mitigation:</strong></p>
-<ul>
-<li>DataStore is app-private (Android sandbox)</li>
-<li>DEK lives in process memory only</li>
-<li>Keystore key requires biometric auth before use; another app cannot trigger that prompt</li>
-</ul>
+<p><strong>Mitigation:</strong>
+- DataStore is app-private (Android sandbox)
+- DEK lives in process memory only
+- Keystore key requires biometric auth before use; another app cannot trigger that prompt</p>
 <p><strong>Residual risk:</strong> A rooted device or kernel exploit breaks the sandbox. Not in scope for this threat model.</p>
 <hr />
 <h3 id="t6-vaultkey-file-lost-deleted-from-drive">T6 — Vault.key File Lost (Deleted from Drive)<a class="headerlink" href="#t6-vaultkey-file-lost-deleted-from-drive" title="Permanent link">&para;</a></h3>
@@ -1266,6 +1256,8 @@
 </span><span id="__span-3-14"><a id="__codelineno-3-14" name="__codelineno-3-14" href="#__codelineno-3-14"></a>│ Metadata (file names)  │ NONE              │ Plaintext in Drive     │
 </span><span id="__span-3-15"><a id="__codelineno-3-15" name="__codelineno-3-15" href="#__codelineno-3-15"></a>└────────────────────────┴───────────────────┴────────────────────────┘
 </span></code></pre></div>
+<hr />
+<p><a href="./encryption">← Encryption Architecture</a>  |  <a href="./faq">FAQ →</a></p>
 
 
 

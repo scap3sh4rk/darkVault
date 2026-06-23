@@ -6,7 +6,7 @@
       <meta charset="utf-8">
       <meta name="viewport" content="width=device-width,initial-scale=1">
       
-        <meta name="description" content="Full cryptographic implementation, key hierarchy, data formats, and control flows in darkVault">
+        <meta name="description" content="AES-256-GCM encrypted personal backup for Google Drive — your files, unreadable to everyone else.">
       
       
         <meta name="author" content="Parthiv Kumar Nikku">
@@ -66,7 +66,7 @@
   
 <meta property="og:type" content="website" />
 <meta property="og:title" content="Encryption Architecture - darkVault" />
-<meta property="og:description" content="Full cryptographic implementation, key hierarchy, data formats, and control flows in darkVault" />
+<meta property="og:description" content="AES-256-GCM encrypted personal backup for Google Drive — your files, unreadable to everyone else." />
 <meta property="og:image" content="https://scap3sh4rk.github.io/darkVault/assets/images/social/encryption.png" />
 <meta property="og:image:type" content="image/png" />
 <meta property="og:image:width" content="1200" />
@@ -74,7 +74,7 @@
 <meta property="og:url" content="https://scap3sh4rk.github.io/darkVault/encryption/" />
 <meta property="twitter:card" content="summary_large_image" />
 <meta property="twitter:title" content="Encryption Architecture - darkVault" />
-<meta property="twitter:description" content="Full cryptographic implementation, key hierarchy, data formats, and control flows in darkVault" />
+<meta property="twitter:description" content="AES-256-GCM encrypted personal backup for Google Drive — your files, unreadable to everyone else." />
 <meta property="twitter:image" content="https://scap3sh4rk.github.io/darkVault/assets/images/social/encryption.png" />
 </head>
   
@@ -1195,13 +1195,11 @@
 </span><span id="__span-2-6"><a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a>              Total: 60 bytes → ~80 chars base64
 </span></code></pre></div>
 <p>The GCM auth tag makes it impossible to tamper with the wrapped DEK without detection. An incorrect unwrapping key produces an <code>AEADBadTagException</code> rather than silently returning garbage.</p>
-<p><strong>Relevant code:</strong></p>
-<ul>
-<li><code>VaultKeyBundle.kt</code> — serialization / deserialization</li>
-<li><code>VaultKeyManager.wrapDek()</code> / <code>unwrapDek()</code> — wrapping logic</li>
-<li><code>AuthViewModel.createAndUploadDek()</code> — creation during setup</li>
-<li><code>DriveApiClient.uploadVaultKey()</code> / <code>downloadVaultKey()</code> — Drive I/O</li>
-</ul>
+<p><strong>Relevant code:</strong>
+- <code>VaultKeyBundle.kt</code> — serialization / deserialization
+- <code>VaultKeyManager.wrapDek()</code> / <code>unwrapDek()</code> — wrapping logic
+- <code>AuthViewModel.createAndUploadDek()</code> — creation during setup
+- <code>DriveApiClient.uploadVaultKey()</code> / <code>downloadVaultKey()</code> — Drive I/O</p>
 <hr />
 <h2 id="4-vault-file-format">4. Vault File Format<a class="headerlink" href="#4-vault-file-format" title="Permanent link">&para;</a></h2>
 <p>Each uploaded file is stored with a <code>.vault</code> extension. Three format versions exist for backward compatibility.</p>
@@ -1226,12 +1224,10 @@
 <p>Each file stores its own PBKDF2 salt. The AES key is derived fresh from <code>password + salt</code> for every decrypt. This format is read-only (new uploads always use 0x03).</p>
 <h3 id="version-0x00-original-legacy-no-version-byte-no-gzip">Version 0x00 — Original legacy (no version byte, no GZIP)<a class="headerlink" href="#version-0x00-original-legacy-no-version-byte-no-gzip" title="Permanent link">&para;</a></h3>
 <p>Files created before the versioning scheme have no leading version byte. The first byte of the 16-byte PBKDF2 salt is treated as the start of the file. No compression.</p>
-<p><strong>Relevant code:</strong></p>
-<ul>
-<li><code>CryptoManager.encrypt()</code> — writes v0x02</li>
-<li><code>CryptoManager.encryptWithDek()</code> — writes v0x03</li>
-<li><code>CryptoManager.decrypt()</code> — reads all three versions (version-switched on first byte)</li>
-</ul>
+<p><strong>Relevant code:</strong>
+- <code>CryptoManager.encrypt()</code> — writes v0x02
+- <code>CryptoManager.encryptWithDek()</code> — writes v0x03
+- <code>CryptoManager.decrypt()</code> — reads all three versions (version-switched on first byte)</p>
 <hr />
 <h2 id="5-authentication-state-machine">5. Authentication State Machine<a class="headerlink" href="#5-authentication-state-machine" title="Permanent link">&para;</a></h2>
 <div class="language-text highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>                    ┌──────────────────────┐
@@ -1260,8 +1256,8 @@
 </span><span id="__span-5-24"><a id="__codelineno-5-24" name="__codelineno-5-24" href="#__codelineno-5-24"></a>         └─────┬────┘   ┌────────────┐  └─────┬────┘
 </span><span id="__span-5-25"><a id="__codelineno-5-25" name="__codelineno-5-25" href="#__codelineno-5-25"></a>               │        │NeedsConsent│        │
 </span><span id="__span-5-26"><a id="__codelineno-5-26" name="__codelineno-5-26" href="#__codelineno-5-26"></a>               │        └────────────┘        │ setup()
-</span><span id="__span-5-27"><a id="__codelineno-5-27" name="__codelineno-5-27" href="#__codelineno-5-27"></a>               │                              │ DEK created
-</span><span id="__span-5-28"><a id="__codelineno-5-28" name="__codelineno-5-28" href="#__codelineno-5-28"></a>               │                              │ vault.key uploaded
+</span><span id="__span-5-27"><a id="__codelineno-5-27" name="__codelineno-5-27" href="#__codelineno-5-27"></a>               │ unlock()                     │ DEK created
+</span><span id="__span-5-28"><a id="__codelineno-5-28" name="__codelineno-5-28" href="#__codelineno-5-28"></a>               │ DEK unwrapped                │ vault.key uploaded
 </span><span id="__span-5-29"><a id="__codelineno-5-29" name="__codelineno-5-29" href="#__codelineno-5-29"></a>               └──────────────┬───────────────┘
 </span><span id="__span-5-30"><a id="__codelineno-5-30" name="__codelineno-5-30" href="#__codelineno-5-30"></a>                              ▼
 </span><span id="__span-5-31"><a id="__codelineno-5-31" name="__codelineno-5-31" href="#__codelineno-5-31"></a>                         ┌──────────┐
@@ -1609,18 +1605,14 @@
 <hr />
 <h2 id="14-session-auto-lock-timers">14. Session &amp; Auto-lock Timers<a class="headerlink" href="#14-session-auto-lock-timers" title="Permanent link">&para;</a></h2>
 <p>Two independent timers run in <code>AuthViewModel.viewModelScope</code>:</p>
-<p><strong><code>autoLockJob</code></strong> — background lock timer (when app leaves foreground)</p>
-<ul>
-<li>Cancelled when app comes back to foreground</li>
-<li>On expiry: <code>lockVault(auto=true)</code></li>
-<li>Only starts if biometric is NOT enrolled; if biometric is enrolled, immediate AppLocked on background</li>
-</ul>
-<p><strong><code>sessionTimeoutJob</code></strong> — absolute session expiry (caps maximum session length)</p>
-<ul>
-<li>Starts on successful password entry; NOT reset by biometric unlocks</li>
-<li>Default: 60 minutes (configurable in Settings)</li>
-<li>On expiry: <code>lockSessionExpired()</code> → full vault lock even if in foreground</li>
-</ul>
+<p><strong><code>autoLockJob</code></strong> — background lock timer (when app leaves foreground)
+- Cancelled when app comes back to foreground
+- On expiry: <code>lockVault(auto=true)</code>
+- Only starts if biometric is NOT enrolled; if biometric is enrolled, immediate AppLocked on background</p>
+<p><strong><code>sessionTimeoutJob</code></strong> — absolute session expiry (caps maximum session length)
+- Starts on successful password entry; NOT reset by biometric unlocks
+- Default: 60 minutes (configurable in Settings)
+- On expiry: <code>lockSessionExpired()</code> → full vault lock even if in foreground</p>
 <hr />
 <h2 id="15-code-map">15. Code Map<a class="headerlink" href="#15-code-map" title="Permanent link">&para;</a></h2>
 <table>
@@ -1673,6 +1665,8 @@
 </tr>
 </tbody>
 </table>
+<hr />
+<p><a href="./">← Back to Home</a>  |  <a href="./threat-model">Threat Model →</a></p>
 
 
 
