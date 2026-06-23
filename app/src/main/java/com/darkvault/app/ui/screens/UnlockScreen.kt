@@ -1,7 +1,10 @@
 package com.darkvault.app.ui.screens
 
+import android.app.Activity
 import android.os.Build
 import android.view.HapticFeedbackConstants
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.biometric.BiometricManager.Authenticators.BIOMETRIC_STRONG
 import androidx.biometric.BiometricPrompt
 import androidx.compose.foundation.background
@@ -57,6 +60,8 @@ import com.darkvault.app.ui.theme.VaultSurfaceVariant
 import com.darkvault.app.viewmodel.AuthState
 import com.darkvault.app.viewmodel.AuthViewModel
 import com.google.android.gms.auth.api.signin.GoogleSignIn
+import com.google.android.gms.auth.api.signin.GoogleSignInOptions
+import com.google.android.gms.common.api.Scope
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
@@ -89,6 +94,39 @@ fun UnlockScreen(viewModel: AuthViewModel) {
     var recoveryConfirmPwd by remember { mutableStateOf("") }
     var recoveryError by remember { mutableStateOf<String?>(null) }
     var recoveryLoading by remember { mutableStateOf(false) }
+
+    // ── Switch account ─────────────────────────────────────────────────────────
+    var showSwitchAccountDialog by remember { mutableStateOf(false) }
+    var switchSignInError by remember { mutableStateOf<String?>(null) }
+
+    val switchGso = remember {
+        GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
+            .requestEmail()
+            .requestScopes(Scope("https://www.googleapis.com/auth/drive.file"))
+            .build()
+    }
+    @Suppress("DEPRECATION")
+    val switchGoogleClient = remember { GoogleSignIn.getClient(context, switchGso) }
+
+    @Suppress("DEPRECATION")
+    val switchSignInLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        if (result.resultCode == Activity.RESULT_OK) {
+            GoogleSignIn.getSignedInAccountFromIntent(result.data)
+                .addOnSuccessListener { account ->
+                    switchSignInError = null
+                    viewModel.onGoogleSignInCompleted(account)
+                }
+                .addOnFailureListener { e ->
+                    switchSignInError = "Sign in failed: ${e.message}"
+                    viewModel.navigateToSignIn()
+                }
+        } else {
+            // User cancelled account chooser — navigate to sign-in so they can retry
+            viewModel.navigateToSignIn()
+        }
+    }
 
     fun resetRecoveryDialog() {
         showRecoveryDialog = false
@@ -309,7 +347,26 @@ fun UnlockScreen(viewModel: AuthViewModel) {
                         )
                     }
                 }
-                Spacer(modifier = Modifier.height(16.dp))
+                TextButton(
+                    onClick = { showSwitchAccountDialog = true },
+                    modifier = Modifier.align(Alignment.End)
+                ) {
+                    Text(
+                        "Switch account",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                }
+                switchSignInError?.let { err ->
+                    Text(
+                        err,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                }
+                Spacer(modifier = Modifier.height(8.dp))
             } else {
                 Spacer(modifier = Modifier.height(32.dp))
             }
@@ -366,6 +423,41 @@ fun UnlockScreen(viewModel: AuthViewModel) {
 
             Spacer(modifier = Modifier.weight(0.6f))
         }
+    }
+
+    // ── Switch account dialog ─────────────────────────────────────────────────
+
+    if (showSwitchAccountDialog) {
+        AlertDialog(
+            onDismissRequest = { showSwitchAccountDialog = false },
+            containerColor = VaultSurfaceVariant,
+            title = { Text("Switch Account?", style = MaterialTheme.typography.titleMedium) },
+            text = {
+                Text(
+                    "This will remove the current account's local data from this device. " +
+                    "Your encrypted files on Google Drive are safe and untouched. " +
+                    "You will sign in with a different Google account.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    showSwitchAccountDialog = false
+                    scope.launch {
+                        viewModel.clearLocalDataForSwitch()
+                        switchGoogleClient.signOut().addOnCompleteListener {
+                            switchSignInLauncher.launch(switchGoogleClient.signInIntent)
+                        }
+                    }
+                }) {
+                    Text("Switch Account", color = CyanPrimary)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showSwitchAccountDialog = false }) { Text("Cancel") }
+            }
+        )
     }
 
     // ── Recovery key dialog ───────────────────────────────────────────────────
