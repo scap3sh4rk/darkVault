@@ -87,8 +87,8 @@ darkVault version/commit:
 Description:
 Steps to reproduce:
 Impact: What can an attacker achieve?
-Suggested fix (optional):
-CVSS v3.1 estimate (optional):
+Suggested fix:
+CVSS v3.1 estimate:
 ```
 
 ---
