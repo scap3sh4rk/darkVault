@@ -1,5 +1,4 @@
 ---
-layout: default
 title: darkVault — Encrypted Cloud Backup
 ---
 
@@ -20,10 +19,10 @@ darkVault is a private Android app that lets you back up your files to Google Dr
 
 | Page | Who it's for |
 |------|-------------|
-| [User Guide](./user-guide) | Anyone using the app — no technical knowledge required |
-| [Encryption Architecture](./encryption) | Developers — full crypto implementation and data flow |
-| [Threat Model](./threat-model) | Developers & security reviewers — what we protect against and known limits |
-| [FAQ](./faq) | Everyone — common questions answered |
+| [User Guide](./user-guide.md) | Anyone using the app — no technical knowledge required |
+| [Encryption Architecture](./encryption.md) | Developers — full crypto implementation and data flow |
+| [Threat Model](./threat-model.md) | Developers & security reviewers — what we protect against and known limits |
+| [FAQ](./faq.md) | Everyone — common questions answered |
 
 ---
 
@@ -59,10 +58,10 @@ The DEK is the actual key that encrypts your files. It is itself encrypted (wrap
 ## Diagrams
 
 ### Data Flow
-[![Data flow diagram](./assets/data_flow.png)](./encryption)
+[![Data flow diagram](./assets/data_flow.png)](./encryption.md)
 
 ### Threat Model
-[![Threat model diagram](./assets/threat_model.png)](./threat-model)
+[![Threat model diagram](./assets/threat_model.png)](./threat-model.md)
 
 ---
 

@@ -1,0 +1,420 @@
+/* ═══════════════════════════════════════════════════════════
+   darkVault docs — custom theme
+   Palette  : #03f0fc cyan · deep blue-black bg · slate grey text
+   Fonts    : Outfit (headings) · DM Sans (body) · JetBrains Mono (code)
+   ═══════════════════════════════════════════════════════════ */
+
+/* ── CSS custom properties ─────────────────────────────────── */
+:root,
+[data-md-color-scheme="slate"] {
+
+  /* — backgrounds — */
+  --md-default-bg-color:           #080d0e;
+  --md-default-bg-color--light:    #0e1516;
+  --md-default-bg-color--lighter:  #141e1f;
+  --md-default-bg-color--lightest: #1b2527;
+
+  /* — body text — */
+  --md-default-fg-color:           #cde0e2;
+  --md-default-fg-color--light:    rgba(205,224,226,.65);
+  --md-default-fg-color--lighter:  rgba(205,224,226,.30);
+  --md-default-fg-color--lightest: rgba(205,224,226,.12);
+
+  /* — primary (header/tabs surface colour system)
+       fg  = the brand accent colour used as surface paint
+       bg  = text / icon colour rendered ON that surface
+       Setting bg to a warm-white makes header text always visible  — */
+  --md-primary-fg-color:           #03f0fc;
+  --md-primary-fg-color--light:    #44f5ff;
+  --md-primary-fg-color--dark:     #00bcc7;
+  --md-primary-bg-color:           #f0feff;   /* light → text drawn on primary surfaces */
+  --md-primary-bg-color--light:    rgba(240,254,255,.65);
+
+  /* — accent — */
+  --md-accent-fg-color:            #03f0fc;
+  --md-accent-fg-color--transparent: rgba(3,240,252,.10);
+  --md-accent-bg-color:            #080d0e;
+
+  /* — typeset — */
+  --md-typeset-color:              #cde0e2;
+  --md-typeset-a-color:            #03f0fc;
+
+  /* — code — */
+  --md-code-bg-color:              #0c1618;
+  --md-code-fg-color:              #cde0e2;
+  --md-code-hl-color:              rgba(3,240,252,.12);
+
+  /* — tables — */
+  --md-typeset-table-color:        rgba(255,255,255,.05);
+  --md-typeset-table-color--light: rgba(255,255,255,.02);
+
+  /* — footer — */
+  --md-footer-bg-color:            #060b0c;
+  --md-footer-bg-color--dark:      #040809;
+  --md-footer-fg-color:            rgba(205,224,226,.80);
+  --md-footer-fg-color--light:     rgba(205,224,226,.55);
+  --md-footer-fg-color--lighter:   rgba(205,224,226,.28);
+}
+
+/* ── Base typography ───────────────────────────────────────── */
+body {
+  font-family: "DM Sans", system-ui, sans-serif;
+  font-size: 17px;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+.md-typeset {
+  font-family: "DM Sans", system-ui, sans-serif;
+  font-size: 1rem;
+  font-weight: 400;
+  line-height: 1.78;
+  color: var(--md-typeset-color);
+}
+
+/* ── Heading font: Outfit ──────────────────────────────────── */
+.md-typeset h1,
+.md-typeset h2,
+.md-typeset h3,
+.md-typeset h4,
+.md-typeset h5,
+.md-typeset h6 {
+  font-family: "Outfit", sans-serif;
+  letter-spacing: -0.025em;
+  line-height: 1.25;
+}
+
+.md-typeset h1 {
+  font-size: 2.4rem;
+  font-weight: 800;
+  color: #03f0fc;
+  margin-bottom: .6em;
+  text-shadow: 0 0 40px rgba(3,240,252,.25);
+}
+
+.md-typeset h2 {
+  font-size: 1.55rem;
+  font-weight: 700;
+  color: #e4f8fa;
+  border-bottom: 1px solid rgba(3,240,252,.20);
+  padding-bottom: .35em;
+  margin-top: 2em;
+}
+
+.md-typeset h3 {
+  font-size: 1.2rem;
+  font-weight: 700;
+  color: #a8d4d8;
+}
+
+.md-typeset h4 {
+  font-size: 1rem;
+  font-weight: 600;
+  color: #8bbfc4;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+}
+
+/* ── Header — force full visibility ───────────────────────── */
+/* Use attribute selector to beat Material's specificity */
+.md-header,
+[data-md-color-primary] .md-header,
+.md-header[data-md-color-primary] {
+  background: #080d0e !important;
+  border-bottom: 1px solid rgba(3,240,252,.18);
+  box-shadow: 0 2px 20px rgba(0,0,0,.70);
+}
+
+/* Every text node / icon inside the header → light */
+.md-header__inner,
+.md-header__title,
+.md-header__topic,
+.md-header__topic > *,
+.md-ellipsis,
+.md-header__button,
+.md-header__button.md-icon,
+.md-header .md-search__icon,
+.md-header .md-icon {
+  color: #e8f8f9 !important;
+  fill:  #e8f8f9 !important;     /* SVG icons */
+}
+
+/* SVG <path> / <use> inside header buttons */
+.md-header svg,
+.md-header__button svg,
+.md-header .md-icon svg {
+  fill: #e8f8f9 !important;
+}
+
+/* Site title font */
+.md-header__title {
+  font-family: "Outfit", sans-serif;
+  font-weight: 700;
+  font-size: 1.1rem;
+  letter-spacing: -.01em;
+  color: #f0feff !important;
+}
+
+/* Logo — bigger */
+.md-header__button.md-logo,
+.md-header__button.md-logo img,
+.md-header__button.md-logo svg {
+  height: 2.6rem !important;
+  width: auto !important;
+  padding: .2rem 0;
+  filter: drop-shadow(0 0 6px rgba(3,240,252,.35));
+}
+
+/* ── Navigation tabs ───────────────────────────────────────── */
+.md-tabs {
+  background: #080d0e !important;
+  border-bottom: 1px solid rgba(255,255,255,.07);
+}
+
+.md-tabs__link {
+  font-family: "DM Sans", sans-serif;
+  font-size: .8rem;
+  font-weight: 600;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  color: rgba(205,224,226,.72) !important;
+  opacity: 1 !important;
+  transition: color .15s ease;
+}
+
+.md-tabs__link:hover,
+.md-tabs__link:focus,
+.md-tabs__link--active {
+  color: #03f0fc !important;
+}
+
+/* ── Sidebar nav ───────────────────────────────────────────── */
+.md-sidebar {
+  background: #090e0f;
+}
+
+.md-nav__title {
+  font-family: "DM Sans", sans-serif;
+  font-weight: 600;
+  font-size: .72rem;
+  letter-spacing: .09em;
+  text-transform: uppercase;
+  color: #3d6e73 !important;
+}
+
+.md-nav__link {
+  font-family: "DM Sans", sans-serif;
+  font-size: .88rem;
+  font-weight: 400;
+  color: rgba(180,208,212,.82) !important;
+  transition: color .12s;
+}
+
+.md-nav__link:hover,
+.md-nav__link:focus {
+  color: #03f0fc !important;
+}
+
+.md-nav__link--active {
+  color: #03f0fc !important;
+  font-weight: 600;
+}
+
+/* ── Search bar ────────────────────────────────────────────── */
+.md-search__form {
+  background: #111d1f !important;
+  border: 1px solid rgba(3,240,252,.20);
+  border-radius: 6px;
+}
+
+.md-search__input {
+  font-family: "DM Sans", sans-serif;
+  color: #cde0e2 !important;
+  font-weight: 400;
+}
+
+.md-search__input::placeholder {
+  color: rgba(150,190,196,.50) !important;
+}
+
+.md-search__icon,
+.md-search__icon.md-icon {
+  color: #cde0e2 !important;
+  fill:  #cde0e2 !important;
+}
+
+/* Search results dropdown */
+.md-search-result {
+  background: #0e1516;
+  border: 1px solid rgba(3,240,252,.12);
+}
+
+.md-search-result__meta {
+  color: #5f9ea3;
+  background: #0a1214;
+}
+
+.md-search-result__link:hover .md-search-result__article,
+.md-search-result__link:focus .md-search-result__article {
+  background: rgba(3,240,252,.06);
+}
+
+mark {
+  background: rgba(3,240,252,.22);
+  color: #03f0fc;
+  border-radius: 2px;
+}
+
+/* ── Code ──────────────────────────────────────────────────── */
+.md-typeset code {
+  font-family: "JetBrains Mono", monospace;
+  background: #0c1618;
+  border: 1px solid rgba(255,255,255,.09);
+  border-radius: 4px;
+  font-size: .84em;
+  padding: .1em .4em;
+  color: #7ef0f5;
+}
+
+.md-typeset pre > code {
+  background: transparent;
+  border: none;
+  padding: 0;
+  color: #cde0e2;
+  font-size: .84rem;
+  line-height: 1.65;
+}
+
+.highlight,
+.md-typeset .highlight {
+  background: #0a1314 !important;
+  border: 1px solid rgba(3,240,252,.12);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+/* copy-code button */
+.md-clipboard {
+  color: rgba(180,208,212,.55) !important;
+}
+
+.md-clipboard:hover {
+  color: #03f0fc !important;
+}
+
+/* ── Tables ────────────────────────────────────────────────── */
+.md-typeset table:not([class]) {
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid rgba(3,240,252,.12);
+  width: 100%;
+}
+
+.md-typeset table:not([class]) th {
+  background: rgba(3,240,252,.09);
+  color: #03f0fc;
+  font-family: "DM Sans", sans-serif;
+  font-weight: 600;
+  font-size: .8rem;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+}
+
+.md-typeset table:not([class]) td {
+  color: #b8d4d8;
+  border-top: 1px solid rgba(255,255,255,.05);
+}
+
+.md-typeset table:not([class]) tr:hover td {
+  background: rgba(3,240,252,.04);
+}
+
+/* ── Blockquotes ───────────────────────────────────────────── */
+.md-typeset blockquote {
+  border-left: 3px solid #03f0fc;
+  background: rgba(3,240,252,.05);
+  border-radius: 0 6px 6px 0;
+  padding: .65em 1.1em;
+  color: #7ea8ac;
+  font-style: italic;
+}
+
+/* ── Links ─────────────────────────────────────────────────── */
+.md-typeset a {
+  color: #03f0fc;
+  font-weight: 500;
+  text-decoration: none;
+}
+
+.md-typeset a:hover {
+  color: #44f5ff;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+/* ── Horizontal rule ───────────────────────────────────────── */
+.md-typeset hr {
+  border-color: rgba(3,240,252,.14);
+  margin: 2em 0;
+}
+
+/* ── Admonitions / callout boxes ───────────────────────────── */
+.md-typeset .admonition,
+.md-typeset details {
+  background: #0c1516;
+  border-color: rgba(3,240,252,.30);
+  border-radius: 6px;
+}
+
+.md-typeset .admonition-title,
+.md-typeset summary {
+  background: rgba(3,240,252,.09);
+}
+
+/* ── TOC sidebar ───────────────────────────────────────────── */
+.md-nav--secondary .md-nav__link {
+  color: rgba(150,192,196,.70) !important;
+  font-size: .84rem;
+}
+
+.md-nav--secondary .md-nav__link:hover,
+.md-nav--secondary .md-nav__link--active {
+  color: #03f0fc !important;
+}
+
+/* ── Footer ────────────────────────────────────────────────── */
+.md-footer {
+  background: #060b0c;
+  border-top: 1px solid rgba(3,240,252,.12);
+}
+
+.md-footer-meta {
+  background: #040809;
+}
+
+.md-footer__link {
+  color: rgba(205,224,226,.65) !important;
+}
+
+.md-footer__link:hover {
+  color: #03f0fc !important;
+}
+
+/* ── Back-to-top button ────────────────────────────────────── */
+.md-top {
+  background: #0e1516;
+  border: 1px solid rgba(3,240,252,.28);
+  color: #03f0fc;
+  font-family: "DM Sans", sans-serif;
+  font-weight: 600;
+}
+
+.md-top:hover {
+  background: rgba(3,240,252,.10);
+}
+
+/* ── Scrollbars (webkit) ───────────────────────────────────── */
+::-webkit-scrollbar              { width: 6px; height: 6px; }
+::-webkit-scrollbar-track        { background: #080d0e; }
+::-webkit-scrollbar-thumb        { background: #1e2e30; border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover  { background: #2c4446; }

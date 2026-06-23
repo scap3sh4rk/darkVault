@@ -1,5 +1,4 @@
 ---
-layout: default
 title: Threat Model
 ---
 
@@ -269,4 +268,4 @@ These are confirmed design limitations. Do not implement partial fixes — each 
 
 ---
 
-[← Encryption Architecture](./encryption)  |  [FAQ →](./faq)
+[← Encryption Architecture](./encryption.md)  |  [FAQ →](./faq.md)

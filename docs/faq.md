@@ -1,5 +1,4 @@
 ---
-layout: default
 title: FAQ
 ---
 
@@ -209,4 +208,4 @@ Currently, no. File names are stored in Google Drive's `appProperties` field as 
 
 ---
 
-[← Threat Model](./threat-model)  |  [Back to Home](./)
+[← Threat Model](./threat-model.md)  |  [Back to Home](./index.md)

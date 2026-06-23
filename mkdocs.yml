@@ -1,0 +1,84 @@
+site_name: darkVault
+site_url: https://scap3sh4rk.github.io/darkVault
+site_author: Parthiv Kumar Nikku
+site_description: AES-256-GCM encrypted personal backup for Google Drive — your files, unreadable to everyone else.
+
+repo_name: scap3sh4rk/darkVault
+repo_url: https://github.com/scap3sh4rk/darkVault
+edit_uri: ""
+
+docs_dir: docs
+site_dir: site
+
+theme:
+  name: material
+  custom_dir: docs/overrides
+  logo: assets/logo.png
+  favicon: assets/favicon.png
+
+  palette:
+    scheme: slate
+    primary: custom
+    accent: custom
+
+  font:
+    text: DM Sans
+    code: JetBrains Mono
+
+  features:
+    - navigation.tabs
+    - navigation.tabs.sticky
+    - navigation.top
+    - navigation.footer
+    - search.highlight
+    - search.suggest
+    - search.share
+    - content.code.copy
+    - content.code.annotate
+    - toc.follow
+
+  icon:
+    repo: fontawesome/brands/github
+
+plugins:
+  - search:
+      lang: en
+  - social:
+      cards_layout_options:
+        background_color: "#0A0A0A"
+        color: "#00D4FF"
+        font_family: Inter
+
+extra_css:
+  - stylesheets/extra.css
+
+extra:
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/scap3sh4rk/darkVault
+      name: darkVault on GitHub
+
+nav:
+  - Home: index.md
+  - User Guide: user-guide.md
+  - Encryption Architecture: encryption.md
+  - Threat Model: threat-model.md
+  - FAQ: faq.md
+
+markdown_extensions:
+  - pymdownx.highlight:
+      anchor_linenums: true
+      line_spans: __span
+      pygments_lang_class: true
+  - pymdownx.inlinehilite
+  - pymdownx.superfences
+  - pymdownx.tabbed:
+      alternate_style: true
+  - admonition
+  - pymdownx.details
+  - attr_list
+  - md_in_html
+  - tables
+  - footnotes
+  - toc:
+      permalink: true

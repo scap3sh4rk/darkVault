@@ -1,5 +1,4 @@
 ---
-layout: default
 title: User Guide
 ---
 
@@ -51,10 +50,7 @@ Inside your darkVault folder on Google Drive, there is a file called `vault.key`
 
 If someone gets `vault.key`, they still cannot read your files without your master password or Recovery Key. However, they could try to guess your password offline — which is why a strong password matters.
 
-check [FAQ →](./faq) for more about `vault.key`
-[https://github.com/scap3sh4rk/darkVault/blob/main/docs/faq.md#1-if-my-google-drive-account-gets-hacked-and-the-attacker-gets-vaultkey--can-they-crack-my-password](1)
-[https://github.com/scap3sh4rk/darkVault/blob/main/docs/faq.md#1-if-my-google-drive-account-gets-hacked-and-the-attacker-gets-vaultkey--can-they-crack-my-password](2)
-[https://github.com/scap3sh4rk/darkVault/blob/main/docs/faq.md#1-if-my-google-drive-account-gets-hacked-and-the-attacker-gets-vaultkey--can-they-crack-my-password](11)
+See the [FAQ](./faq.md) for more about `vault.key` — questions 1, 2, and 11.
 
 ---
 
@@ -126,4 +122,4 @@ When locked:
 
 ---
 
-[← Back to Home](./)  |  [FAQ →](./faq)
+[← Back to Home](./index.md)  |  [FAQ →](./faq.md)

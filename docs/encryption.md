@@ -1,5 +1,4 @@
 ---
-layout: default
 title: Encryption Architecture
 ---
 
@@ -526,4 +525,4 @@ Two independent timers run in `AuthViewModel.viewModelScope`:
 
 ---
 
-[← Back to Home](./)  |  [Threat Model →](./threat-model)
+[← Back to Home](./index.md)  |  [Threat Model →](./threat-model.md)

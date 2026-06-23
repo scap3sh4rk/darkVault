@@ -14,6 +14,9 @@
 .cxx
 local.properties
 
+# MkDocs build output
+/site
+
 # AI tool files — never commit
 .claude/
 /CLAUDE.md
