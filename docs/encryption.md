@@ -407,6 +407,8 @@ AES-GCM unwrap dekWrappedByRecovery with recoveryKeyBytes
 
 ## 11. File Encryption / Decryption Data Flow
 
+![darkVault data flow diagram](./assets/data_flow.png)
+
 ```
 UPLOAD
 ──────

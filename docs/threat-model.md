@@ -27,6 +27,8 @@ title: Threat Model
 
 ## 2. Trust Boundaries
 
+![darkVault threat model diagram](./assets/threat_model.png)
+
 ```
 ┌──────────────────────────────────────────────────────────────────┐
 │  TRUSTED: User's device (Android process boundary)              │

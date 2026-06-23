@@ -56,6 +56,16 @@ The DEK is the actual key that encrypts your files. It is itself encrypted (wrap
 
 ---
 
+## Diagrams
+
+### Data Flow
+[![Data flow diagram](./assets/data_flow.png)](./encryption)
+
+### Threat Model
+[![Threat model diagram](./assets/threat_model.png)](./threat-model)
+
+---
+
 ## Source
 
 [github.com/scap3sh4rk/darkVault](https://github.com/scap3sh4rk/darkVault)
