@@ -108,7 +108,7 @@ class PreferencesManager(private val context: Context) {
 
     val imagePreviewEnabled: Flow<Boolean> = context.dataStore.data.map { it[KEY_IMAGE_PREVIEW] ?: true }
     val videoPreviewEnabled: Flow<Boolean> = context.dataStore.data.map { it[KEY_VIDEO_PREVIEW] ?: false }
-    val autoLockMinutes: Flow<Int> = context.dataStore.data.map { it[KEY_AUTO_LOCK_MINUTES]?.toIntOrNull() ?: 0 }
+    val autoLockMinutes: Flow<Int> = context.dataStore.data.map { it[KEY_AUTO_LOCK_MINUTES]?.toIntOrNull() ?: 5 }
 
     suspend fun setImagePreview(enabled: Boolean) {
         context.dataStore.edit { it[KEY_IMAGE_PREVIEW] = enabled }
@@ -155,7 +155,7 @@ class PreferencesManager(private val context: Context) {
 
     // ── Session timeout ───────────────────────────────────────────────────
 
-    val sessionTimeoutMinutes: Flow<Int> = context.dataStore.data.map { it[KEY_SESSION_TIMEOUT_MINUTES] ?: 0 }
+    val sessionTimeoutMinutes: Flow<Int> = context.dataStore.data.map { it[KEY_SESSION_TIMEOUT_MINUTES] ?: 60 }
 
     suspend fun setSessionTimeoutMinutes(minutes: Int) {
         context.dataStore.edit { it[KEY_SESSION_TIMEOUT_MINUTES] = minutes }

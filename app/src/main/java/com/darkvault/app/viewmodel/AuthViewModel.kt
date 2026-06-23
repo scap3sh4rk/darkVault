@@ -181,6 +181,38 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     /**
+     * Wipes all local credentials and in-memory secrets without changing [authState].
+     * Used by the account-switch flow on UnlockScreen: the UI signs out of Google and launches
+     * account selection itself, then calls [onGoogleSignInCompleted] with the chosen account.
+     * On cancellation, call [navigateToSignIn] to land on the sign-in screen.
+     */
+    suspend fun clearLocalDataForSwitch() = withContext(Dispatchers.IO) {
+        prefs.clearAll()
+        BiometricKeyManager.deleteKey()
+        VaultSession.clearDek()
+        VaultSession.signedInAccount = null
+        VaultSession.masterPassword = null
+        _masterPassword.value = null
+        _sessionPasswordEntered = false
+        _biometricAutoLaunch.value = false
+        autoLockJob?.cancel()
+        sessionTimeoutJob?.cancel()
+        sessionTimeoutJob = null
+        _sessionExpiresAtMs = 0L
+        _pendingFolderId = null
+        _pendingAccount = null
+        if (com.darkvault.app.BuildConfig.DEBUG) {
+            com.darkvault.app.debug.DeveloperOptionsManager.onDekCleared()
+            emitDebugDiagnostics()
+        }
+    }
+
+    /** Transitions to [AuthState.SignIn]. Called when an account switch is cancelled mid-flow. */
+    fun navigateToSignIn() {
+        _authState.value = AuthState.SignIn
+    }
+
+    /**
      * Clears all local credentials and navigates back to the sign-in screen.
      * Caller is responsible for signing out of the Google client before calling this.
      */
@@ -219,11 +251,11 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
     )
 
     val autoLockMinutes: StateFlow<Int> = prefs.autoLockMinutes.stateIn(
-        viewModelScope, SharingStarted.Eagerly, 0
+        viewModelScope, SharingStarted.Eagerly, 5
     )
 
     val sessionTimeoutMinutes: StateFlow<Int> = prefs.sessionTimeoutMinutes.stateIn(
-        viewModelScope, SharingStarted.Eagerly, 0
+        viewModelScope, SharingStarted.Eagerly, 60
     )
 
     val failedAttempts: StateFlow<Int> = prefs.failedAttempts.stateIn(

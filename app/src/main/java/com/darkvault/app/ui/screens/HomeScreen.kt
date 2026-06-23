@@ -35,6 +35,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.shape.CircleShape
@@ -190,6 +191,7 @@ fun HomeScreen(
     val viewLayout by homeViewModel.viewLayout.collectAsState()
     val pendingConflict by homeViewModel.pendingConflict.collectAsState()
     val uploadIsPaused by homeViewModel.uploadIsPaused.collectAsState()
+    val canGoBack by homeViewModel.canGoBack.collectAsState()
     // Task 4 — thumbnail gating flags
     val thumbnailsEnabled by homeViewModel.thumbnailsEnabled.collectAsState()
     val imagePreviewEnabled by homeViewModel.imagePreviewEnabled.collectAsState()
@@ -220,7 +222,7 @@ fun HomeScreen(
     var breadcrumbExpanded by remember { mutableStateOf(false) }
 
     // Back intercept: clear selection first; if not selecting, go up one folder level
-    BackHandler(enabled = isSelectionMode || homeViewModel.canGoBack) {
+    BackHandler(enabled = isSelectionMode || canGoBack) {
         if (isSelectionMode) homeViewModel.clearSelection()
         else homeViewModel.navigateUp()
     }
@@ -316,7 +318,7 @@ fun HomeScreen(
                 TopAppBar(
                     navigationIcon = {
                         // Task 9 — back arrow only when inside a sub-folder
-                        if (homeViewModel.canGoBack) {
+                        if (canGoBack) {
                             IconButton(onClick = { homeViewModel.navigateUp() }) {
                                 Icon(Icons.AutoMirrored.Outlined.ArrowBack, "Up", tint = CyanPrimary)
                             }
@@ -413,9 +415,6 @@ fun HomeScreen(
                                     }
                                 }
                             }
-                            IconButton(onClick = { currentAccount?.let { homeViewModel.loadFiles(it) } }) {
-                                Icon(Icons.Outlined.Refresh, "Refresh", tint = CyanPrimary)
-                            }
                             Box {
                                 IconButton(onClick = { showMoreMenu = true }) {
                                     Icon(Icons.Outlined.MoreVert, "More options", tint = CyanPrimary)
@@ -464,15 +463,6 @@ fun HomeScreen(
                                             onNavigateToSettings()
                                         }
                                     )
-                                    if (BuildConfig.DEBUG) {
-                                        DropdownMenuItem(
-                                            text = { Text("Developer Options") },
-                                            onClick = {
-                                                showMoreMenu = false
-                                                onNavigateToDebugPanel()
-                                            }
-                                        )
-                                    }
                                 }
                             }
                         }
@@ -664,6 +654,12 @@ fun HomeScreen(
 
             val isRefreshing = uiState is HomeUiState.Loading
             val pullRefreshState = rememberPullToRefreshState()
+
+            val showRecents = folderStack.size == 1 &&
+                    searchQuery.isBlank() &&
+                    filterType == FilterType.ALL &&
+                    recentItems.isNotEmpty()
+
             PullToRefreshBox(
                 isRefreshing = isRefreshing,
                 onRefresh = { currentAccount?.let { homeViewModel.loadFiles(it) } },
@@ -712,12 +708,6 @@ fun HomeScreen(
                                         verticalArrangement = Arrangement.spacedBy(8.dp),
                                         modifier = Modifier.fillMaxSize()
                                     ) {
-                                        // Recents section — only at root with no active search/filter
-                                        val showRecents = folderStack.size == 1 &&
-                                            searchQuery.isBlank() &&
-                                            filterType == FilterType.ALL &&
-                                            recentItems.isNotEmpty()
-
                                         if (showRecents) {
                                             item(key = "recents_header") {
                                                 Text(
@@ -760,6 +750,15 @@ fun HomeScreen(
                                                     }
                                                 }
                                             }
+                                        }
+
+                                        item(key = "all_files_header") {
+                                            Text(
+                                                "All Files",
+                                                style = MaterialTheme.typography.labelLarge,
+                                                color = CyanPrimary,
+                                                modifier = Modifier.padding(top = 4.dp, bottom = 4.dp)
+                                            )
                                         }
 
                                         items(displayItems, key = { it.id }) { item ->
@@ -822,6 +821,61 @@ fun HomeScreen(
                                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                                         modifier = Modifier.fillMaxSize()
                                     ) {
+                                        if (showRecents) {
+                                            item(span = { GridItemSpan(maxLineSpan) }, key = "recents_header") {
+                                                Column {
+                                                    Text(
+                                                        "Recents",
+                                                        style = MaterialTheme.typography.labelLarge,
+                                                        color = CyanPrimary,
+                                                        modifier = Modifier.padding(bottom = 4.dp)
+                                                    )
+                                                    LazyRow(
+                                                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                                        contentPadding = PaddingValues(bottom = 8.dp)
+                                                    ) {
+                                                        items(recentItems, key = { "recent_${it.id}" }) { file ->
+                                                            RecentFileCard(
+                                                                file = file,
+                                                                isSelected = file.id in selectedIds,
+                                                                showThumbnail = showThumbnails,
+                                                                thumbnailPassword = password,
+                                                                thumbnailAccount = currentAccount,
+                                                                onClick = {
+                                                                    if (isSelectionMode) {
+                                                                        homeViewModel.toggleSelection(file.id)
+                                                                    } else {
+                                                                        when (previewKind(file.originalMimeType)) {
+                                                                            PreviewKind.IMAGE -> previewFile = file
+                                                                            PreviewKind.VIDEO -> videoPreviewFile = file
+                                                                            PreviewKind.AUDIO -> audioPreviewFile = file
+                                                                            PreviewKind.PDF -> pdfPreviewFile = file
+                                                                            PreviewKind.TEXT -> textPreviewFile = file
+                                                                            PreviewKind.NONE -> {
+                                                                                val pwd = password; val acc = currentAccount
+                                                                                if (pwd != null && acc != null) homeViewModel.downloadAndDecrypt(file, pwd, acc)
+                                                                                else scope.launch { snackbarHostState.showSnackbar("Vault is locked") }
+                                                                            }
+                                                                        }
+                                                                    }
+                                                                },
+                                                                onLongPress = { homeViewModel.toggleSelection(file.id) }
+                                                            )
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+
+                                        item(span = { GridItemSpan(maxLineSpan) }, key = "all_files_header") {
+                                            Text(
+                                                "All Files",
+                                                style = MaterialTheme.typography.labelLarge,
+                                                color = CyanPrimary,
+                                                modifier = Modifier.padding(top = 4.dp, bottom = 4.dp)
+                                            )
+                                        }
+
                                         items(displayItems, key = { it.id }) { item ->
                                             VaultGridItem(
                                                 item = item,

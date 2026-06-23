@@ -89,8 +89,9 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     val currentFolderName: String
         get() = _folderStack.value.lastOrNull()?.name ?: "darkVault"
 
-    val canGoBack: Boolean
-        get() = _folderStack.value.size > 1
+    val canGoBack: StateFlow<Boolean> = _folderStack
+        .map { it.size > 1 }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, false)
 
     // ── Search / filter / sort ─────────────────────────────────────────────
     val searchQuery = MutableStateFlow("")
