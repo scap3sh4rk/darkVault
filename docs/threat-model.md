@@ -1,6 +1,6 @@
 ---
-layout: default
 title: Threat Model
+description: What darkVault protects against, attack resistance, known limitations, and architectural debt
 ---
 
 # Threat Model
@@ -68,10 +68,12 @@ title: Threat Model
 **Scenario:** Attacker gains full access to the victim's Google Drive.
 
 **What the attacker has:**
+
 - All `.vault` files (AES-256-GCM ciphertext)
 - `vault.key` containing `kekSalt`, `dekWrappedByKek`, `dekWrappedByRecovery`
 
 **What the attacker must do to read files:**
+
 1. Brute-force the master password offline using `vault.key`
 2. Each guess requires: `PBKDF2(guess, kekSalt, 100,000 iterations)` → attempt AES-GCM unwrap
 3. Success is confirmed by GCM auth tag acceptance (no false positives)
@@ -101,6 +103,7 @@ Password entropy vs. cracking resistance @ ~200,000 guesses/sec (GPU cluster):
 **What the attacker has:** Physical access to the Android device.
 
 **Protected by:**
+
 - DEK is zeroed from RAM on full vault lock (`Arrays.fill(dek, 0)`)
 - Master password is never written to DataStore
 - DataStore contents (PBKDF2 hash, biometric blob) are app-private, OS-enforced
@@ -116,6 +119,7 @@ Password entropy vs. cracking resistance @ ~200,000 guesses/sec (GPU cluster):
 **What the attacker has:** Process memory containing the DEK.
 
 **Mitigations:**
+
 - AppLocked UI blocks all file operations; fingerprint is required to resume
 - Full process kill (force-stop, reboot) clears RAM → DEK gone
 - Android's full-disk encryption protects RAM snapshots in storage
@@ -139,6 +143,7 @@ Password entropy vs. cracking resistance @ ~200,000 guesses/sec (GPU cluster):
 **Scenario:** A malicious app on the same device attempts to read darkVault's data.
 
 **Mitigation:**
+
 - DataStore is app-private (Android sandbox)
 - DEK lives in process memory only
 - Keystore key requires biometric auth before use; another app cannot trigger that prompt
@@ -266,7 +271,3 @@ These are confirmed design limitations. Do not implement partial fixes — each 
 │ Metadata (file names)  │ NONE              │ Plaintext in Drive     │
 └────────────────────────┴───────────────────┴────────────────────────┘
 ```
-
----
-
-[← Encryption Architecture](./encryption)  |  [FAQ →](./faq)

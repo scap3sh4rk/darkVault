@@ -1,6 +1,6 @@
 ---
-layout: default
 title: Encryption Architecture
+description: Full cryptographic implementation, key hierarchy, data formats, and control flows in darkVault
 ---
 
 # Encryption Architecture
@@ -95,6 +95,7 @@ All primitives are from `javax.crypto` (Android's built-in JCA provider). No thi
 The GCM auth tag makes it impossible to tamper with the wrapped DEK without detection. An incorrect unwrapping key produces an `AEADBadTagException` rather than silently returning garbage.
 
 **Relevant code:**
+
 - `VaultKeyBundle.kt` — serialization / deserialization
 - `VaultKeyManager.wrapDek()` / `unwrapDek()` — wrapping logic
 - `AuthViewModel.createAndUploadDek()` — creation during setup
@@ -136,6 +137,7 @@ Each file stores its own PBKDF2 salt. The AES key is derived fresh from `passwor
 Files created before the versioning scheme have no leading version byte. The first byte of the 16-byte PBKDF2 salt is treated as the start of the file. No compression.
 
 **Relevant code:**
+
 - `CryptoManager.encrypt()` — writes v0x02
 - `CryptoManager.encryptWithDek()` — writes v0x03
 - `CryptoManager.decrypt()` — reads all three versions (version-switched on first byte)
@@ -171,8 +173,8 @@ Files created before the versioning scheme have no leading version byte. The fir
          └─────┬────┘   ┌────────────┐  └─────┬────┘
                │        │NeedsConsent│        │
                │        └────────────┘        │ setup()
-               │ unlock()                     │ DEK created
-               │ DEK unwrapped                │ vault.key uploaded
+               │                              │ DEK created
+               │                              │ vault.key uploaded
                └──────────────┬───────────────┘
                               ▼
                          ┌──────────┐
@@ -498,11 +500,13 @@ Unlock:
 Two independent timers run in `AuthViewModel.viewModelScope`:
 
 **`autoLockJob`** — background lock timer (when app leaves foreground)
+
 - Cancelled when app comes back to foreground
 - On expiry: `lockVault(auto=true)`
 - Only starts if biometric is NOT enrolled; if biometric is enrolled, immediate AppLocked on background
 
 **`sessionTimeoutJob`** — absolute session expiry (caps maximum session length)
+
 - Starts on successful password entry; NOT reset by biometric unlocks
 - Default: 60 minutes (configurable in Settings)
 - On expiry: `lockSessionExpired()` → full vault lock even if in foreground
@@ -523,7 +527,3 @@ Two independent timers run in `AuthViewModel.viewModelScope`:
 | DataStore preferences (hash, salt, biometric creds) | `data/PreferencesManager.kt` |
 | Drive REST API (upload, download, vault.key ops) | `drive/DriveApiClient.kt` |
 | Background upload, chunked protocol | `service/UploadForegroundService.kt` |
-
----
-
-[← Back to Home](./)  |  [Threat Model →](./threat-model)
