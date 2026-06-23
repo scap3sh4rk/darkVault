@@ -1,6 +1,6 @@
-<img width="1050" height="326" alt="darkVAult" src="https://github.com/user-attachments/assets/e4337d89-3262-4be3-8078-6f9dc76f5103" />
+<img width="1050" height="326" alt="darkVAult" src="/assets/darkVAult.png" />
 
-darkVault is a security-first Android application designed to turn your Google Drive into a high-security, encrypted vault. In an era where data breaches are common, darkVault ensures that your most sensitive files—photos, videos, and documents—remain completely private, even from the cloud provider itself.
+darkVault is the premier open-source solution for users who trust Google Drive’s infrastructure but not its privacy. While most Drive clients are simple file managers, darkVault is a security-first fortress built from the ground up to ensure your data remains your own.
 
 ---
 
