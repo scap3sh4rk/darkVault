@@ -335,7 +335,7 @@ fun SettingsScreen(
                         color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
                     )
                     Text(
-                        "by Parthiv Kumar Nikku",
+                        "by scap3sh4rk",
                         style = MaterialTheme.typography.bodyMedium,
                         fontWeight = FontWeight.SemiBold,
                         color = MaterialTheme.colorScheme.onSurface
@@ -360,7 +360,7 @@ fun SettingsScreen(
                         IconButton(onClick = {
                             context.startActivity(
                                 Intent(Intent.ACTION_SENDTO).apply {
-                                    data = Uri.parse("mailto:parthiv.kumar.Nikku+darkvault@gmail.com")
+                                    data = Uri.parse("mailto:scap3sh4rk+darkvault@gmail.com")
                                 }
                             )
                         }) {
@@ -372,7 +372,7 @@ fun SettingsScreen(
                             )
                         }
                         // GitHub profile
-                        IconButton(onClick = { openUrl("https://github.com/parthivkumarnikku") }) {
+                        IconButton(onClick = { openUrl("https://github.com/scap3sh4rk") }) {
                             Icon(
                                 Icons.Outlined.Code,
                                 contentDescription = "GitHub",
@@ -390,7 +390,7 @@ fun SettingsScreen(
                             )
                         }
                         // GitHub Issues / Feedback
-                        IconButton(onClick = { openUrl("https://github.com/parthivkumarnikku/darkVault/issues") }) {
+                        IconButton(onClick = { openUrl("https://github.com/scap3sh4rk/darkVault/issues") }) {
                             Icon(
                                 Icons.Outlined.BugReport,
                                 contentDescription = "Report issue",

@@ -58,7 +58,7 @@ darkVault targets a "ship complete, use privately" model. All security fixes app
 
 Use GitHub private vulnerability reporting:
 
-1. Go to `https://github.com/parthivkumarnikku/darkVault/security/advisories`
+1. Go to `https://github.com/scap3sh4rk/darkVault/security/advisories`
 2. Click **"Report a vulnerability"**
 3. Fill in the advisory form (template below)
 4. Submit — private, only visible to repo admins
@@ -169,4 +169,4 @@ Recovery key is the only vault escape if master password is forgotten. Repeated 
 visit the site and click contact - https://parthivkumarnikku.github.io/portfolio/ 
 
 Security: `scap3sh4rk+darkvault@gmail.com`
-Advisory portal: `https://github.com/parthivkumarnikku/darkVault/security/advisories`
+Advisory portal: `https://github.com/scap3sh4rk/darkVault/security/advisories`
