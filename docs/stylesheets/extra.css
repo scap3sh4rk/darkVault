@@ -188,46 +188,22 @@ body {
   color: #03f0fc !important;
 }
 
-/* ── Download button in header ─────────────────────────────── */
-.dv-download-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.4rem;
-  height: 2rem;
-  padding: 0 0.85rem;
-  margin-right: 0.5rem;
+/* Download button — last tab styled as a pill */
+.md-tabs__item:last-child .md-tabs__link {
+  color: #03f0fc !important;
   border: 1.5px solid rgba(3, 240, 252, 0.55);
   border-radius: 20px;
-  color: #03f0fc !important;
-  font-family: "DM Sans", sans-serif;
-  font-size: 0.8rem;
-  font-weight: 600;
-  letter-spacing: 0.04em;
-  text-decoration: none !important;
-  white-space: nowrap;
-  cursor: pointer;
-  transition: border-color 0.2s ease,
-              box-shadow   0.2s ease,
-              background   0.2s ease,
-              color        0.2s ease;
+  padding: 0.25rem 1rem !important;
+  margin-left: 0.5rem;
+  margin-top: 0.35rem;
+  line-height: 1.6;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
 }
 
-.dv-download-btn svg {
-  width: 1rem;
-  height: 1rem;
-  fill: #03f0fc;
-  flex-shrink: 0;
-  transition: fill 0.2s ease;
-}
-
-.dv-download-btn:hover,
-.dv-download-btn:focus {
-  background:    rgba(3, 240, 252, 0.10) !important;
-  border-color:  #03f0fc;
-  box-shadow:    0 0 10px rgba(3, 240, 252, 0.45),
-                 0 0 22px rgba(3, 240, 252, 0.20);
+.md-tabs__item:last-child .md-tabs__link:hover {
+  background: rgba(3, 240, 252, 0.12) !important;
+  border-color: #03f0fc;
   color: #03f0fc !important;
-  text-decoration: none !important;
 }
 
 /* ── Sidebar nav ───────────────────────────────────────────── */
