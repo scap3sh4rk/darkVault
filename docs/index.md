@@ -65,6 +65,26 @@ The DEK is the actual key that encrypts your files. It is itself encrypted (wrap
 
 ---
 
+## Screenshots
+<table>
+  <tr>
+    <td align="center">
+      <img src="/docs/assets/settings-screen.jpeg" alt="Settings Screen" width="250"><br>
+      <b>Settings Screen</b>
+    </td>
+    <td align="center">
+      <img src="/docs/assets/home-screen.jpeg" alt="Home Screen" width="250"><br>
+      <b>Home Screen</b>
+    </td>
+    <td align="center">
+      <img src="/docs/assets/login-screen.jpeg" alt="Login Screen" width="250"><br>
+      <b>Login Screen</b>
+    </td>
+  </tr>
+</table>
+
+---
+
 ## Source
 
 [github.com/scap3sh4rk/darkVault](https://github.com/scap3sh4rk/darkVault)
