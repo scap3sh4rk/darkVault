@@ -106,35 +106,35 @@ fun TrashScreen(
             TopAppBar(
                 title = {
                     Column {
-                        Text("Trash", style = MaterialTheme.typography.titleLarge, color = CyanPrimary)
+                        Text("Trash", style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.primary)
                         Text(
                             "${trashedItems.size} item(s)",
                             style = MaterialTheme.typography.labelSmall,
-                            color = VaultOutline
+                            color = MaterialTheme.colorScheme.outline
                         )
                     }
                 },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Outlined.ArrowBack, "Back", tint = CyanPrimary)
+                        Icon(Icons.AutoMirrored.Outlined.ArrowBack, "Back", tint = MaterialTheme.colorScheme.primary)
                     }
                 },
                 actions = {
                     IconButton(onClick = { currentAccount?.let { homeViewModel.loadTrashedFiles(it) } }) {
-                        Icon(Icons.Outlined.Refresh, "Refresh", tint = CyanPrimary)
+                        Icon(Icons.Outlined.Refresh, "Refresh", tint = MaterialTheme.colorScheme.primary)
                     }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = VaultBackground)
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background)
             )
         },
         snackbarHost = { SnackbarHost(snackbarHost) },
-        containerColor = VaultBackground
+        containerColor = MaterialTheme.colorScheme.background
     ) { padding ->
         Box(modifier = Modifier.fillMaxSize().padding(padding)) {
             when {
                 trashLoading -> {
                     CircularProgressIndicator(
-                        color = CyanPrimary,
+                        color = MaterialTheme.colorScheme.primary,
                         strokeCap = StrokeCap.Round,
                         modifier = Modifier.size(40.dp).align(Alignment.Center)
                     )
@@ -145,13 +145,13 @@ fun TrashScreen(
                         verticalArrangement = Arrangement.Center,
                         modifier = Modifier.fillMaxSize().padding(32.dp)
                     ) {
-                        Icon(Icons.Outlined.Delete, null, tint = VaultOutline, modifier = Modifier.size(56.dp))
+                        Icon(Icons.Outlined.Delete, null, tint = MaterialTheme.colorScheme.outline, modifier = Modifier.size(56.dp))
                         Spacer(Modifier.height(16.dp))
-                        Text("Trash is empty", style = MaterialTheme.typography.bodyMedium, color = VaultOutline)
+                        Text("Trash is empty", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.outline)
                         Text(
                             "Files moved to trash appear here",
                             style = MaterialTheme.typography.bodySmall,
-                            color = VaultOutline.copy(alpha = 0.6f)
+                            color = MaterialTheme.colorScheme.outline.copy(alpha = 0.6f)
                         )
                     }
                 }
@@ -177,14 +177,14 @@ fun TrashScreen(
     fileToRestore?.let { file ->
         AlertDialog(
             onDismissRequest = { fileToRestore = null },
-            containerColor = VaultSurfaceVariant,
+            containerColor = MaterialTheme.colorScheme.surfaceVariant,
             title = { Text("Restore file?") },
             text = { Text("\"${file.originalName}\" will be moved back to your vault.") },
             confirmButton = {
                 TextButton(onClick = {
                     currentAccount?.let { homeViewModel.restoreFile(file, it) }
                     fileToRestore = null
-                }) { Text("Restore", color = CyanPrimary) }
+                }) { Text("Restore", color = MaterialTheme.colorScheme.primary) }
             },
             dismissButton = {
                 TextButton(onClick = { fileToRestore = null }) { Text("Cancel") }
@@ -196,7 +196,7 @@ fun TrashScreen(
     fileToPermDelete?.let { file ->
         AlertDialog(
             onDismissRequest = { fileToPermDelete = null },
-            containerColor = VaultSurfaceVariant,
+            containerColor = MaterialTheme.colorScheme.surfaceVariant,
             title = { Text("Delete permanently?") },
             text = {
                 Text(
@@ -226,7 +226,7 @@ private fun TrashedFileCard(
 ) {
     Card(
         shape = RoundedCornerShape(12.dp),
-        colors = CardDefaults.cardColors(containerColor = VaultSurfaceVariant),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
         modifier = modifier.fillMaxWidth()
     ) {
         Row(
@@ -238,12 +238,12 @@ private fun TrashedFileCard(
                 modifier = Modifier
                     .size(40.dp)
                     .clip(RoundedCornerShape(10.dp))
-                    .background(VaultBackground)
+                    .background(MaterialTheme.colorScheme.background)
             ) {
                 Icon(
                     fileTypeIcon(file.originalName, file.originalMimeType),
                     null,
-                    tint = VaultOutline,
+                    tint = MaterialTheme.colorScheme.outline,
                     modifier = Modifier.size(20.dp)
                 )
             }
@@ -265,7 +265,7 @@ private fun TrashedFileCard(
                 }
             }
             IconButton(onClick = onRestore) {
-                Icon(Icons.Outlined.RestoreFromTrash, "Restore", tint = CyanPrimary)
+                Icon(Icons.Outlined.RestoreFromTrash, "Restore", tint = MaterialTheme.colorScheme.primary)
             }
             IconButton(onClick = onDelete) {
                 Icon(Icons.Outlined.DeleteForever, "Delete permanently", tint = MaterialTheme.colorScheme.error)

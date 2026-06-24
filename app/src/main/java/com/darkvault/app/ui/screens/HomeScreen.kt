@@ -296,7 +296,7 @@ fun HomeScreen(
     recoveryKeyToShow?.let { key ->
         AlertDialog(
             onDismissRequest = { /* force user to acknowledge */ },
-            containerColor = VaultSurfaceVariant,
+            containerColor = MaterialTheme.colorScheme.surfaceVariant,
             title = { Text("Save Your Recovery Key", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface) },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -311,14 +311,14 @@ fun HomeScreen(
                             fontFamily = FontFamily.Monospace,
                             letterSpacing = androidx.compose.ui.unit.TextUnit(1.5f, androidx.compose.ui.unit.TextUnitType.Sp)
                         ),
-                        color = CyanPrimary,
+                        color = MaterialTheme.colorScheme.primary,
                         modifier = Modifier.fillMaxWidth()
                     )
                 }
             },
             confirmButton = {
                 TextButton(onClick = { authViewModel.clearRecoveryKey() }) {
-                    Text("I have saved it", color = CyanPrimary)
+                    Text("I have saved it", color = MaterialTheme.colorScheme.primary)
                 }
             },
             dismissButton = {
@@ -330,7 +330,7 @@ fun HomeScreen(
                         clipboardManager.setText(AnnotatedString(""))
                     }
                 }) {
-                    Text("Copy", color = CyanPrimary)
+                    Text("Copy", color = MaterialTheme.colorScheme.primary)
                 }
             }
         )
@@ -346,13 +346,13 @@ fun HomeScreen(
                         // Task 9 — back arrow only when inside a sub-folder
                         if (canGoBack) {
                             IconButton(onClick = { homeViewModel.navigateUp() }) {
-                                Icon(Icons.AutoMirrored.Outlined.ArrowBack, "Up", tint = CyanPrimary)
+                                Icon(Icons.AutoMirrored.Outlined.ArrowBack, "Up", tint = MaterialTheme.colorScheme.primary)
                             }
                         }
                     },
                     title = {
                         if (isSelectionMode) {
-                            Text("${selectedIds.size} selected", style = MaterialTheme.typography.titleLarge, color = CyanPrimary)
+                            Text("${selectedIds.size} selected", style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.primary)
                         } else {
                             Column {
                                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -362,14 +362,14 @@ fun HomeScreen(
                                         modifier = Modifier.size(22.dp)
                                     )
                                     Spacer(Modifier.width(6.dp))
-                                    Text("darkVault", style = MaterialTheme.typography.titleLarge, color = CyanPrimary)
+                                    Text("darkVault", style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.primary)
                                 }
                                 if (folderStack.size <= 1) {
                                     currentAccount?.email?.let { email ->
                                         Text(
                                             email,
                                             style = MaterialTheme.typography.labelSmall,
-                                            color = VaultOutline,
+                                            color = MaterialTheme.colorScheme.outline,
                                             maxLines = 1,
                                             overflow = TextOverflow.Ellipsis
                                         )
@@ -383,13 +383,13 @@ fun HomeScreen(
                             // Count non-folder selected items for download badge
                             val downloadableCount = displayItems.count { it.id in selectedIds && !it.isFolder }
                             IconButton(onClick = { homeViewModel.selectAll() }) {
-                                Icon(Icons.Outlined.SelectAll, "Select all", tint = CyanPrimary)
+                                Icon(Icons.Outlined.SelectAll, "Select all", tint = MaterialTheme.colorScheme.primary)
                             }
                             // Task 3 — download button with count badge
                             BadgedBox(
                                 badge = {
                                     if (downloadableCount > 0) {
-                                        Badge(containerColor = CyanPrimary, contentColor = Color(0xFF00363F)) {
+                                        Badge(containerColor = MaterialTheme.colorScheme.primary, contentColor = MaterialTheme.colorScheme.onPrimary) {
                                             Text("$downloadableCount")
                                         }
                                     }
@@ -406,7 +406,7 @@ fun HomeScreen(
                                 ) {
                                     Icon(
                                         Icons.Outlined.Download, "Download selected",
-                                        tint = if (downloadableCount > 0) CyanPrimary else CyanPrimary.copy(alpha = 0.38f)
+                                        tint = if (downloadableCount > 0) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.primary.copy(alpha = 0.38f)
                                     )
                                 }
                             }
@@ -414,15 +414,15 @@ fun HomeScreen(
                                 Icon(Icons.Outlined.DeleteSweep, "Move selected to trash", tint = MaterialTheme.colorScheme.error)
                             }
                             IconButton(onClick = { homeViewModel.clearSelection() }) {
-                                Icon(Icons.Outlined.Close, "Cancel selection", tint = CyanPrimary)
+                                Icon(Icons.Outlined.Close, "Cancel selection", tint = MaterialTheme.colorScheme.primary)
                             }
                         } else {
                             IconButton(onClick = { showSearch = !showSearch }) {
-                                Icon(if (showSearch) Icons.Outlined.Close else Icons.Outlined.Search, "Search", tint = CyanPrimary)
+                                Icon(if (showSearch) Icons.Outlined.Close else Icons.Outlined.Search, "Search", tint = MaterialTheme.colorScheme.primary)
                             }
                             Box {
                                 IconButton(onClick = { showSortMenu = true }) {
-                                    Icon(Icons.Outlined.Sort, "Sort", tint = CyanPrimary)
+                                    Icon(Icons.Outlined.Sort, "Sort", tint = MaterialTheme.colorScheme.primary)
                                 }
                                 DropdownMenu(expanded = showSortMenu, onDismissRequest = { showSortMenu = false }) {
                                     SortOrder.entries.forEach { order ->
@@ -430,7 +430,7 @@ fun HomeScreen(
                                             text = {
                                                 Text(
                                                     order.label,
-                                                    color = if (sortOrder == order) CyanPrimary else MaterialTheme.colorScheme.onSurface
+                                                    color = if (sortOrder == order) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
                                                 )
                                             },
                                             onClick = {
@@ -443,23 +443,23 @@ fun HomeScreen(
                             }
                             Box {
                                 IconButton(onClick = { showMoreMenu = true }) {
-                                    Icon(Icons.Outlined.MoreVert, "More options", tint = CyanPrimary)
+                                    Icon(Icons.Outlined.MoreVert, "More options", tint = MaterialTheme.colorScheme.primary)
                                 }
                                 DropdownMenu(expanded = showMoreMenu, onDismissRequest = { showMoreMenu = false }) {
                                     // Layout options at top of menu
                                     DropdownMenuItem(
-                                        text = { Text("List view", color = if (viewLayout == ViewLayout.LIST) CyanPrimary else MaterialTheme.colorScheme.onSurface) },
-                                        leadingIcon = { Icon(Icons.Outlined.ViewList, null, tint = if (viewLayout == ViewLayout.LIST) CyanPrimary else MaterialTheme.colorScheme.onSurface) },
+                                        text = { Text("List view", color = if (viewLayout == ViewLayout.LIST) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface) },
+                                        leadingIcon = { Icon(Icons.Outlined.ViewList, null, tint = if (viewLayout == ViewLayout.LIST) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface) },
                                         onClick = { homeViewModel.setViewLayout(ViewLayout.LIST); showMoreMenu = false }
                                     )
                                     DropdownMenuItem(
-                                        text = { Text("Grid (2 columns)", color = if (viewLayout == ViewLayout.GRID2) CyanPrimary else MaterialTheme.colorScheme.onSurface) },
-                                        leadingIcon = { Icon(Icons.Outlined.GridView, null, tint = if (viewLayout == ViewLayout.GRID2) CyanPrimary else MaterialTheme.colorScheme.onSurface) },
+                                        text = { Text("Grid (2 columns)", color = if (viewLayout == ViewLayout.GRID2) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface) },
+                                        leadingIcon = { Icon(Icons.Outlined.GridView, null, tint = if (viewLayout == ViewLayout.GRID2) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface) },
                                         onClick = { homeViewModel.setViewLayout(ViewLayout.GRID2); showMoreMenu = false }
                                     )
                                     DropdownMenuItem(
-                                        text = { Text("Grid (3 columns)", color = if (viewLayout == ViewLayout.GRID3) CyanPrimary else MaterialTheme.colorScheme.onSurface) },
-                                        leadingIcon = { Icon(Icons.Outlined.GridOn, null, tint = if (viewLayout == ViewLayout.GRID3) CyanPrimary else MaterialTheme.colorScheme.onSurface) },
+                                        text = { Text("Grid (3 columns)", color = if (viewLayout == ViewLayout.GRID3) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface) },
+                                        leadingIcon = { Icon(Icons.Outlined.GridOn, null, tint = if (viewLayout == ViewLayout.GRID3) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface) },
                                         onClick = { homeViewModel.setViewLayout(ViewLayout.GRID3); showMoreMenu = false }
                                     )
                                     HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
@@ -493,7 +493,7 @@ fun HomeScreen(
                             }
                         }
                     },
-                    colors = TopAppBarDefaults.topAppBarColors(containerColor = VaultBackground)
+                    colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background)
                 )
 
                 // Task 6 — Breadcrumb row (only when inside a sub-folder)
@@ -513,19 +513,19 @@ fun HomeScreen(
                         onValueChange = { homeViewModel.searchQuery.value = it },
                         placeholder = { Text("Search files…") },
                         singleLine = true,
-                        leadingIcon = { Icon(Icons.Outlined.Search, null, tint = VaultOutline) },
+                        leadingIcon = { Icon(Icons.Outlined.Search, null, tint = MaterialTheme.colorScheme.outline) },
                         trailingIcon = {
                             if (searchQuery.isNotEmpty()) {
                                 IconButton(onClick = { homeViewModel.searchQuery.value = "" }) {
-                                    Icon(Icons.Outlined.Close, "Clear", tint = VaultOutline)
+                                    Icon(Icons.Outlined.Close, "Clear", tint = MaterialTheme.colorScheme.outline)
                                 }
                             }
                         },
                         colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = CyanPrimary,
-                            unfocusedBorderColor = VaultOutline,
-                            cursorColor = CyanPrimary,
-                            focusedLeadingIconColor = CyanPrimary
+                            focusedBorderColor = MaterialTheme.colorScheme.primary,
+                            unfocusedBorderColor = MaterialTheme.colorScheme.outline,
+                            cursorColor = MaterialTheme.colorScheme.primary,
+                            focusedLeadingIconColor = MaterialTheme.colorScheme.primary
                         ),
                         modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp)
                     )
@@ -540,7 +540,7 @@ fun HomeScreen(
                 Box {
                     FloatingActionButton(
                         onClick = { showUploadMenu = true },
-                        containerColor = CyanPrimary,
+                        containerColor = MaterialTheme.colorScheme.primary,
                         contentColor = MaterialTheme.colorScheme.onPrimary
                     ) {
                         Icon(Icons.Outlined.Add, "Upload")
@@ -579,7 +579,7 @@ fun HomeScreen(
                 if (showNewFolderDialog) {
                     AlertDialog(
                         onDismissRequest = { showNewFolderDialog = false },
-                        containerColor = VaultSurfaceVariant,
+                        containerColor = MaterialTheme.colorScheme.surfaceVariant,
                         title = { Text("New Folder", style = MaterialTheme.typography.titleMedium) },
                         text = {
                             OutlinedTextField(
@@ -588,8 +588,8 @@ fun HomeScreen(
                                 label = { Text("Folder name") },
                                 singleLine = true,
                                 colors = OutlinedTextFieldDefaults.colors(
-                                    focusedBorderColor = CyanPrimary,
-                                    unfocusedBorderColor = VaultOutline
+                                    focusedBorderColor = MaterialTheme.colorScheme.primary,
+                                    unfocusedBorderColor = MaterialTheme.colorScheme.outline
                                 ),
                                 modifier = Modifier.fillMaxWidth()
                             )
@@ -605,7 +605,7 @@ fun HomeScreen(
                                     }
                                     showNewFolderDialog = false
                                 }
-                            ) { Text("Create", color = CyanPrimary) }
+                            ) { Text("Create", color = MaterialTheme.colorScheme.primary) }
                         },
                         dismissButton = {
                             TextButton(onClick = { showNewFolderDialog = false }) { Text("Cancel") }
@@ -615,7 +615,7 @@ fun HomeScreen(
             }
         },
         snackbarHost = { SnackbarHost(snackbarHostState) },
-        containerColor = VaultBackground
+        containerColor = MaterialTheme.colorScheme.background
     ) { innerPadding ->
         Column(modifier = Modifier.fillMaxSize().padding(innerPadding)) {
 
@@ -673,7 +673,7 @@ fun HomeScreen(
                 Text(
                     label,
                     style = MaterialTheme.typography.labelSmall,
-                    color = VaultOutline,
+                    color = MaterialTheme.colorScheme.outline,
                     modifier = Modifier.padding(horizontal = 16.dp, vertical = 2.dp)
                 )
             }
@@ -739,7 +739,7 @@ fun HomeScreen(
                                                 Text(
                                                     "Recents",
                                                     style = MaterialTheme.typography.labelLarge,
-                                                    color = CyanPrimary,
+                                                    color = MaterialTheme.colorScheme.primary,
                                                     modifier = Modifier.padding(bottom = 4.dp)
                                                 )
                                                 LazyRow(
@@ -782,7 +782,7 @@ fun HomeScreen(
                                             Text(
                                                 "All Files",
                                                 style = MaterialTheme.typography.labelLarge,
-                                                color = CyanPrimary,
+                                                color = MaterialTheme.colorScheme.primary,
                                                 modifier = Modifier.padding(top = 4.dp, bottom = 4.dp)
                                             )
                                         }
@@ -853,7 +853,7 @@ fun HomeScreen(
                                                     Text(
                                                         "Recents",
                                                         style = MaterialTheme.typography.labelLarge,
-                                                        color = CyanPrimary,
+                                                        color = MaterialTheme.colorScheme.primary,
                                                         modifier = Modifier.padding(bottom = 4.dp)
                                                     )
                                                     LazyRow(
@@ -897,7 +897,7 @@ fun HomeScreen(
                                             Text(
                                                 "All Files",
                                                 style = MaterialTheme.typography.labelLarge,
-                                                color = CyanPrimary,
+                                                color = MaterialTheme.colorScheme.primary,
                                                 modifier = Modifier.padding(top = 4.dp, bottom = 4.dp)
                                             )
                                         }
@@ -950,7 +950,7 @@ fun HomeScreen(
                     Text(
                         "$drivePercent%",
                         style = MaterialTheme.typography.labelSmall,
-                        color = VaultOutline,
+                        color = MaterialTheme.colorScheme.outline,
                         modifier = Modifier
                             .align(Alignment.End)
                             .padding(end = 40.dp, bottom = 2.dp)
@@ -961,21 +961,21 @@ fun HomeScreen(
                             .padding(horizontal = 40.dp, vertical = 6.dp)
                             .height(4.dp)
                             .clip(RoundedCornerShape(2.dp))
-                            .background(VaultOutline.copy(alpha = 0.25f))
+                            .background(MaterialTheme.colorScheme.outline.copy(alpha = 0.25f))
                     ) {
                         Box(
                             modifier = Modifier
                                 .fillMaxHeight()
                                 .fillMaxWidth(driveFraction)
                                 .clip(RoundedCornerShape(2.dp))
-                                .background(CyanPrimary.copy(alpha = 0.35f))
+                                .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.35f))
                         )
                         Box(
                             modifier = Modifier
                                 .fillMaxHeight()
                                 .fillMaxWidth(vaultFraction)
                                 .clip(RoundedCornerShape(2.dp))
-                                .background(CyanPrimary)
+                                .background(MaterialTheme.colorScheme.primary)
                         )
                     }
                 }
@@ -1061,7 +1061,7 @@ fun HomeScreen(
     pendingConflict?.let { conflict ->
         AlertDialog(
             onDismissRequest = { homeViewModel.resolveConflict(ConflictResolution.Skip) },
-            containerColor = VaultSurfaceVariant,
+            containerColor = MaterialTheme.colorScheme.surfaceVariant,
             title = {
                 Column {
                     Text(
@@ -1071,7 +1071,7 @@ fun HomeScreen(
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
-                    HorizontalDivider(thickness = 1.dp, color = CyanPrimary.copy(alpha = 0.6f))
+                    HorizontalDivider(thickness = 1.dp, color = MaterialTheme.colorScheme.primary.copy(alpha = 0.6f))
                 }
             },
             text = {
@@ -1091,8 +1091,8 @@ fun HomeScreen(
                         label = { Text("Rename to") },
                         singleLine = true,
                         colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = CyanPrimary,
-                            unfocusedBorderColor = VaultOutline
+                            focusedBorderColor = MaterialTheme.colorScheme.primary,
+                            unfocusedBorderColor = MaterialTheme.colorScheme.outline
                         ),
                         modifier = Modifier.fillMaxWidth()
                     )
@@ -1106,7 +1106,7 @@ fun HomeScreen(
                         },
                         enabled = conflictRenameText.isNotBlank()
                     ) {
-                        Text("Confirm rename", color = CyanPrimary)
+                        Text("Confirm rename", color = MaterialTheme.colorScheme.primary)
                     }
                     OutlinedButton(
                         onClick = { showReplaceConfirmDialog = true },
@@ -1117,7 +1117,7 @@ fun HomeScreen(
                     }
                     OutlinedButton(
                         onClick = { homeViewModel.resolveConflict(ConflictResolution.Skip) },
-                        border = BorderStroke(1.dp, VaultOutline),
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Text("Skip this file", color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -1132,7 +1132,7 @@ fun HomeScreen(
     if (showReplaceConfirmDialog) {
         AlertDialog(
             onDismissRequest = { showReplaceConfirmDialog = false },
-            containerColor = VaultSurfaceVariant,
+            containerColor = MaterialTheme.colorScheme.surfaceVariant,
             title = { Text("Replace existing file?", style = MaterialTheme.typography.titleMedium) },
             text = { Text("The existing file will be moved to Trash and replaced. This cannot be undone.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) },
             confirmButton = {
@@ -1211,7 +1211,7 @@ fun HomeScreen(
     longPressFile?.let { file ->
         AlertDialog(
             onDismissRequest = { longPressFile = null },
-            containerColor = VaultSurfaceVariant,
+            containerColor = MaterialTheme.colorScheme.surfaceVariant,
             title = { Text(file.originalName, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis) },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -1225,7 +1225,7 @@ fun HomeScreen(
                     }
                     previewAction?.let { action ->
                         TextButton(onClick = action, modifier = Modifier.fillMaxWidth()) {
-                            Text("Preview", color = CyanPrimary)
+                            Text("Preview", color = MaterialTheme.colorScheme.primary)
                         }
                     }
                     if (!file.isFolder) {
@@ -1236,12 +1236,12 @@ fun HomeScreen(
                                 if (pwd != null && acc != null) homeViewModel.downloadAndDecrypt(file, pwd, acc)
                             },
                             modifier = Modifier.fillMaxWidth()
-                        ) { Text("Download", color = CyanPrimary) }
+                        ) { Text("Download", color = MaterialTheme.colorScheme.primary) }
                     }
                     TextButton(
                         onClick = { showFileInfo = file; longPressFile = null },
                         modifier = Modifier.fillMaxWidth()
-                    ) { Text("Info", color = CyanPrimary) }
+                    ) { Text("Info", color = MaterialTheme.colorScheme.primary) }
                     TextButton(
                         onClick = {
                             longPressFile = null
@@ -1249,7 +1249,7 @@ fun HomeScreen(
                             showRenameDialog = file
                         },
                         modifier = Modifier.fillMaxWidth()
-                    ) { Text("Rename", color = CyanPrimary) }
+                    ) { Text("Rename", color = MaterialTheme.colorScheme.primary) }
                     TextButton(
                         onClick = {
                             fileToDelete = file
@@ -1268,7 +1268,7 @@ fun HomeScreen(
     showFileInfo?.let { file ->
         AlertDialog(
             onDismissRequest = { showFileInfo = null },
-            containerColor = VaultSurfaceVariant,
+            containerColor = MaterialTheme.colorScheme.surfaceVariant,
             title = { Text("File Info", style = MaterialTheme.typography.titleMedium) },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -1288,7 +1288,7 @@ fun HomeScreen(
     showRenameDialog?.let { file ->
         AlertDialog(
             onDismissRequest = { showRenameDialog = null },
-            containerColor = VaultSurfaceVariant,
+            containerColor = MaterialTheme.colorScheme.surfaceVariant,
             title = { Text("Rename", style = MaterialTheme.typography.titleMedium) },
             text = {
                 OutlinedTextField(
@@ -1297,8 +1297,8 @@ fun HomeScreen(
                     label = { Text("New name") },
                     singleLine = true,
                     colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = CyanPrimary,
-                        unfocusedBorderColor = VaultOutline
+                        focusedBorderColor = MaterialTheme.colorScheme.primary,
+                        unfocusedBorderColor = MaterialTheme.colorScheme.outline
                     ),
                     modifier = Modifier.fillMaxWidth()
                 )
@@ -1311,13 +1311,14 @@ fun HomeScreen(
                         if (acc != null) homeViewModel.renameFile(file, renameText, acc)
                         showRenameDialog = null
                     }
-                ) { Text("Rename", color = CyanPrimary) }
+                ) { Text("Rename", color = MaterialTheme.colorScheme.primary) }
             },
             dismissButton = { TextButton(onClick = { showRenameDialog = null }) { Text("Cancel") } }
         )
     }
 
     // ── Vault-open iris overlay ───────────────────────────────────────────────
+    val irisColor = MaterialTheme.colorScheme.primary
     if (irisVisible) {
         Canvas(
             modifier = Modifier
@@ -1330,25 +1331,25 @@ fun HomeScreen(
 
             val r1 = ring1.value * maxR * 0.52f
             if (r1 > 0f) drawCircle(
-                color = CyanAccent.copy(alpha = (1f - ring1.value) * 0.55f),
+                color = irisColor.copy(alpha = (1f - ring1.value) * 0.55f),
                 radius = r1, center = Offset(cx, cy),
                 style = Stroke(2.5.dp.toPx())
             )
             val r2 = ring2.value * maxR * 0.70f
             if (r2 > 0f) drawCircle(
-                color = CyanAccent.copy(alpha = (1f - ring2.value) * 0.35f),
+                color = irisColor.copy(alpha = (1f - ring2.value) * 0.35f),
                 radius = r2, center = Offset(cx, cy),
                 style = Stroke(1.5.dp.toPx())
             )
             val r3 = ring3.value * maxR * 0.88f
             if (r3 > 0f) drawCircle(
-                color = CyanAccent.copy(alpha = (1f - ring3.value) * 0.20f),
+                color = irisColor.copy(alpha = (1f - ring3.value) * 0.20f),
                 radius = r3, center = Offset(cx, cy),
                 style = Stroke(1.dp.toPx())
             )
             // Brief flash fill
             if (ring1.value < 0.35f) {
-                drawRect(CyanAccent.copy(alpha = (0.35f - ring1.value) * 0.10f))
+                drawRect(irisColor.copy(alpha = (0.35f - ring1.value) * 0.10f))
             }
         }
     }
@@ -1382,7 +1383,7 @@ private fun BreadcrumbRow(
         modifier = modifier
             .fillMaxWidth()
             .height(28.dp)
-            .background(VaultBackground)
+            .background(MaterialTheme.colorScheme.background)
     ) {
         items(displayStack.size) { idx ->
             val item = displayStack[idx]
@@ -1398,7 +1399,7 @@ private fun BreadcrumbRow(
                         Text(
                             item.name,
                             style = MaterialTheme.typography.labelSmall,
-                            color = if (isLast) CyanPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
+                            color = if (isLast) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
                             fontWeight = if (isLast) androidx.compose.ui.text.font.FontWeight.SemiBold else null,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
@@ -1419,7 +1420,7 @@ private fun BreadcrumbRow(
                 Text(
                     " / ",
                     style = MaterialTheme.typography.labelSmall,
-                    color = VaultOutline,
+                    color = MaterialTheme.colorScheme.outline,
                     modifier = Modifier.padding(top = 4.dp)
                 )
             }
@@ -1445,7 +1446,7 @@ private fun VaultGridItem(
     thumbnailAccount: com.google.android.gms.auth.api.signin.GoogleSignInAccount? = null
 ) {
     val iconSize = if (columns == 2) 40.dp else 28.dp
-    val borderColor = if (isSelected) CyanPrimary else VaultOutline
+    val borderColor = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline
     val borderWidth = if (isSelected) 1.5.dp else 1.dp
     // Fixed text area heights prevent uneven rows when file names differ in length
     val textAreaHeight = if (columns == 2) 52.dp else 20.dp
@@ -1453,7 +1454,7 @@ private fun VaultGridItem(
     Card(
         shape = RoundedCornerShape(12.dp),
         colors = CardDefaults.cardColors(
-            containerColor = if (isSelected) CyanPrimary.copy(alpha = 0.08f) else VaultSurfaceVariant
+            containerColor = if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.08f) else MaterialTheme.colorScheme.surfaceVariant
         ),
         modifier = modifier
             .fillMaxWidth()
@@ -1475,7 +1476,7 @@ private fun VaultGridItem(
                         .fillMaxWidth()
                         .aspectRatio(1f)
                         .clip(RoundedCornerShape(8.dp))
-                        .background(VaultBackground)
+                        .background(MaterialTheme.colorScheme.background)
                 ) {
                     VaultThumbnailImage(
                         file = item,
@@ -1520,9 +1521,9 @@ private fun VaultGridItem(
                         .padding(4.dp)
                 ) {
                     if (isSelected) {
-                        Icon(Icons.Outlined.CheckCircle, null, tint = CyanPrimary, modifier = Modifier.size(24.dp))
+                        Icon(Icons.Outlined.CheckCircle, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(24.dp))
                     } else {
-                        Box(Modifier.size(20.dp).border(1.5.dp, VaultOutline, CircleShape))
+                        Box(Modifier.size(20.dp).border(1.5.dp, MaterialTheme.colorScheme.outline, CircleShape))
                     }
                 }
             } else if (onMoreActions != null) {
@@ -1533,7 +1534,7 @@ private fun VaultGridItem(
                         .size(28.dp)
                         .align(Alignment.TopEnd)
                         .clip(RoundedCornerShape(bottomStart = 8.dp, topEnd = 12.dp))
-                        .background(VaultBackground.copy(alpha = 0.7f))
+                        .background(MaterialTheme.colorScheme.background.copy(alpha = 0.7f))
                         .clickable { onMoreActions() }
                 ) {
                     Icon(
@@ -1565,11 +1566,11 @@ private fun RecentFileCard(
     Card(
         shape = RoundedCornerShape(10.dp),
         colors = CardDefaults.cardColors(
-            containerColor = if (isSelected) CyanPrimary.copy(alpha = 0.08f) else VaultSurfaceVariant
+            containerColor = if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.08f) else MaterialTheme.colorScheme.surfaceVariant
         ),
         modifier = modifier
             .width(100.dp)
-            .border(if (isSelected) 1.5.dp else 1.dp, if (isSelected) CyanPrimary else VaultOutline, RoundedCornerShape(10.dp))
+            .border(if (isSelected) 1.5.dp else 1.dp, if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline, RoundedCornerShape(10.dp))
             .combinedClickable(
                 onClick = onClick,
                 onLongClick = onLongPress
@@ -1584,7 +1585,7 @@ private fun RecentFileCard(
                 modifier = Modifier
                     .size(64.dp)
                     .clip(RoundedCornerShape(8.dp))
-                    .background(VaultBackground)
+                    .background(MaterialTheme.colorScheme.background)
             ) {
                 VaultThumbnailImage(
                     file = file,
@@ -1678,7 +1679,7 @@ private fun ImagePreviewDialog(
                         .fillMaxWidth()
                 ) {
                     when {
-                        loading -> CircularProgressIndicator(color = CyanPrimary, strokeCap = StrokeCap.Round)
+                        loading -> CircularProgressIndicator(color = MaterialTheme.colorScheme.primary, strokeCap = StrokeCap.Round)
                         error != null -> Text(
                             error!!,
                             color = MaterialTheme.colorScheme.error,
@@ -1760,7 +1761,7 @@ private fun ImagePreviewDialog(
                             Icon(Icons.Outlined.ZoomOut, "Zoom out", tint = Color.White)
                         }
                         TextButton(onClick = { scale = 1f; offset = Offset.Zero }) {
-                            Text("Reset", color = CyanPrimary, style = MaterialTheme.typography.labelMedium)
+                            Text("Reset", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelMedium)
                         }
                         IconButton(onClick = { scale = (scale * 1.4f).coerceAtMost(8f) }) {
                             Icon(Icons.Outlined.ZoomIn, "Zoom in", tint = Color.White)
@@ -1788,8 +1789,8 @@ private fun ShimmerFileCard() {
             .fillMaxWidth()
             .height(68.dp)
             .clip(RoundedCornerShape(12.dp))
-            .background(VaultSurfaceVariant.copy(alpha = alpha))
-            .border(1.dp, VaultOutline.copy(alpha = alpha * 0.5f), RoundedCornerShape(12.dp))
+            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = alpha))
+            .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = alpha * 0.5f), RoundedCornerShape(12.dp))
     )
 }
 
@@ -1857,7 +1858,7 @@ private fun TextPreviewDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        containerColor = VaultSurfaceVariant,
+        containerColor = MaterialTheme.colorScheme.surfaceVariant,
         title = {
             Text(
                 file.originalName,
@@ -1873,7 +1874,7 @@ private fun TextPreviewDialog(
                 modifier = androidx.compose.ui.Modifier.fillMaxWidth().height(350.dp)
             ) {
                 when {
-                    loading -> CircularProgressIndicator(color = CyanPrimary, strokeCap = StrokeCap.Round)
+                    loading -> CircularProgressIndicator(color = MaterialTheme.colorScheme.primary, strokeCap = StrokeCap.Round)
                     error != null -> Text(error!!, color = MaterialTheme.colorScheme.error)
                     text != null -> {
                         LazyColumn(modifier = androidx.compose.ui.Modifier.fillMaxSize()) {

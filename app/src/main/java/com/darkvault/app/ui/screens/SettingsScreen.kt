@@ -282,14 +282,14 @@ fun SettingsScreen(
                 title = { Text("Settings", style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.onBackground) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Outlined.ArrowBack, "Back", tint = CyanPrimary)
+                        Icon(Icons.AutoMirrored.Outlined.ArrowBack, "Back", tint = MaterialTheme.colorScheme.primary)
                     }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = VaultBackground)
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background)
             )
         },
         snackbarHost = { SnackbarHost(snackbarHost) },
-        containerColor = VaultBackground
+        containerColor = MaterialTheme.colorScheme.background
     ) { padding ->
         Column(
             modifier = Modifier
@@ -306,10 +306,10 @@ fun SettingsScreen(
 
             Card(
                 shape = RoundedCornerShape(16.dp),
-                colors = CardDefaults.cardColors(containerColor = VaultSurfaceVariant),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
                 modifier = Modifier
                     .fillMaxWidth()
-                    .border(1.dp, CyanPrimary.copy(alpha = 0.25f), RoundedCornerShape(16.dp))
+                    .border(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.25f), RoundedCornerShape(16.dp))
             ) {
                 Column(
                     horizontalAlignment = Alignment.CenterHorizontally,
@@ -326,7 +326,7 @@ fun SettingsScreen(
                     Text(
                         "darkVault",
                         style = MaterialTheme.typography.titleLarge,
-                        color = CyanPrimary
+                        color = MaterialTheme.colorScheme.primary
                     )
                     Spacer(Modifier.height(4.dp))
                     Text(
@@ -341,7 +341,7 @@ fun SettingsScreen(
                         color = MaterialTheme.colorScheme.onSurface
                     )
                     Spacer(Modifier.height(16.dp))
-                    HorizontalDivider(color = VaultOutline.copy(alpha = 0.2f))
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f))
                     Spacer(Modifier.height(12.dp))
                     Row(
                         horizontalArrangement = Arrangement.SpaceEvenly,
@@ -352,7 +352,7 @@ fun SettingsScreen(
                             Icon(
                                 Icons.Outlined.Language,
                                 contentDescription = "Portfolio",
-                                tint = CyanPrimary,
+                                tint = MaterialTheme.colorScheme.primary,
                                 modifier = Modifier.size(24.dp)
                             )
                         }
@@ -367,7 +367,7 @@ fun SettingsScreen(
                             Icon(
                                 Icons.Outlined.Email,
                                 contentDescription = "Email",
-                                tint = CyanPrimary,
+                                tint = MaterialTheme.colorScheme.primary,
                                 modifier = Modifier.size(24.dp)
                             )
                         }
@@ -376,7 +376,7 @@ fun SettingsScreen(
                             Icon(
                                 Icons.Outlined.Code,
                                 contentDescription = "GitHub",
-                                tint = CyanPrimary,
+                                tint = MaterialTheme.colorScheme.primary,
                                 modifier = Modifier.size(24.dp)
                             )
                         }
@@ -385,7 +385,7 @@ fun SettingsScreen(
                             Icon(
                                 Icons.Outlined.Work,
                                 contentDescription = "LinkedIn",
-                                tint = CyanPrimary,
+                                tint = MaterialTheme.colorScheme.primary,
                                 modifier = Modifier.size(24.dp)
                             )
                         }
@@ -394,7 +394,7 @@ fun SettingsScreen(
                             Icon(
                                 Icons.Outlined.BugReport,
                                 contentDescription = "Report issue",
-                                tint = CyanPrimary,
+                                tint = MaterialTheme.colorScheme.primary,
                                 modifier = Modifier.size(24.dp)
                             )
                         }
@@ -419,11 +419,11 @@ fun SettingsScreen(
             SectionHeader("Appearance")
 
             SettingsCard {
-                HorizontalDivider(thickness = 1.dp, color = CyanPrimary.copy(alpha = 0.6f))
+                HorizontalDivider(thickness = 1.dp, color = MaterialTheme.colorScheme.primary.copy(alpha = 0.6f))
 
                 // Theme row
                 SettingRow(
-                    icon = { Icon(Icons.Outlined.Palette, null, tint = CyanPrimary, modifier = Modifier.size(22.dp)) },
+                    icon = { Icon(Icons.Outlined.Palette, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(22.dp)) },
                     title = "Theme",
                     subtitle = themeModeLabel(themeMode)
                 ) {
@@ -434,8 +434,8 @@ fun SettingsScreen(
                             readOnly = true,
                             trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(themeExpanded) },
                             colors = OutlinedTextFieldDefaults.colors(
-                                focusedBorderColor = CyanPrimary,
-                                unfocusedBorderColor = VaultOutline,
+                                focusedBorderColor = MaterialTheme.colorScheme.primary,
+                                unfocusedBorderColor = MaterialTheme.colorScheme.outline,
                                 focusedTextColor = MaterialTheme.colorScheme.onSurface,
                                 unfocusedTextColor = MaterialTheme.colorScheme.onSurface
                             ),
@@ -444,7 +444,7 @@ fun SettingsScreen(
                         ExposedDropdownMenu(expanded = themeExpanded, onDismissRequest = { themeExpanded = false }) {
                             listOf("SYSTEM" to "System default", "DARK" to "Dark", "LIGHT" to "Light").forEach { (value, label) ->
                                 DropdownMenuItem(
-                                    text = { Text(label, color = if (themeMode == value) CyanPrimary else MaterialTheme.colorScheme.onSurface) },
+                                    text = { Text(label, color = if (themeMode == value) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface) },
                                     onClick = { scope.launch { prefs.setThemeMode(value) }; themeExpanded = false }
                                 )
                             }
@@ -452,11 +452,11 @@ fun SettingsScreen(
                     }
                 }
 
-                HorizontalDivider(color = VaultOutline.copy(alpha = 0.3f))
+                HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f))
 
                 // Default layout row
                 SettingRow(
-                    icon = { Icon(Icons.Outlined.GridView, null, tint = CyanPrimary, modifier = Modifier.size(22.dp)) },
+                    icon = { Icon(Icons.Outlined.GridView, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(22.dp)) },
                     title = "Default layout",
                     subtitle = layoutLabel(viewLayoutPref)
                 ) {
@@ -467,8 +467,8 @@ fun SettingsScreen(
                             readOnly = true,
                             trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(layoutExpanded) },
                             colors = OutlinedTextFieldDefaults.colors(
-                                focusedBorderColor = CyanPrimary,
-                                unfocusedBorderColor = VaultOutline,
+                                focusedBorderColor = MaterialTheme.colorScheme.primary,
+                                unfocusedBorderColor = MaterialTheme.colorScheme.outline,
                                 focusedTextColor = MaterialTheme.colorScheme.onSurface,
                                 unfocusedTextColor = MaterialTheme.colorScheme.onSurface
                             ),
@@ -477,7 +477,7 @@ fun SettingsScreen(
                         ExposedDropdownMenu(expanded = layoutExpanded, onDismissRequest = { layoutExpanded = false }) {
                             listOf("LIST" to "List", "GRID2" to "Grid (2 col)", "GRID3" to "Grid (3 col)").forEach { (value, label) ->
                                 DropdownMenuItem(
-                                    text = { Text(label, color = if (viewLayoutPref == value) CyanPrimary else MaterialTheme.colorScheme.onSurface) },
+                                    text = { Text(label, color = if (viewLayoutPref == value) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface) },
                                     onClick = { scope.launch { prefs.setViewLayout(value) }; layoutExpanded = false }
                                 )
                             }
@@ -485,12 +485,12 @@ fun SettingsScreen(
                     }
                 }
 
-                HorizontalDivider(color = VaultOutline.copy(alpha = 0.3f))
+                HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f))
 
                 // Font row
                 val currentFont = AppFont.entries.firstOrNull { it.key == fontKey } ?: AppFont.INTER
                 SettingRow(
-                    icon = { Icon(Icons.Outlined.Palette, null, tint = CyanPrimary, modifier = Modifier.size(22.dp)) },
+                    icon = { Icon(Icons.Outlined.Palette, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(22.dp)) },
                     title = "Font",
                     subtitle = currentFont.label
                 ) {
@@ -501,8 +501,8 @@ fun SettingsScreen(
                             readOnly = true,
                             trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(fontExpanded) },
                             colors = OutlinedTextFieldDefaults.colors(
-                                focusedBorderColor = CyanPrimary,
-                                unfocusedBorderColor = VaultOutline,
+                                focusedBorderColor = MaterialTheme.colorScheme.primary,
+                                unfocusedBorderColor = MaterialTheme.colorScheme.outline,
                                 focusedTextColor = MaterialTheme.colorScheme.onSurface,
                                 unfocusedTextColor = MaterialTheme.colorScheme.onSurface
                             ),
@@ -511,7 +511,7 @@ fun SettingsScreen(
                         ExposedDropdownMenu(expanded = fontExpanded, onDismissRequest = { fontExpanded = false }) {
                             AppFont.entries.forEach { font ->
                                 DropdownMenuItem(
-                                    text = { Text(font.label, color = if (fontKey == font.key) CyanPrimary else MaterialTheme.colorScheme.onSurface) },
+                                    text = { Text(font.label, color = if (fontKey == font.key) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface) },
                                     onClick = { scope.launch { prefs.setAppFont(font.key) }; fontExpanded = false }
                                 )
                             }
@@ -527,11 +527,11 @@ fun SettingsScreen(
             SectionHeader("Security")
 
             SettingsCard {
-                HorizontalDivider(thickness = 1.dp, color = CyanPrimary.copy(alpha = 0.6f))
+                HorizontalDivider(thickness = 1.dp, color = MaterialTheme.colorScheme.primary.copy(alpha = 0.6f))
 
                 // Biometric toggle
                 SettingRow(
-                    icon = { Icon(Icons.Outlined.Fingerprint, null, tint = CyanPrimary, modifier = Modifier.size(22.dp)) },
+                    icon = { Icon(Icons.Outlined.Fingerprint, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(22.dp)) },
                     title = "Biometric app lock",
                     subtitle = if (!biometricAvailable) "Not available on this device"
                     else if (biometricEnabled) "App locks on background, fingerprint to resume"
@@ -560,17 +560,17 @@ fun SettingsScreen(
                             }
                         },
                         colors = SwitchDefaults.colors(
-                            checkedThumbColor = CyanPrimary,
-                            checkedTrackColor = CyanPrimary.copy(alpha = 0.3f)
+                            checkedThumbColor = MaterialTheme.colorScheme.primary,
+                            checkedTrackColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)
                         )
                     )
                 }
 
-                HorizontalDivider(color = VaultOutline.copy(alpha = 0.3f))
+                HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f))
 
                 // Auto-lock
                 SettingRow(
-                    icon = { Icon(Icons.Outlined.Timer, null, tint = CyanPrimary, modifier = Modifier.size(22.dp)) },
+                    icon = { Icon(Icons.Outlined.Timer, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(22.dp)) },
                     title = "Auto-lock",
                     subtitle = "Full vault lock after N min in background (when biometric is off)"
                 ) {
@@ -581,8 +581,8 @@ fun SettingsScreen(
                             readOnly = true,
                             trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(autoLockExpanded) },
                             colors = OutlinedTextFieldDefaults.colors(
-                                focusedBorderColor = CyanPrimary,
-                                unfocusedBorderColor = VaultOutline,
+                                focusedBorderColor = MaterialTheme.colorScheme.primary,
+                                unfocusedBorderColor = MaterialTheme.colorScheme.outline,
                                 focusedTextColor = MaterialTheme.colorScheme.onSurface,
                                 unfocusedTextColor = MaterialTheme.colorScheme.onSurface
                             ),
@@ -599,11 +599,11 @@ fun SettingsScreen(
                     }
                 }
 
-                HorizontalDivider(color = VaultOutline.copy(alpha = 0.3f))
+                HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f))
 
                 // Session timeout
                 SettingRow(
-                    icon = { Icon(Icons.Outlined.Timer, null, tint = CyanPrimary, modifier = Modifier.size(22.dp)) },
+                    icon = { Icon(Icons.Outlined.Timer, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(22.dp)) },
                     title = "Session timeout",
                     subtitle = "Force master password re-entry after this long, regardless of biometric"
                 ) {
@@ -614,8 +614,8 @@ fun SettingsScreen(
                             readOnly = true,
                             trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(sessionTimeoutExpanded) },
                             colors = OutlinedTextFieldDefaults.colors(
-                                focusedBorderColor = CyanPrimary,
-                                unfocusedBorderColor = VaultOutline,
+                                focusedBorderColor = MaterialTheme.colorScheme.primary,
+                                unfocusedBorderColor = MaterialTheme.colorScheme.outline,
                                 focusedTextColor = MaterialTheme.colorScheme.onSurface,
                                 unfocusedTextColor = MaterialTheme.colorScheme.onSurface
                             ),
@@ -642,7 +642,7 @@ fun SettingsScreen(
                     }
                 }
 
-                HorizontalDivider(color = VaultOutline.copy(alpha = 0.3f))
+                HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f))
 
                 // Lockout status row (NEW — Task 10)
                 val lockoutSubtitle = when {
@@ -658,13 +658,13 @@ fun SettingsScreen(
                     else -> MaterialTheme.colorScheme.onSurfaceVariant
                 }
                 SettingRow(
-                    icon = { Icon(Icons.Outlined.Security, null, tint = CyanPrimary, modifier = Modifier.size(22.dp)) },
+                    icon = { Icon(Icons.Outlined.Security, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(22.dp)) },
                     title = "Brute-force protection",
                     subtitle = lockoutSubtitle,
                     subtitleColor = lockoutColor
                 ) {}
 
-                HorizontalDivider(color = VaultOutline.copy(alpha = 0.3f))
+                HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f))
 
                 // Lock now
                 SettingRow(
@@ -685,27 +685,27 @@ fun SettingsScreen(
             SectionHeader("Password")
 
             SettingsCard {
-                HorizontalDivider(thickness = 1.dp, color = CyanPrimary.copy(alpha = 0.6f))
+                HorizontalDivider(thickness = 1.dp, color = MaterialTheme.colorScheme.primary.copy(alpha = 0.6f))
 
                 SettingRow(
-                    icon = { Icon(Icons.Outlined.Lock, null, tint = CyanPrimary, modifier = Modifier.size(22.dp)) },
+                    icon = { Icon(Icons.Outlined.Lock, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(22.dp)) },
                     title = "Change password",
                     subtitle = "Update master password and re-key vault"
                 ) {
                     TextButton(onClick = { showChangePasswordDialog = true }) {
-                        Text("Change", color = CyanPrimary, style = MaterialTheme.typography.labelMedium)
+                        Text("Change", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelMedium)
                     }
                 }
 
-                HorizontalDivider(color = VaultOutline.copy(alpha = 0.3f))
+                HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f))
 
                 SettingRow(
-                    icon = { Icon(Icons.Outlined.Key, null, tint = CyanPrimary, modifier = Modifier.size(22.dp)) },
+                    icon = { Icon(Icons.Outlined.Key, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(22.dp)) },
                     title = "Recovery key",
                     subtitle = "Rotate your offline vault recovery key"
                 ) {
                     TextButton(onClick = { showRotateKeyDialog = true }) {
-                        Text("Rotate", color = CyanPrimary, style = MaterialTheme.typography.labelMedium)
+                        Text("Rotate", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelMedium)
                     }
                 }
             }
@@ -717,11 +717,11 @@ fun SettingsScreen(
             SectionHeader("Files & Storage")
 
             SettingsCard {
-                HorizontalDivider(thickness = 1.dp, color = CyanPrimary.copy(alpha = 0.6f))
+                HorizontalDivider(thickness = 1.dp, color = MaterialTheme.colorScheme.primary.copy(alpha = 0.6f))
 
                 // Export local backup
                 SettingRow(
-                    icon = { Icon(Icons.Outlined.FolderZip, null, tint = CyanPrimary, modifier = Modifier.size(22.dp)) },
+                    icon = { Icon(Icons.Outlined.FolderZip, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(22.dp)) },
                     title = "Export local backup",
                     subtitle = "Decrypt all vault files to Downloads/darkVault-loc/"
                 ) {
@@ -736,15 +736,15 @@ fun SettingsScreen(
                             scope.launch { snackbarHost.showSnackbar("Export started") }
                         }
                     }) {
-                        Text("Export", color = CyanPrimary, style = MaterialTheme.typography.labelMedium)
+                        Text("Export", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelMedium)
                     }
                 }
 
-                HorizontalDivider(color = VaultOutline.copy(alpha = 0.3f))
+                HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f))
 
                 // Image previews
                 SettingRow(
-                    icon = { Icon(Icons.Outlined.Image, null, tint = CyanPrimary, modifier = Modifier.size(22.dp)) },
+                    icon = { Icon(Icons.Outlined.Image, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(22.dp)) },
                     title = "Image previews",
                     subtitle = "Tap to preview encrypted images in-memory"
                 ) {
@@ -752,17 +752,17 @@ fun SettingsScreen(
                         checked = imagePreview,
                         onCheckedChange = { scope.launch { prefs.setImagePreview(it) } },
                         colors = SwitchDefaults.colors(
-                            checkedThumbColor = CyanPrimary,
-                            checkedTrackColor = CyanPrimary.copy(alpha = 0.3f)
+                            checkedThumbColor = MaterialTheme.colorScheme.primary,
+                            checkedTrackColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)
                         )
                     )
                 }
 
-                HorizontalDivider(color = VaultOutline.copy(alpha = 0.3f))
+                HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f))
 
                 // Video previews
                 SettingRow(
-                    icon = { Icon(Icons.Outlined.VideoFile, null, tint = CyanPrimary, modifier = Modifier.size(22.dp)) },
+                    icon = { Icon(Icons.Outlined.VideoFile, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(22.dp)) },
                     title = "Video previews",
                     subtitle = "Show play option for encrypted videos (downloads full file)"
                 ) {
@@ -770,17 +770,17 @@ fun SettingsScreen(
                         checked = videoPreview,
                         onCheckedChange = { scope.launch { prefs.setVideoPreview(it) } },
                         colors = SwitchDefaults.colors(
-                            checkedThumbColor = CyanPrimary,
-                            checkedTrackColor = CyanPrimary.copy(alpha = 0.3f)
+                            checkedThumbColor = MaterialTheme.colorScheme.primary,
+                            checkedTrackColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)
                         )
                     )
                 }
 
-                HorizontalDivider(color = VaultOutline.copy(alpha = 0.3f))
+                HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f))
 
                 // Show thumbnails (NEW)
                 SettingRow(
-                    icon = { Icon(Icons.Outlined.ImageSearch, null, tint = CyanPrimary, modifier = Modifier.size(22.dp)) },
+                    icon = { Icon(Icons.Outlined.ImageSearch, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(22.dp)) },
                     title = "Show thumbnails",
                     subtitle = "Decrypt file thumbnails in list view (uses more Drive data)"
                 ) {
@@ -788,17 +788,17 @@ fun SettingsScreen(
                         checked = thumbnailsEnabled,
                         onCheckedChange = { scope.launch { prefs.setThumbnailsEnabled(it) } },
                         colors = SwitchDefaults.colors(
-                            checkedThumbColor = CyanPrimary,
-                            checkedTrackColor = CyanPrimary.copy(alpha = 0.3f)
+                            checkedThumbColor = MaterialTheme.colorScheme.primary,
+                            checkedTrackColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)
                         )
                     )
                 }
 
-                HorizontalDivider(color = VaultOutline.copy(alpha = 0.3f))
+                HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f))
 
                 // Storage quota
                 SettingRow(
-                    icon = { Icon(Icons.Outlined.Storage, null, tint = CyanPrimary, modifier = Modifier.size(22.dp)) },
+                    icon = { Icon(Icons.Outlined.Storage, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(22.dp)) },
                     title = "Storage quota",
                     subtitle = ""
                 ) {}
@@ -821,15 +821,15 @@ fun SettingsScreen(
             SectionHeader("Account")
 
             SettingsCard {
-                HorizontalDivider(thickness = 1.dp, color = CyanPrimary.copy(alpha = 0.6f))
+                HorizontalDivider(thickness = 1.dp, color = MaterialTheme.colorScheme.primary.copy(alpha = 0.6f))
 
                 SettingRow(
-                    icon = { Icon(Icons.Outlined.AccountCircle, null, tint = CyanPrimary, modifier = Modifier.size(22.dp)) },
+                    icon = { Icon(Icons.Outlined.AccountCircle, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(22.dp)) },
                     title = "Signed in as",
                     subtitle = currentAccount?.email ?: "No account"
                 ) {}
 
-                HorizontalDivider(color = VaultOutline.copy(alpha = 0.3f))
+                HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f))
 
                 SettingRow(
                     icon = { Icon(Icons.Outlined.SwitchAccount, null, tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(22.dp)) },
@@ -850,7 +850,7 @@ fun SettingsScreen(
                 SectionHeader("Developer")
 
                 SettingsCard {
-                    HorizontalDivider(thickness = 1.dp, color = CyanPrimary.copy(alpha = 0.6f))
+                    HorizontalDivider(thickness = 1.dp, color = MaterialTheme.colorScheme.primary.copy(alpha = 0.6f))
 
                     // Kill switch toggle — fingerprint required to change state
                     SettingRow(
@@ -858,7 +858,7 @@ fun SettingsScreen(
                             Icon(
                                 Icons.Outlined.Security,
                                 null,
-                                tint = if (devOptionsEnabled) CyanPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
+                                tint = if (devOptionsEnabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
                                 modifier = Modifier.size(22.dp)
                             )
                         },
@@ -871,17 +871,17 @@ fun SettingsScreen(
                                 scope.launch { prefs.setDevOptionsEnabled(!devOptionsEnabled) }
                             },
                             colors = SwitchDefaults.colors(
-                                checkedThumbColor = CyanPrimary,
-                                checkedTrackColor = CyanPrimary.copy(alpha = 0.3f),
+                                checkedThumbColor = MaterialTheme.colorScheme.primary,
+                                checkedTrackColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.3f),
                                 uncheckedThumbColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                                uncheckedTrackColor = VaultOutline
+                                uncheckedTrackColor = MaterialTheme.colorScheme.outline
                             )
                         )
                     }
 
                     // Dev options rows — only visible when developer mode is ON
                     if (devOptionsEnabled) {
-                        HorizontalDivider(thickness = 0.5.dp, color = VaultOutline)
+                        HorizontalDivider(thickness = 0.5.dp, color = MaterialTheme.colorScheme.outline)
 
                         SettingRow(
                             icon = { Icon(Icons.Outlined.BugReport, null, tint = VaultError, modifier = Modifier.size(22.dp)) },
@@ -889,7 +889,7 @@ fun SettingsScreen(
                             subtitle = "Diagnostics, fault injection, log viewer"
                         ) {
                             IconButton(onClick = onNavigateToDebugPanel) {
-                                Icon(Icons.AutoMirrored.Outlined.ArrowForward, null, tint = CyanPrimary)
+                                Icon(Icons.AutoMirrored.Outlined.ArrowForward, null, tint = MaterialTheme.colorScheme.primary)
                             }
                         }
                     }
@@ -903,7 +903,7 @@ fun SettingsScreen(
             if (showChangePasswordDialog) {
                 AlertDialog(
                     onDismissRequest = { resetChangePwdDialog() },
-                    containerColor = VaultSurfaceVariant,
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant,
                     title = { Text("Change Password", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface) },
                     text = {
                         Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -940,8 +940,8 @@ fun SettingsScreen(
                                 }
                             }
                         }) {
-                            if (changePwdLoading) CircularProgressIndicator(modifier = Modifier.size(16.dp), color = CyanPrimary, strokeWidth = 2.dp)
-                            else Text("Change", color = CyanPrimary)
+                            if (changePwdLoading) CircularProgressIndicator(modifier = Modifier.size(16.dp), color = MaterialTheme.colorScheme.primary, strokeWidth = 2.dp)
+                            else Text("Change", color = MaterialTheme.colorScheme.primary)
                         }
                     },
                     dismissButton = { TextButton(onClick = { resetChangePwdDialog() }) { Text("Cancel") } }
@@ -951,7 +951,7 @@ fun SettingsScreen(
             if (showSwitchAccountDialog) {
                 AlertDialog(
                     onDismissRequest = { resetSwitchDialog() },
-                    containerColor = VaultSurfaceVariant,
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant,
                     title = { Text("Switch Account?", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface) },
                     text = {
                         Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -980,7 +980,7 @@ fun SettingsScreen(
                                 }
                             }
                         }) {
-                            if (switchAccountLoading) CircularProgressIndicator(modifier = Modifier.size(16.dp), color = CyanPrimary, strokeWidth = 2.dp)
+                            if (switchAccountLoading) CircularProgressIndicator(modifier = Modifier.size(16.dp), color = MaterialTheme.colorScheme.primary, strokeWidth = 2.dp)
                             else Text("Switch", color = MaterialTheme.colorScheme.error)
                         }
                     },
@@ -991,7 +991,7 @@ fun SettingsScreen(
             if (showRotateKeyDialog) {
                 AlertDialog(
                     onDismissRequest = { resetRotateDialog() },
-                    containerColor = VaultSurfaceVariant,
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant,
                     title = { Text("Rotate Recovery Key", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface) },
                     text = {
                         Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -1014,8 +1014,8 @@ fun SettingsScreen(
                                 }
                             }
                         }) {
-                            if (rotateKeyLoading) CircularProgressIndicator(modifier = Modifier.size(16.dp), color = CyanPrimary, strokeWidth = 2.dp)
-                            else Text("Rotate", color = CyanPrimary)
+                            if (rotateKeyLoading) CircularProgressIndicator(modifier = Modifier.size(16.dp), color = MaterialTheme.colorScheme.primary, strokeWidth = 2.dp)
+                            else Text("Rotate", color = MaterialTheme.colorScheme.primary)
                         }
                     },
                     dismissButton = { TextButton(onClick = { resetRotateDialog() }) { Text("Cancel") } }
@@ -1025,15 +1025,15 @@ fun SettingsScreen(
             rotatedKeyToShow?.let { key ->
                 AlertDialog(
                     onDismissRequest = { /* force acknowledgement */ },
-                    containerColor = VaultSurfaceVariant,
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant,
                     title = { Text("New Recovery Key", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface) },
                     text = {
                         Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                             Text("Your old recovery key is now invalid. Write down the new key and store it safely.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            Text(key, style = MaterialTheme.typography.bodyMedium.copy(fontFamily = FontFamily.Monospace, letterSpacing = TextUnit(1.5f, TextUnitType.Sp)), color = CyanPrimary, modifier = Modifier.fillMaxWidth())
+                            Text(key, style = MaterialTheme.typography.bodyMedium.copy(fontFamily = FontFamily.Monospace, letterSpacing = TextUnit(1.5f, TextUnitType.Sp)), color = MaterialTheme.colorScheme.primary, modifier = Modifier.fillMaxWidth())
                         }
                     },
-                    confirmButton = { TextButton(onClick = { rotatedKeyToShow = null }) { Text("I have saved it", color = CyanPrimary) } },
+                    confirmButton = { TextButton(onClick = { rotatedKeyToShow = null }) { Text("I have saved it", color = MaterialTheme.colorScheme.primary) } },
                     dismissButton = {
                         TextButton(onClick = {
                             clipboardManager.setText(AnnotatedString(key))
@@ -1042,7 +1042,7 @@ fun SettingsScreen(
                                 delay(60_000L)
                                 clipboardManager.setText(AnnotatedString(""))
                             }
-                        }) { Text("Copy", color = CyanPrimary) }
+                        }) { Text("Copy", color = MaterialTheme.colorScheme.primary) }
                     }
                 )
             }
@@ -1050,7 +1050,7 @@ fun SettingsScreen(
             if (showCustomTimeoutDialog) {
                 AlertDialog(
                     onDismissRequest = { showCustomTimeoutDialog = false },
-                    containerColor = VaultSurfaceVariant,
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant,
                     title = { Text("Custom session timeout", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface) },
                     text = {
                         Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -1063,8 +1063,8 @@ fun SettingsScreen(
                                 singleLine = true,
                                 keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Number),
                                 colors = OutlinedTextFieldDefaults.colors(
-                                    focusedBorderColor = CyanPrimary,
-                                    unfocusedBorderColor = VaultOutline,
+                                    focusedBorderColor = MaterialTheme.colorScheme.primary,
+                                    unfocusedBorderColor = MaterialTheme.colorScheme.outline,
                                     focusedTextColor = MaterialTheme.colorScheme.onSurface,
                                     unfocusedTextColor = MaterialTheme.colorScheme.onSurface,
                                     focusedLabelColor = CyanPrimary,
@@ -1083,7 +1083,7 @@ fun SettingsScreen(
                                 mins > 10080 -> customTimeoutError = "Maximum is 10 080 minutes (7 days)"
                                 else -> { authViewModel.setSessionTimeoutMinutes(mins); showCustomTimeoutDialog = false }
                             }
-                        }) { Text("Set", color = CyanPrimary) }
+                        }) { Text("Set", color = MaterialTheme.colorScheme.primary) }
                     },
                     dismissButton = { TextButton(onClick = { showCustomTimeoutDialog = false }) { Text("Cancel") } }
                 )
@@ -1099,7 +1099,7 @@ internal fun SectionHeader(title: String) {
     Text(
         title.uppercase(),
         style = MaterialTheme.typography.labelSmall,
-        color = CyanPrimary,
+        color = MaterialTheme.colorScheme.primary,
         letterSpacing = androidx.compose.ui.unit.TextUnit(2f, androidx.compose.ui.unit.TextUnitType.Sp),
         modifier = Modifier.padding(horizontal = 4.dp, vertical = 8.dp)
     )
@@ -1109,7 +1109,7 @@ internal fun SectionHeader(title: String) {
 internal fun SettingsCard(content: @Composable () -> Unit) {
     Card(
         shape = RoundedCornerShape(12.dp),
-        colors = CardDefaults.cardColors(containerColor = VaultSurfaceVariant),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
         modifier = Modifier
             .fillMaxWidth()
             .background(VaultSurfaceVariant, RoundedCornerShape(12.dp))

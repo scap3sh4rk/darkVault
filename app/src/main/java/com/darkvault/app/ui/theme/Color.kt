@@ -55,14 +55,14 @@ val VaultInversePrimary = Color(0xFF006E84)
 
 val VaultScrim        = Color(0xFF000000)
 
-// Light theme colors (Task 8)
-val LightBackground      = Color(0xFFF5FAFF)
-val LightSurface         = Color(0xFFFFFFFF)
-val LightSurfaceVariant  = Color(0xFFEDF3FB)
-val LightPrimary         = Color(0xFF006B80)
+// Light theme colors
+val LightBackground      = Color(0xFFF4F8FC)   // soft cool white
+val LightSurface         = Color(0xFFFFFFFF)   // pure white cards
+val LightSurfaceVariant  = Color(0xFFE8EEF6)   // subtle blue-grey tint for card tops
+val LightPrimary         = Color(0xFF003D52)   // dark black-cyan — headings, icons, accents
 val LightOnPrimary       = Color(0xFFFFFFFF)
-val LightOnBackground    = Color(0xFF0A0A0F)
-val LightOnSurface       = Color(0xFF0A0A0F)
-val LightOnSurfaceVariant= Color(0xFF4A4A6A)
-val LightOutline         = Color(0xFFC8C8D8)
+val LightOnBackground    = Color(0xFF080C10)   // near-black text
+val LightOnSurface       = Color(0xFF080C10)
+val LightOnSurfaceVariant= Color(0xFF3E4A58)   // secondary text
+val LightOutline         = Color(0xFF9AAABB)   // visible card borders on white
 val LightError           = Color(0xFFB3001B)

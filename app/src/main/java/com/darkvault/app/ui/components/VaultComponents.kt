@@ -129,9 +129,8 @@ fun VaultTextField(
         animationSpec = tween(200),
         label = "field_glow"
     )
-    // Capture theme colors for use in non-composable contexts
+    val primary        = MaterialTheme.colorScheme.primary
     val containerColor = MaterialTheme.colorScheme.surfaceVariant
-    val bgColor        = MaterialTheme.colorScheme.background
 
     Column(modifier = modifier) {
         Box(
@@ -141,9 +140,9 @@ fun VaultTextField(
                     elevation = glowElevation.dp,
                     shape = RoundedCornerShape(10.dp),
                     ambientColor = if (isError) MaterialTheme.colorScheme.error.copy(0.3f)
-                                   else CyanPrimary.copy(0.25f),
+                                   else primary.copy(0.25f),
                     spotColor   = if (isError) MaterialTheme.colorScheme.error.copy(0.2f)
-                                   else CyanPrimary.copy(0.15f)
+                                   else primary.copy(0.15f)
                 )
         ) {
             OutlinedTextField(
@@ -157,10 +156,10 @@ fun VaultTextField(
                 leadingIcon = leadingIcon?.let { { Icon(it, contentDescription = null) } },
                 shape = RoundedCornerShape(10.dp),
                 colors = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor           = CyanPrimary,
-                    focusedLabelColor            = CyanPrimary,
-                    focusedLeadingIconColor      = CyanPrimary,
-                    cursorColor                  = CyanPrimary,
+                    focusedBorderColor           = primary,
+                    focusedLabelColor            = primary,
+                    focusedLeadingIconColor      = primary,
+                    cursorColor                  = primary,
                     unfocusedBorderColor         = MaterialTheme.colorScheme.outline.copy(0.6f),
                     unfocusedLabelColor          = MaterialTheme.colorScheme.onSurfaceVariant.copy(0.6f),
                     unfocusedLeadingIconColor    = MaterialTheme.colorScheme.onSurfaceVariant.copy(0.6f),
@@ -213,11 +212,13 @@ fun CyberButton(
         animationSpec = spring(0.5f, Spring.StiffnessMedium), label = "btn_elev"
     )
 
-    // Theme-aware surface colors captured in composable scope
-    val surfaceTop = MaterialTheme.colorScheme.surfaceVariant
-    val surfaceBot = MaterialTheme.colorScheme.surface
-    val disabledTop = MaterialTheme.colorScheme.surface
-    val disabledBot = MaterialTheme.colorScheme.background
+    val primary      = MaterialTheme.colorScheme.primary
+    val outline      = MaterialTheme.colorScheme.outline
+    val surfaceTop   = MaterialTheme.colorScheme.surfaceVariant
+    val surfaceBot   = MaterialTheme.colorScheme.surface
+    val disabledTop  = MaterialTheme.colorScheme.surface
+    val disabledBot  = MaterialTheme.colorScheme.background
+    val edgeLine     = MaterialTheme.colorScheme.onSurface
 
     Box(
         contentAlignment = Alignment.Center,
@@ -227,8 +228,8 @@ fun CyberButton(
             .shadow(
                 elevation    = shadowElev.dp,
                 shape        = RoundedCornerShape(10.dp),
-                ambientColor = CyanPrimary.copy(shadowAlpha * 0.5f),
-                spotColor    = CyanPrimary.copy(shadowAlpha)
+                ambientColor = primary.copy(shadowAlpha * 0.5f),
+                spotColor    = primary.copy(shadowAlpha)
             )
             .clip(RoundedCornerShape(10.dp))
             .background(
@@ -237,14 +238,14 @@ fun CyberButton(
             )
             .drawBehind {
                 if (enabled) {
-                    // Glass top-edge refraction
+                    // Top-edge hairline (white on dark, subtle dark on light)
                     drawLine(
-                        Color.White.copy(if (isPressed) 0.05f else 0.10f),
+                        edgeLine.copy(if (isPressed) 0.04f else 0.07f),
                         Offset(28f, 1f), Offset(size.width - 28f, 1f), 1f
                     )
-                    // Bottom cyan accent line
+                    // Bottom primary accent line
                     drawLine(
-                        CyanPrimary.copy(if (isPressed) 0.60f else 0.25f),
+                        primary.copy(if (isPressed) 0.60f else 0.30f),
                         Offset(28f, size.height - 1f), Offset(size.width - 28f, size.height - 1f), 1f
                     )
                 }
@@ -252,10 +253,9 @@ fun CyberButton(
             .border(
                 width = 1.dp,
                 brush = if (enabled) Brush.verticalGradient(
-                    listOf(GlassHighlight, CyanPrimary.copy(0.28f))
+                    listOf(outline.copy(0.45f), primary.copy(0.40f))
                 ) else Brush.linearGradient(
-                    listOf(MaterialTheme.colorScheme.outline.copy(0.3f),
-                           MaterialTheme.colorScheme.outline.copy(0.3f))
+                    listOf(outline.copy(0.3f), outline.copy(0.3f))
                 ),
                 shape = RoundedCornerShape(10.dp)
             )
