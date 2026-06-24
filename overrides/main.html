@@ -7,28 +7,3 @@
   <!-- Outfit: heading display font | DM Sans: body | JetBrains Mono: code -->
   <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@600;700;800&family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;1,9..40,400&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 {% endblock %}
-
-{% block scripts %}
-  {{ super() }}
-  <script>
-    document.addEventListener("DOMContentLoaded", function () {
-      var source = document.querySelector(".md-header__source");
-      if (!source) return;
-
-      var btn = document.createElement("a");
-      btn.href = "https://github.com/scap3sh4rk/darkVault/releases/latest";
-      btn.target = "_blank";
-      btn.rel = "noopener noreferrer";
-      btn.className = "dv-download-btn";
-      btn.setAttribute("aria-label", "Download latest release");
-      btn.innerHTML =
-        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" aria-hidden="true">' +
-          '<path d="M12 16l-5-5h3V4h4v7h3l-5 5z"/>' +
-          '<path d="M5 18h14v2H5z"/>' +
-        '</svg>' +
-        '<span>Download</span>';
-
-      source.parentNode.insertBefore(btn, source);
-    });
-  </script>
-{% endblock %}
