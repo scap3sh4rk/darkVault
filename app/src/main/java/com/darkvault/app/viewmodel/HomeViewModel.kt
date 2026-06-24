@@ -101,7 +101,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     // Task 7 — view layout (persisted in DataStore)
     val viewLayout: StateFlow<ViewLayout> = prefs.viewLayout.map { str ->
         when (str) { "GRID2" -> ViewLayout.GRID2; "GRID3" -> ViewLayout.GRID3; else -> ViewLayout.LIST }
-    }.stateIn(viewModelScope, SharingStarted.Eagerly, ViewLayout.LIST)
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, ViewLayout.GRID2)
 
     fun setViewLayout(layout: ViewLayout) {
         viewModelScope.launch { prefs.setViewLayout(layout.name) }

@@ -158,6 +158,12 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.tween as animTween
+import androidx.compose.foundation.Canvas
+import androidx.compose.ui.graphics.drawscope.Stroke
+import com.darkvault.app.ui.theme.CyanPrimary as CyanAccent
 
 @Suppress("DEPRECATION")
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
@@ -220,6 +226,24 @@ fun HomeScreen(
 
     // Task 6 — breadcrumb expansion state
     var breadcrumbExpanded by remember { mutableStateOf(false) }
+
+    // ── Vault-open iris animation (plays once per Home entry) ─────────────────
+    var irisVisible by remember { mutableStateOf(true) }
+    val ring1 = remember { Animatable(0f) }
+    val ring2 = remember { Animatable(0f) }
+    val ring3 = remember { Animatable(0f) }
+    val irisAlpha = remember { Animatable(1f) }
+    LaunchedEffect(Unit) {
+        delay(80L)
+        launch { ring1.animateTo(1f, animTween(480, easing = FastOutSlowInEasing)) }
+        delay(90L)
+        launch { ring2.animateTo(1f, animTween(480, easing = FastOutSlowInEasing)) }
+        delay(90L)
+        launch { ring3.animateTo(1f, animTween(480, easing = FastOutSlowInEasing)) }
+        delay(520L)
+        irisAlpha.animateTo(0f, animTween(260))
+        irisVisible = false
+    }
 
     // Back intercept: clear selection first; if not selecting, go up one folder level
     BackHandler(enabled = isSelectionMode || canGoBack) {
@@ -311,6 +335,8 @@ fun HomeScreen(
             }
         )
     }
+
+    Box(modifier = Modifier.fillMaxSize()) {
 
     Scaffold(
         topBar = {
@@ -1290,6 +1316,45 @@ fun HomeScreen(
             dismissButton = { TextButton(onClick = { showRenameDialog = null }) { Text("Cancel") } }
         )
     }
+
+    // ── Vault-open iris overlay ───────────────────────────────────────────────
+    if (irisVisible) {
+        Canvas(
+            modifier = Modifier
+                .fillMaxSize()
+                .graphicsLayer { alpha = irisAlpha.value }
+        ) {
+            val cx = size.width / 2f
+            val cy = size.height / 2f
+            val maxR = maxOf(size.width, size.height)
+
+            val r1 = ring1.value * maxR * 0.52f
+            if (r1 > 0f) drawCircle(
+                color = CyanAccent.copy(alpha = (1f - ring1.value) * 0.55f),
+                radius = r1, center = Offset(cx, cy),
+                style = Stroke(2.5.dp.toPx())
+            )
+            val r2 = ring2.value * maxR * 0.70f
+            if (r2 > 0f) drawCircle(
+                color = CyanAccent.copy(alpha = (1f - ring2.value) * 0.35f),
+                radius = r2, center = Offset(cx, cy),
+                style = Stroke(1.5.dp.toPx())
+            )
+            val r3 = ring3.value * maxR * 0.88f
+            if (r3 > 0f) drawCircle(
+                color = CyanAccent.copy(alpha = (1f - ring3.value) * 0.20f),
+                radius = r3, center = Offset(cx, cy),
+                style = Stroke(1.dp.toPx())
+            )
+            // Brief flash fill
+            if (ring1.value < 0.35f) {
+                drawRect(CyanAccent.copy(alpha = (0.35f - ring1.value) * 0.10f))
+            }
+        }
+    }
+
+    } // end outer Box
+
 }
 
 // ── Task 6 — Breadcrumb Row ───────────────────────────────────────────────────

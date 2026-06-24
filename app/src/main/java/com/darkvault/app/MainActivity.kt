@@ -12,9 +12,12 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.appcompat.app.AppCompatActivity
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.ui.platform.LocalView
 import androidx.core.content.ContextCompat
+import androidx.core.view.WindowInsetsControllerCompat
 import androidx.lifecycle.lifecycleScope
 import com.darkvault.app.data.PreferencesManager
 import com.darkvault.app.service.UploadForegroundService
@@ -60,6 +63,14 @@ class MainActivity : AppCompatActivity() {
                 }
             }
             DarkVaultTheme(darkTheme = isDark, fontKey = fontKey) {
+                val view = LocalView.current
+                if (!view.isInEditMode) {
+                    SideEffect {
+                        val controller = WindowInsetsControllerCompat(window, view)
+                        controller.isAppearanceLightStatusBars = !isDark
+                        controller.isAppearanceLightNavigationBars = !isDark
+                    }
+                }
                 DarkVaultNavGraph(authViewModel)
             }
         }

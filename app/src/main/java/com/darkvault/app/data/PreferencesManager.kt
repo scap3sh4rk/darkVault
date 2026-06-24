@@ -172,7 +172,7 @@ class PreferencesManager(private val context: Context) {
     // ── Theme / layout (Task 8, 7) ────────────────────────────────────────
 
     val themeMode: Flow<String> = context.dataStore.data.map { it[KEY_THEME_MODE] ?: "SYSTEM" }
-    val viewLayout: Flow<String> = context.dataStore.data.map { it[KEY_VIEW_LAYOUT] ?: "LIST" }
+    val viewLayout: Flow<String> = context.dataStore.data.map { it[KEY_VIEW_LAYOUT] ?: "GRID2" }
     val thumbnailsEnabled: Flow<Boolean> = context.dataStore.data.map { it[KEY_THUMBNAILS_ENABLED] ?: true }
 
     suspend fun setThemeMode(mode: String) {
@@ -195,7 +195,7 @@ class PreferencesManager(private val context: Context) {
     }
 
     // ── Developer mode toggle (debug only) ───────────────────────────────────
-    val devOptionsEnabled: Flow<Boolean> = context.dataStore.data.map { it[KEY_DEV_OPTIONS_ENABLED] ?: true }
+    val devOptionsEnabled: Flow<Boolean> = context.dataStore.data.map { it[KEY_DEV_OPTIONS_ENABLED] ?: false }
 
     suspend fun setDevOptionsEnabled(enabled: Boolean) {
         context.dataStore.edit { it[KEY_DEV_OPTIONS_ENABLED] = enabled }

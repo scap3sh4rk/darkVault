@@ -2,10 +2,32 @@ package com.darkvault.app.ui.theme
 
 import androidx.compose.ui.graphics.Color
 
+// ── Primary accent ─────────────────────────────────────────────────────────────
 val CyanPrimary       = Color(0xFF00D4FF)
 val CyanOnPrimary     = Color(0xFF00363F)
 val CyanContainer     = Color(0xFF004F5C)
 val CyanOnContainer   = Color(0xFF9EEEFF)
+
+// ── Spatial depth planes ───────────────────────────────────────────────────────
+val DepthPlane0 = Color(0xFF020207)   // Plane 0 — wallpaper / environment
+val DepthPlane1 = Color(0xFF070711)   // Plane 1 — background surfaces
+val DepthPlane2 = Color(0xFF0C0C1A)   // Plane 2 — content surfaces
+val DepthPlane3 = Color(0xFF121224)   // Plane 3 — interactive surfaces
+val DepthPlane4 = Color(0xFF181832)   // Plane 4 — modal surfaces
+val DepthPlane5 = Color(0xFF000000)   // Plane 5 — critical security overlays
+
+// ── Glass material layers ──────────────────────────────────────────────────────
+val GlassHighlight = Color(0x12FFFFFF)   // 7% white — top-edge refraction line
+val GlassMid       = Color(0x08FFFFFF)   // 3% white — ambient glass sheen
+
+// ── Glow helpers ───────────────────────────────────────────────────────────────
+val CyanGlow30 = Color(0x4D00D4FF)    // 30% opacity glow
+val CyanGlow15 = Color(0x2600D4FF)    // 15% opacity subtle glow
+val CyanGlow05 = Color(0x0D00D4FF)    // 5%  opacity ambient
+
+// ── Security status ────────────────────────────────────────────────────────────
+val SecureGreen = Color(0xFF00E896)
+val AlertAmber  = Color(0xFFFFB547)
 
 val PurpleSecondary   = Color(0xFFCE93D8)
 val PurpleOnSecondary = Color(0xFF4A148C)

@@ -1,16 +1,27 @@
 package com.darkvault.app.ui.components
 
+import androidx.compose.animation.Crossfade
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image as ComposeImage
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -22,12 +33,12 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.AudioFile
 import androidx.compose.material.icons.outlined.CheckCircle
-import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Download
 import androidx.compose.material.icons.outlined.Folder
@@ -40,11 +51,8 @@ import androidx.compose.material.icons.outlined.MusicNote
 import androidx.compose.material.icons.outlined.PauseCircleOutline
 import androidx.compose.material.icons.outlined.PictureAsPdf
 import androidx.compose.material.icons.outlined.Preview
+import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.VideoFile
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
@@ -57,13 +65,26 @@ import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -74,7 +95,16 @@ import androidx.compose.ui.unit.sp
 import com.darkvault.app.R
 import com.darkvault.app.model.FilterType
 import com.darkvault.app.model.VaultFile
+import com.darkvault.app.ui.theme.AlertAmber
+import com.darkvault.app.ui.theme.CyanGlow05
+import com.darkvault.app.ui.theme.CyanGlow15
+import com.darkvault.app.ui.theme.CyanGlow30
 import com.darkvault.app.ui.theme.CyanPrimary
+import com.darkvault.app.ui.theme.DepthPlane1
+import com.darkvault.app.ui.theme.DepthPlane2
+import com.darkvault.app.ui.theme.DepthPlane3
+import com.darkvault.app.ui.theme.GlassHighlight
+import com.darkvault.app.ui.theme.SecureGreen
 import com.darkvault.app.ui.theme.VaultBackground
 import com.darkvault.app.ui.theme.VaultOutline
 import com.darkvault.app.ui.theme.VaultSurfaceVariant
@@ -93,28 +123,58 @@ fun VaultTextField(
     errorMessage: String? = null,
     leadingIcon: ImageVector? = null
 ) {
+    var isFocused by remember { mutableStateOf(false) }
+    val glowElevation by animateFloatAsState(
+        targetValue = if (isFocused) 8f else 0f,
+        animationSpec = tween(200),
+        label = "field_glow"
+    )
+    // Capture theme colors for use in non-composable contexts
+    val containerColor = MaterialTheme.colorScheme.surfaceVariant
+    val bgColor        = MaterialTheme.colorScheme.background
+
     Column(modifier = modifier) {
-        OutlinedTextField(
-            value = value,
-            onValueChange = onValueChange,
-            label = { Text(label) },
-            isError = isError,
-            singleLine = true,
-            visualTransformation = if (isPassword) PasswordVisualTransformation() else VisualTransformation.None,
-            leadingIcon = leadingIcon?.let { { Icon(it, contentDescription = null) } },
-            colors = OutlinedTextFieldDefaults.colors(
-                focusedBorderColor = CyanPrimary,
-                focusedLabelColor = CyanPrimary,
-                focusedLeadingIconColor = CyanPrimary,
-                cursorColor = CyanPrimary,
-                unfocusedBorderColor = VaultOutline,
-                unfocusedLabelColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                unfocusedLeadingIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                errorBorderColor = MaterialTheme.colorScheme.error,
-                errorLabelColor = MaterialTheme.colorScheme.error
-            ),
-            modifier = Modifier.fillMaxWidth()
-        )
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .shadow(
+                    elevation = glowElevation.dp,
+                    shape = RoundedCornerShape(10.dp),
+                    ambientColor = if (isError) MaterialTheme.colorScheme.error.copy(0.3f)
+                                   else CyanPrimary.copy(0.25f),
+                    spotColor   = if (isError) MaterialTheme.colorScheme.error.copy(0.2f)
+                                   else CyanPrimary.copy(0.15f)
+                )
+        ) {
+            OutlinedTextField(
+                value = value,
+                onValueChange = onValueChange,
+                label = { Text(label) },
+                isError = isError,
+                singleLine = true,
+                visualTransformation = if (isPassword) PasswordVisualTransformation()
+                                       else VisualTransformation.None,
+                leadingIcon = leadingIcon?.let { { Icon(it, contentDescription = null) } },
+                shape = RoundedCornerShape(10.dp),
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedBorderColor           = CyanPrimary,
+                    focusedLabelColor            = CyanPrimary,
+                    focusedLeadingIconColor      = CyanPrimary,
+                    cursorColor                  = CyanPrimary,
+                    unfocusedBorderColor         = MaterialTheme.colorScheme.outline.copy(0.6f),
+                    unfocusedLabelColor          = MaterialTheme.colorScheme.onSurfaceVariant.copy(0.6f),
+                    unfocusedLeadingIconColor    = MaterialTheme.colorScheme.onSurfaceVariant.copy(0.6f),
+                    errorBorderColor             = MaterialTheme.colorScheme.error,
+                    errorLabelColor              = MaterialTheme.colorScheme.error,
+                    focusedContainerColor        = containerColor,
+                    unfocusedContainerColor      = containerColor,
+                    errorContainerColor          = containerColor,
+                ),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .onFocusChanged { isFocused = it.isFocused }
+            )
+        }
         if (isError && errorMessage != null) {
             Spacer(Modifier.height(4.dp))
             Text(
@@ -136,27 +196,91 @@ fun CyberButton(
     enabled: Boolean = true,
     isLoading: Boolean = false
 ) {
-    Button(
-        onClick = onClick,
-        enabled = enabled && !isLoading,
-        shape = RoundedCornerShape(8.dp),
-        colors = ButtonDefaults.buttonColors(
-            containerColor = CyanPrimary,
-            contentColor = Color(0xFF00363F),
-            disabledContainerColor = VaultOutline,
-            disabledContentColor = MaterialTheme.colorScheme.onSurfaceVariant
-        ),
-        modifier = modifier.height(52.dp)
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+
+    val scale by animateFloatAsState(
+        targetValue = if (isPressed && enabled && !isLoading) 0.972f else 1f,
+        animationSpec = spring(dampingRatio = 0.45f, stiffness = Spring.StiffnessMediumLow),
+        label = "btn_scale"
+    )
+    val shadowAlpha by animateFloatAsState(
+        targetValue = if (isPressed && enabled) 0.55f else if (enabled) 0.3f else 0f,
+        animationSpec = tween(90), label = "btn_shadow"
+    )
+    val shadowElev by animateFloatAsState(
+        targetValue = if (!enabled || isLoading) 0f else if (isPressed) 2f else 10f,
+        animationSpec = spring(0.5f, Spring.StiffnessMedium), label = "btn_elev"
+    )
+
+    // Theme-aware surface colors captured in composable scope
+    val surfaceTop = MaterialTheme.colorScheme.surfaceVariant
+    val surfaceBot = MaterialTheme.colorScheme.surface
+    val disabledTop = MaterialTheme.colorScheme.surface
+    val disabledBot = MaterialTheme.colorScheme.background
+
+    Box(
+        contentAlignment = Alignment.Center,
+        modifier = modifier
+            .height(52.dp)
+            .graphicsLayer { scaleX = scale; scaleY = scale }
+            .shadow(
+                elevation    = shadowElev.dp,
+                shape        = RoundedCornerShape(10.dp),
+                ambientColor = CyanPrimary.copy(shadowAlpha * 0.5f),
+                spotColor    = CyanPrimary.copy(shadowAlpha)
+            )
+            .clip(RoundedCornerShape(10.dp))
+            .background(
+                if (enabled) Brush.verticalGradient(listOf(surfaceTop, surfaceBot))
+                else Brush.verticalGradient(listOf(disabledTop, disabledBot))
+            )
+            .drawBehind {
+                if (enabled) {
+                    // Glass top-edge refraction
+                    drawLine(
+                        Color.White.copy(if (isPressed) 0.05f else 0.10f),
+                        Offset(28f, 1f), Offset(size.width - 28f, 1f), 1f
+                    )
+                    // Bottom cyan accent line
+                    drawLine(
+                        CyanPrimary.copy(if (isPressed) 0.60f else 0.25f),
+                        Offset(28f, size.height - 1f), Offset(size.width - 28f, size.height - 1f), 1f
+                    )
+                }
+            }
+            .border(
+                width = 1.dp,
+                brush = if (enabled) Brush.verticalGradient(
+                    listOf(GlassHighlight, CyanPrimary.copy(0.28f))
+                ) else Brush.linearGradient(
+                    listOf(MaterialTheme.colorScheme.outline.copy(0.3f),
+                           MaterialTheme.colorScheme.outline.copy(0.3f))
+                ),
+                shape = RoundedCornerShape(10.dp)
+            )
+            .clickable(
+                interactionSource = interactionSource,
+                indication = null,
+                enabled = enabled && !isLoading,
+                onClick = onClick
+            )
+            .padding(horizontal = 24.dp)
     ) {
         if (isLoading) {
             CircularProgressIndicator(
-                modifier = Modifier.size(20.dp),
-                color = Color(0xFF00363F),
+                modifier = Modifier.size(18.dp),
+                color = MaterialTheme.colorScheme.primary,
                 strokeWidth = 2.dp,
                 strokeCap = StrokeCap.Round
             )
         } else {
-            Text(text.uppercase(), style = MaterialTheme.typography.labelLarge, letterSpacing = 2.sp)
+            Text(
+                text = text.uppercase(),
+                style = MaterialTheme.typography.labelLarge.copy(letterSpacing = 2.2.sp),
+                color = if (enabled) MaterialTheme.colorScheme.primary
+                        else MaterialTheme.colorScheme.onSurfaceVariant.copy(0.35f)
+            )
         }
     }
 }
@@ -165,35 +289,140 @@ fun CyberButton(
 
 @Composable
 fun VaultLogo(modifier: Modifier = Modifier) {
-    val pulse by rememberInfiniteTransition(label = "pulse").animateFloat(
-        initialValue = 0.8f,
-        targetValue = 1f,
-        animationSpec = infiniteRepeatable(tween(2000), RepeatMode.Reverse),
-        label = "alpha"
+    val anim = rememberInfiniteTransition(label = "logo_anim")
+
+    val outerAlpha by anim.animateFloat(
+        initialValue = 0.08f, targetValue = 0.20f,
+        animationSpec = infiniteRepeatable(tween(4500, easing = LinearEasing), RepeatMode.Reverse),
+        label = "outer_alpha"
     )
+    val midRotation by anim.animateFloat(
+        initialValue = 0f, targetValue = 360f,
+        animationSpec = infiniteRepeatable(tween(22000, easing = LinearEasing)),
+        label = "mid_rotate"
+    )
+    val innerAlpha by anim.animateFloat(
+        initialValue = 0.45f, targetValue = 0.85f,
+        animationSpec = infiniteRepeatable(tween(2200, easing = FastOutSlowInEasing), RepeatMode.Reverse),
+        label = "inner_alpha"
+    )
+    val innerScale by anim.animateFloat(
+        initialValue = 0.97f, targetValue = 1.00f,
+        animationSpec = infiniteRepeatable(tween(2200, easing = FastOutSlowInEasing), RepeatMode.Reverse),
+        label = "inner_scale"
+    )
+    val dotAlpha by anim.animateFloat(
+        initialValue = 0.5f, targetValue = 1.0f,
+        animationSpec = infiniteRepeatable(tween(1600, easing = FastOutSlowInEasing), RepeatMode.Reverse),
+        label = "dot_alpha"
+    )
+
+    // Theme-aware icon container colors
+    val iconContainerTop = MaterialTheme.colorScheme.surfaceVariant
+    val iconContainerBot = MaterialTheme.colorScheme.surface
+    val primary          = MaterialTheme.colorScheme.primary
+
     Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = modifier) {
-        Box(
-            contentAlignment = Alignment.Center,
-            modifier = Modifier
-                .size(100.dp)
-                .clip(RoundedCornerShape(24.dp))
-                .background(Brush.radialGradient(listOf(CyanPrimary.copy(alpha = 0.1f), Color.Transparent)))
-                .border(1.dp, CyanPrimary.copy(alpha = pulse * 0.5f), RoundedCornerShape(24.dp))
-                .padding(8.dp)
-        ) {
-            ComposeImage(
-                painter = painterResource(id = R.drawable.icon),
-                contentDescription = "darkVault",
-                modifier = Modifier.fillMaxSize()
-            )
+        Box(contentAlignment = Alignment.Center, modifier = Modifier.size(128.dp)) {
+
+            Canvas(Modifier.size(128.dp)) {
+                drawCircle(
+                    brush = Brush.radialGradient(
+                        listOf(primary.copy(outerAlpha * 0.18f), Color.Transparent),
+                        center = center, radius = size.minDimension / 2f
+                    ),
+                    radius = size.minDimension / 2f
+                )
+                drawCircle(
+                    color = primary.copy(outerAlpha),
+                    radius = size.minDimension / 2f - 1f,
+                    style = Stroke(1.dp.toPx())
+                )
+            }
+
+            Canvas(
+                Modifier
+                    .size(96.dp)
+                    .graphicsLayer { rotationZ = midRotation }
+            ) {
+                val r = size.minDimension / 2f - 1f
+                listOf(0f, 90f, 180f, 270f).forEach { start ->
+                    drawArc(
+                        color = primary.copy(0.30f),
+                        startAngle = start, sweepAngle = 55f, useCenter = false,
+                        style = Stroke(1.dp.toPx()),
+                        topLeft = Offset(center.x - r, center.y - r),
+                        size = Size(r * 2, r * 2)
+                    )
+                }
+            }
+
+            Canvas(
+                Modifier
+                    .size(72.dp)
+                    .graphicsLayer { scaleX = innerScale; scaleY = innerScale }
+            ) {
+                drawCircle(
+                    color = primary.copy(innerAlpha),
+                    radius = size.minDimension / 2f - 1f,
+                    style = Stroke(1.dp.toPx())
+                )
+            }
+
+            Box(
+                contentAlignment = Alignment.Center,
+                modifier = Modifier
+                    .size(54.dp)
+                    .shadow(12.dp, RoundedCornerShape(14.dp),
+                            ambientColor = primary.copy(0.22f), spotColor = primary.copy(0.12f))
+                    .clip(RoundedCornerShape(14.dp))
+                    .background(Brush.verticalGradient(listOf(iconContainerTop, iconContainerBot)))
+                    .drawBehind {
+                        drawLine(Color.White.copy(0.12f), Offset(8f, 1f), Offset(size.width - 8f, 1f), 1f)
+                    }
+                    .border(
+                        1.dp,
+                        Brush.verticalGradient(listOf(GlassHighlight, primary.copy(0.25f))),
+                        RoundedCornerShape(14.dp)
+                    )
+                    .padding(9.dp)
+            ) {
+                ComposeImage(
+                    painter = painterResource(R.drawable.icon),
+                    contentDescription = "darkVault",
+                    modifier = Modifier.fillMaxSize()
+                )
+            }
         }
-        Spacer(Modifier.height(16.dp))
-        Text("darkVault", style = MaterialTheme.typography.headlineMedium, color = MaterialTheme.colorScheme.onBackground, fontFamily = FontFamily.Monospace)
-        Text("SECURE CLOUD STORAGE", style = MaterialTheme.typography.labelSmall, color = CyanPrimary.copy(alpha = 0.7f), letterSpacing = 3.sp)
+
+        Spacer(Modifier.height(22.dp))
+
+        Text(
+            "darkVault",
+            style = MaterialTheme.typography.headlineMedium,
+            color = MaterialTheme.colorScheme.onBackground,
+            fontFamily = FontFamily.Monospace
+        )
+
+        Spacer(Modifier.height(6.dp))
+
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(7.dp)
+        ) {
+            Canvas(Modifier.size(4.dp)) { drawCircle(SecureGreen.copy(dotAlpha)) }
+            Text(
+                "SECURE CLOUD STORAGE",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.primary.copy(0.55f),
+                letterSpacing = 3.sp
+            )
+            Canvas(Modifier.size(4.dp)) { drawCircle(SecureGreen.copy(dotAlpha)) }
+        }
     }
 }
 
-// ── File / folder cards ────────────────────────────────────────────────────────
+// ── File card ──────────────────────────────────────────────────────────────────
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -212,104 +441,139 @@ fun VaultFileCard(
     thumbnailPassword: String? = null,
     thumbnailAccount: com.google.android.gms.auth.api.signin.GoogleSignInAccount? = null
 ) {
-    val borderColor = if (isSelected) CyanPrimary else VaultOutline
-    Card(
-        shape = RoundedCornerShape(12.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = if (isSelected) CyanPrimary.copy(alpha = 0.08f) else VaultSurfaceVariant
-        ),
+    val breatheAnim = rememberInfiniteTransition(label = "card_breathe")
+    val borderBreath by breatheAnim.animateFloat(
+        initialValue = 0.18f, targetValue = 0.32f,
+        animationSpec = infiniteRepeatable(tween(3800, easing = LinearEasing), RepeatMode.Reverse),
+        label = "border_breath"
+    )
+    val tiltDeg by animateFloatAsState(
+        targetValue = if (isSelected) -1.8f else 0f,
+        animationSpec = spring(0.55f, 260f), label = "card_tilt"
+    )
+    val shadowElev by animateFloatAsState(
+        targetValue = if (isSelected) 14f else 1f,
+        animationSpec = spring(0.65f, 280f), label = "card_elev"
+    )
+
+    // Theme-aware colors — captured in composable scope, safe to use in lambdas
+    val primary        = MaterialTheme.colorScheme.primary
+    val surfaceTop     = MaterialTheme.colorScheme.surfaceVariant
+    val surfaceBot     = MaterialTheme.colorScheme.surface
+    val bgColor        = MaterialTheme.colorScheme.background
+    val outlineColor   = MaterialTheme.colorScheme.outline
+
+    val clickModifier = when {
+        onToggleSelect != null -> Modifier.combinedClickable(
+            onClick = { onToggleSelect() }, onLongClick = onLongPress
+        )
+        onClick != null || onLongPress != null -> Modifier.combinedClickable(
+            onClick = { onClick?.invoke() }, onLongClick = onLongPress
+        )
+        else -> Modifier
+    }
+
+    Box(
         modifier = modifier
             .fillMaxWidth()
-            .border(if (isSelected) 1.5.dp else 1.dp, borderColor, RoundedCornerShape(12.dp))
-            .then(when {
-                onToggleSelect != null -> Modifier.combinedClickable(
-                    onClick = { onToggleSelect() },
-                    onLongClick = onLongPress
+            .graphicsLayer { rotationX = tiltDeg; cameraDistance = 8 * density }
+            .shadow(
+                elevation    = shadowElev.dp,
+                shape        = RoundedCornerShape(12.dp),
+                ambientColor = if (isSelected) primary.copy(0.22f) else Color.Black,
+                spotColor    = if (isSelected) primary.copy(0.12f) else Color.Black
+            )
+            .clip(RoundedCornerShape(12.dp))
+            .background(
+                if (isSelected) Brush.verticalGradient(listOf(surfaceTop, primary.copy(0.07f)))
+                else Brush.verticalGradient(listOf(surfaceTop, surfaceBot))
+            )
+            .drawBehind {
+                drawRect(
+                    color = if (isSelected) primary else primary.copy(0.45f),
+                    size = Size(3.dp.toPx(), size.height)
                 )
-                onClick != null || onLongPress != null -> Modifier.combinedClickable(
-                    onClick = { onClick?.invoke() },
-                    onLongClick = onLongPress
-                )
-                else -> Modifier
-            })
+                drawLine(Color.White.copy(0.07f),
+                    Offset(3.dp.toPx() + 8f, 1f), Offset(size.width - 8f, 1f), 1f)
+            }
+            .border(
+                width = if (isSelected) 1.5.dp else 1.dp,
+                color = if (isSelected) primary else primary.copy(borderBreath),
+                shape = RoundedCornerShape(12.dp)
+            )
+            .then(clickModifier)
     ) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp)
+            modifier = Modifier.padding(start = 16.dp, end = 10.dp, top = 11.dp, bottom = 11.dp)
         ) {
-            // Selection indicator
             if (onToggleSelect != null) {
-                Box(
-                    contentAlignment = Alignment.Center,
-                    modifier = Modifier.size(22.dp)
-                ) {
-                    if (isSelected) {
-                        Icon(Icons.Outlined.CheckCircle, null, tint = CyanPrimary, modifier = Modifier.size(22.dp))
+                Crossfade(targetState = isSelected, label = "sel_icon") { sel ->
+                    if (sel) {
+                        Icon(Icons.Outlined.CheckCircle, null, tint = primary, modifier = Modifier.size(20.dp))
                     } else {
-                        Box(Modifier.size(18.dp).border(1.5.dp, VaultOutline, CircleShape))
+                        Box(Modifier.size(20.dp).border(1.dp, outlineColor.copy(0.55f), CircleShape))
                     }
                 }
                 Spacer(Modifier.width(10.dp))
             }
 
-            // Thumbnail or file type icon
             Box(
                 contentAlignment = Alignment.Center,
-                modifier = Modifier.size(40.dp).clip(RoundedCornerShape(10.dp)).background(VaultBackground)
+                modifier = Modifier
+                    .size(40.dp)
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(bgColor)
+                    .border(1.dp, outlineColor.copy(0.35f), RoundedCornerShape(10.dp))
             ) {
                 VaultThumbnailImage(
-                    file = file,
-                    password = thumbnailPassword,
-                    account = thumbnailAccount,
-                    showThumbnails = showThumbnail,
-                    iconSize = 20.dp,
-                    modifier = Modifier.fillMaxSize()
+                    file = file, password = thumbnailPassword, account = thumbnailAccount,
+                    showThumbnails = showThumbnail, iconSize = 18.dp, modifier = Modifier.fillMaxSize()
                 )
             }
 
             Spacer(Modifier.width(12.dp))
 
             Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    file.originalName,
+                Text(file.originalName,
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurface,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
+                    maxLines = 1, overflow = TextOverflow.Ellipsis)
                 Spacer(Modifier.height(2.dp))
-                Row {
-                    Text(
-                        formatSize(file.size),
+                Row(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+                    Text(formatSize(file.size),
                         style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+                        color = primary.copy(0.55f))
                     if (file.modifiedTime.isNotEmpty()) {
-                        Text(
-                            " · ${formatDate(file.modifiedTime.ifEmpty { file.createdTime })}",
+                        Text("·", style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.outline)
+                        Text(formatDate(file.modifiedTime.ifEmpty { file.createdTime }),
                             style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
-                        )
+                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(0.45f))
                     }
                 }
             }
 
-            // In selection mode: show preview shortcut for previewable files
             if (onToggleSelect != null && onPreview != null) {
-                IconButton(onClick = onPreview) {
-                    Icon(Icons.Outlined.Preview, "Preview", tint = CyanPrimary.copy(alpha = 0.8f))
+                IconButton(onClick = onPreview, modifier = Modifier.size(36.dp)) {
+                    Icon(Icons.Outlined.Preview, "Preview",
+                        tint = primary.copy(0.65f), modifier = Modifier.size(18.dp))
                 }
             }
-            // Normal mode: single 3-dot menu keeps the card minimal
             if (onToggleSelect == null && onMoreActions != null) {
-                IconButton(onClick = onMoreActions) {
-                    Icon(Icons.Outlined.MoreVert, "More actions", tint = CyanPrimary.copy(alpha = 0.6f))
+                IconButton(onClick = onMoreActions, modifier = Modifier.size(36.dp)) {
+                    Icon(Icons.Outlined.MoreVert, "More",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(0.45f),
+                        modifier = Modifier.size(18.dp))
                 }
             }
         }
     }
 }
 
+// ── Folder card ────────────────────────────────────────────────────────────────
+
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun VaultFolderCard(
     folder: VaultFile,
@@ -321,63 +585,92 @@ fun VaultFolderCard(
     onLongPress: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
-    val borderColor = if (isSelected) CyanPrimary else VaultOutline
-    Card(
-        shape = RoundedCornerShape(12.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = if (isSelected) CyanPrimary.copy(alpha = 0.08f) else VaultSurfaceVariant
-        ),
+    val breatheAnim = rememberInfiniteTransition(label = "folder_breathe")
+    val borderBreath by breatheAnim.animateFloat(
+        initialValue = 0.25f, targetValue = 0.45f,
+        animationSpec = infiniteRepeatable(tween(3200, easing = LinearEasing), RepeatMode.Reverse),
+        label = "folder_border"
+    )
+    val tiltDeg by animateFloatAsState(
+        targetValue = if (isSelected) -1.8f else 0f, animationSpec = spring(0.55f, 260f), label = "folder_tilt"
+    )
+    val shadowElev by animateFloatAsState(
+        targetValue = if (isSelected) 14f else 1f, animationSpec = spring(0.65f, 280f), label = "folder_elev"
+    )
+
+    val primary      = MaterialTheme.colorScheme.primary
+    val surfaceTop   = MaterialTheme.colorScheme.surfaceVariant
+    val surfaceBot   = MaterialTheme.colorScheme.surface
+    val bgColor      = MaterialTheme.colorScheme.background
+    val outlineColor = MaterialTheme.colorScheme.outline
+
+    Box(
         modifier = modifier
             .fillMaxWidth()
-            .border(if (isSelected) 1.5.dp else 1.dp, borderColor, RoundedCornerShape(12.dp))
+            .graphicsLayer { rotationX = tiltDeg; cameraDistance = 8 * density }
+            .shadow(shadowElev.dp, RoundedCornerShape(12.dp),
+                    ambientColor = if (isSelected) primary.copy(0.25f) else Color.Black,
+                    spotColor    = if (isSelected) primary.copy(0.15f) else Color.Black)
+            .clip(RoundedCornerShape(12.dp))
+            .background(
+                if (isSelected) Brush.verticalGradient(listOf(surfaceTop, primary.copy(0.09f)))
+                else Brush.verticalGradient(listOf(surfaceTop, surfaceBot))
+            )
+            .drawBehind {
+                drawRect(if (isSelected) primary else primary.copy(0.65f), size = Size(3.dp.toPx(), size.height))
+                drawLine(Color.White.copy(0.07f), Offset(3.dp.toPx() + 8f, 1f), Offset(size.width - 8f, 1f), 1f)
+            }
+            .border(
+                if (isSelected) 1.5.dp else 1.dp,
+                if (isSelected) primary else primary.copy(borderBreath),
+                RoundedCornerShape(12.dp)
+            )
             .combinedClickable(
-                onClick = { if (onToggleSelect != null) onToggleSelect() else onOpen() },
+                onClick    = { if (onToggleSelect != null) onToggleSelect() else onOpen() },
                 onLongClick = { onLongPress?.invoke() }
             )
     ) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp)
+            modifier = Modifier.padding(start = 16.dp, end = 10.dp, top = 11.dp, bottom = 11.dp)
         ) {
             if (onToggleSelect != null) {
-                Box(contentAlignment = Alignment.Center, modifier = Modifier.size(22.dp)) {
-                    if (isSelected) {
-                        Icon(Icons.Outlined.CheckCircle, null, tint = CyanPrimary, modifier = Modifier.size(22.dp))
-                    } else {
-                        Box(Modifier.size(18.dp).border(1.5.dp, VaultOutline, CircleShape))
-                    }
+                Crossfade(targetState = isSelected, label = "folder_sel") { sel ->
+                    if (sel) Icon(Icons.Outlined.CheckCircle, null, tint = primary, modifier = Modifier.size(20.dp))
+                    else Box(Modifier.size(20.dp).border(1.dp, outlineColor.copy(0.55f), CircleShape))
                 }
                 Spacer(Modifier.width(10.dp))
             }
 
             Box(
                 contentAlignment = Alignment.Center,
-                modifier = Modifier.size(40.dp).clip(RoundedCornerShape(10.dp)).background(VaultBackground)
+                modifier = Modifier
+                    .size(40.dp)
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(bgColor)
+                    .border(1.dp, primary.copy(0.25f), RoundedCornerShape(10.dp))
             ) {
-                Icon(Icons.Outlined.Folder, null, tint = CyanPrimary, modifier = Modifier.size(20.dp))
+                Icon(Icons.Outlined.Folder, null, tint = primary, modifier = Modifier.size(20.dp))
             }
 
             Spacer(Modifier.width(12.dp))
 
             Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    folder.originalName,
+                Text(folder.originalName,
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurface,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
+                    maxLines = 1, overflow = TextOverflow.Ellipsis)
                 Spacer(Modifier.height(2.dp))
-                Text(
-                    "Folder",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = CyanPrimary.copy(alpha = 0.7f)
-                )
+                Text("CONTAINER",
+                    style = MaterialTheme.typography.labelSmall.copy(letterSpacing = 1.5.sp),
+                    color = primary.copy(0.55f))
             }
 
             if (onToggleSelect == null && onMoreActions != null) {
-                IconButton(onClick = onMoreActions) {
-                    Icon(Icons.Outlined.MoreVert, "More actions", tint = CyanPrimary.copy(alpha = 0.6f))
+                IconButton(onClick = onMoreActions, modifier = Modifier.size(36.dp)) {
+                    Icon(Icons.Outlined.MoreVert, "More",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(0.45f),
+                        modifier = Modifier.size(18.dp))
                 }
             }
         }
@@ -401,103 +694,89 @@ fun UploadProgressCard(
     onPause: (() -> Unit)? = null,
     onResume: (() -> Unit)? = null
 ) {
-    Card(
-        shape = RoundedCornerShape(12.dp),
-        colors = CardDefaults.cardColors(containerColor = VaultSurfaceVariant),
-        modifier = modifier.fillMaxWidth().border(1.dp, CyanPrimary.copy(alpha = 0.4f), RoundedCornerShape(12.dp))
+    val primary    = MaterialTheme.colorScheme.primary
+    val surfaceTop = MaterialTheme.colorScheme.surfaceVariant
+    val surfaceBot = MaterialTheme.colorScheme.surface
+
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .shadow(8.dp, RoundedCornerShape(12.dp),
+                    ambientColor = primary.copy(0.2f), spotColor = primary.copy(0.1f))
+            .clip(RoundedCornerShape(12.dp))
+            .background(Brush.verticalGradient(listOf(surfaceTop, surfaceBot)))
+            .drawBehind {
+                drawLine(primary.copy(0.6f),
+                    Offset(0f, size.height - 1f),
+                    Offset(size.width * progress.coerceIn(0f, 1f), size.height - 1f), 2f)
+                drawLine(Color.White.copy(0.06f), Offset(12f, 1f), Offset(size.width - 12f, 1f), 1f)
+            }
+            .border(1.dp, primary.copy(0.35f), RoundedCornerShape(12.dp))
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
-            // Multi-file queue line (Task 5)
             if (totalInBatch > 1 && currentIndex > 0) {
-                Text(
-                    "File $currentIndex of $totalInBatch",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(bottom = 4.dp)
-                )
+                Text("FILE $currentIndex OF $totalInBatch",
+                    style = MaterialTheme.typography.labelSmall.copy(letterSpacing = 1.5.sp),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(0.6f),
+                    modifier = Modifier.padding(bottom = 6.dp))
             }
             Row(verticalAlignment = Alignment.CenterVertically) {
                 if (isPaused) {
-                    Icon(Icons.Outlined.PauseCircleOutline, null, tint = CyanPrimary, modifier = Modifier.size(16.dp))
+                    Icon(Icons.Outlined.PauseCircleOutline, null, tint = primary, modifier = Modifier.size(16.dp))
                 } else {
-                    CircularProgressIndicator(
-                        modifier = Modifier.size(16.dp),
-                        color = CyanPrimary,
-                        strokeWidth = 2.dp,
-                        strokeCap = StrokeCap.Round
-                    )
+                    CircularProgressIndicator(Modifier.size(16.dp), color = primary,
+                        strokeWidth = 2.dp, strokeCap = StrokeCap.Round)
                 }
                 Spacer(Modifier.width(10.dp))
-                Text(
-                    if (isPaused) "Upload paused" else stage,
-                    style = MaterialTheme.typography.labelMedium,
-                    color = CyanPrimary,
-                    modifier = Modifier.weight(1f)
-                )
-                if (total > 0) {
-                    Text(
-                        "${(progress * 100).toInt()}%",
-                        style = MaterialTheme.typography.labelMedium,
-                        color = CyanPrimary
-                    )
-                }
+                Text(if (isPaused) "UPLOAD PAUSED" else stage.uppercase(),
+                    style = MaterialTheme.typography.labelMedium.copy(letterSpacing = 1.sp),
+                    color = primary, modifier = Modifier.weight(1f))
+                if (total > 0) Text("${(progress * 100).toInt()}%",
+                    style = MaterialTheme.typography.labelMedium, color = primary)
             }
             Spacer(Modifier.height(6.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    fileName,
+                Text(fileName,
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f)
-                )
-                if (total > 0) {
-                    Text(
-                        "${formatSize(uploaded)} / ${formatSize(total)}",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(0.7f),
+                    maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                if (total > 0) Text("${formatSize(uploaded)} / ${formatSize(total)}",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(0.5f))
             }
             Spacer(Modifier.height(8.dp))
             if (progress >= 0f) {
                 LinearProgressIndicator(
                     progress = { progress.coerceIn(0f, 1f) },
                     modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(4.dp)),
-                    color = CyanPrimary,
-                    trackColor = VaultOutline
-                )
+                    color = primary, trackColor = MaterialTheme.colorScheme.outline.copy(0.4f))
             } else {
                 LinearProgressIndicator(
                     modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(4.dp)),
-                    color = CyanPrimary,
-                    trackColor = VaultOutline
-                )
+                    color = primary, trackColor = MaterialTheme.colorScheme.outline.copy(0.4f))
             }
-            Spacer(Modifier.height(8.dp))
+            Spacer(Modifier.height(6.dp))
             Row(horizontalArrangement = Arrangement.End, modifier = Modifier.fillMaxWidth()) {
-                // Task 5: Pause / Resume button
                 if (onPause != null && onResume != null) {
                     if (isPaused) {
                         androidx.compose.material3.TextButton(onClick = onResume) {
-                            Text("Resume", color = CyanPrimary, style = MaterialTheme.typography.labelMedium)
+                            Text("RESUME", color = primary, style = MaterialTheme.typography.labelMedium)
                         }
                     } else {
                         androidx.compose.material3.TextButton(onClick = onPause) {
-                            Text("Pause", color = CyanPrimary, style = MaterialTheme.typography.labelMedium)
+                            Text("PAUSE", color = primary, style = MaterialTheme.typography.labelMedium)
                         }
                     }
                 }
                 androidx.compose.material3.TextButton(onClick = onCancel) {
-                    Text("Cancel", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.labelMedium)
+                    Text("CANCEL", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.labelMedium)
                 }
             }
         }
     }
 }
 
-// ── Storage info bar ──────────────────────────────────────────────────────────
+// ── Storage info ───────────────────────────────────────────────────────────────
 
 @Composable
 fun StorageInfoCard(
@@ -506,50 +785,57 @@ fun StorageInfoCard(
     driveLimit: Long,
     modifier: Modifier = Modifier
 ) {
-    Card(
-        shape = RoundedCornerShape(12.dp),
-        colors = CardDefaults.cardColors(containerColor = VaultSurfaceVariant),
-        modifier = modifier.fillMaxWidth().border(1.dp, VaultOutline, RoundedCornerShape(12.dp))
+    val fraction    = if (driveLimit > 0) (driveTotalUsed.toFloat() / driveLimit).coerceIn(0f, 1f) else 0f
+    val statusColor = if (fraction > 0.90f) AlertAmber else SecureGreen
+
+    val breatheAnim = rememberInfiniteTransition(label = "storage_anim")
+    val dotPulse by breatheAnim.animateFloat(
+        initialValue = 0.5f, targetValue = 1.0f,
+        animationSpec = infiniteRepeatable(tween(1800, easing = FastOutSlowInEasing), RepeatMode.Reverse),
+        label = "status_dot"
+    )
+
+    val primary    = MaterialTheme.colorScheme.primary
+    val surfaceTop = MaterialTheme.colorScheme.surfaceVariant
+    val surfaceBot = MaterialTheme.colorScheme.surface
+
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .shadow(4.dp, RoundedCornerShape(12.dp))
+            .clip(RoundedCornerShape(12.dp))
+            .background(Brush.verticalGradient(listOf(surfaceTop, surfaceBot)))
+            .drawBehind {
+                drawLine(Color.White.copy(0.05f), Offset(12f, 1f), Offset(size.width - 12f, 1f), 1f)
+            }
+            .border(1.dp, MaterialTheme.colorScheme.outline.copy(0.5f), RoundedCornerShape(12.dp))
     ) {
         Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                Text(
-                    "Vault: ${formatSize(usedByVault)}",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = CyanPrimary
-                )
+            Row(Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically) {
+                Row(verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Canvas(Modifier.size(5.dp)) { drawCircle(statusColor.copy(dotPulse)) }
+                    Text("VAULT",
+                        style = MaterialTheme.typography.labelSmall.copy(letterSpacing = 1.5.sp),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(0.55f))
+                    Text(formatSize(usedByVault),
+                        style = MaterialTheme.typography.labelSmall, color = primary)
+                }
                 if (driveLimit > 0) {
-                    val free = driveLimit - driveTotalUsed
-                    Text(
-                        "Drive free: ${formatSize(free)}",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+                    Text("${(fraction * 100).toInt()}%  FREE ${formatSize(driveLimit - driveTotalUsed)}",
+                        style = MaterialTheme.typography.labelSmall.copy(letterSpacing = 0.8.sp),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(0.45f))
                 }
             }
             if (driveLimit > 0) {
-                Spacer(Modifier.height(6.dp))
-                val fraction = (driveTotalUsed.toFloat() / driveLimit).coerceIn(0f, 1f)
-                Text(
-                    "${(fraction * 100).toInt()}%",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
-                    modifier = Modifier.fillMaxWidth(),
-                    textAlign = androidx.compose.ui.text.style.TextAlign.Center
-                )
-                Spacer(Modifier.height(2.dp))
+                Spacer(Modifier.height(8.dp))
                 LinearProgressIndicator(
                     progress = { fraction },
-                    modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(4.dp)),
-                    color = if (fraction > 0.9f) MaterialTheme.colorScheme.error else CyanPrimary.copy(alpha = 0.6f),
-                    trackColor = VaultOutline
-                )
-                Spacer(Modifier.height(4.dp))
-                Text(
-                    "${formatSize(driveTotalUsed)} of ${formatSize(driveLimit)} used",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+                    modifier = Modifier.fillMaxWidth().height(2.dp).clip(RoundedCornerShape(4.dp)),
+                    color = if (fraction > 0.90f) AlertAmber else primary.copy(0.7f),
+                    trackColor = MaterialTheme.colorScheme.outline.copy(0.3f))
             }
         }
     }
@@ -563,53 +849,69 @@ fun FilterChipRow(
     onSelect: (FilterType) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    androidx.compose.foundation.lazy.LazyRow(
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        modifier = modifier
-    ) {
+    val primary = MaterialTheme.colorScheme.primary
+    LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = modifier) {
         items(FilterType.entries.size) { i ->
-            val type = FilterType.entries[i]
+            val type       = FilterType.entries[i]
+            val isSelected = selected == type
             FilterChip(
-                selected = selected == type,
-                onClick = { onSelect(type) },
-                label = { Text(type.label, style = MaterialTheme.typography.labelMedium) },
+                selected = isSelected,
+                onClick  = { onSelect(type) },
+                label = {
+                    Text(type.label,
+                        style = MaterialTheme.typography.labelMedium.copy(
+                            letterSpacing = if (isSelected) 0.8.sp else 0.sp))
+                },
                 colors = FilterChipDefaults.filterChipColors(
-                    selectedContainerColor = CyanPrimary.copy(alpha = 0.15f),
-                    selectedLabelColor = CyanPrimary,
-                    containerColor = VaultSurfaceVariant,
-                    labelColor = MaterialTheme.colorScheme.onSurfaceVariant
+                    selectedContainerColor = primary.copy(0.12f),
+                    selectedLabelColor     = primary,
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                    labelColor     = MaterialTheme.colorScheme.onSurfaceVariant.copy(0.6f)
                 ),
                 border = FilterChipDefaults.filterChipBorder(
-                    enabled = true,
-                    selected = selected == type,
-                    selectedBorderColor = CyanPrimary,
-                    borderColor = VaultOutline,
-                    selectedBorderWidth = 1.dp,
-                    borderWidth = 1.dp
+                    enabled = true, selected = isSelected,
+                    selectedBorderColor = primary,
+                    borderColor         = MaterialTheme.colorScheme.outline.copy(0.5f),
+                    selectedBorderWidth = 1.dp, borderWidth = 1.dp
                 )
             )
         }
     }
 }
 
-// ── Empty state ────────────────────────────────────────────────────────────────
+// ── Empty states ───────────────────────────────────────────────────────────────
 
 @Composable
 fun EmptyVaultState(modifier: Modifier = Modifier) {
+    val anim = rememberInfiniteTransition(label = "empty_anim")
+    val ringAlpha by anim.animateFloat(
+        initialValue = 0.08f, targetValue = 0.20f,
+        animationSpec = infiniteRepeatable(tween(2800, easing = LinearEasing), RepeatMode.Reverse),
+        label = "empty_ring"
+    )
+    val primary = MaterialTheme.colorScheme.primary
+
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
         modifier = modifier.padding(32.dp)
     ) {
-        Icon(Icons.Outlined.FolderOpen, null, tint = VaultOutline, modifier = Modifier.size(64.dp))
-        Spacer(Modifier.height(16.dp))
-        Text("Vault is empty", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        Spacer(Modifier.height(8.dp))
-        Text(
-            "Tap + to upload and encrypt a file",
+        Box(contentAlignment = Alignment.Center, modifier = Modifier.size(72.dp)) {
+            Canvas(Modifier.fillMaxSize()) {
+                drawCircle(primary.copy(ringAlpha), radius = size.minDimension / 2f, style = Stroke(1.dp.toPx()))
+                drawCircle(primary.copy(ringAlpha * 0.5f), radius = size.minDimension / 2f * 0.7f, style = Stroke(1.dp.toPx()))
+            }
+            Icon(Icons.Outlined.FolderOpen, null,
+                tint = MaterialTheme.colorScheme.outline.copy(0.5f), modifier = Modifier.size(32.dp))
+        }
+        Spacer(Modifier.height(18.dp))
+        Text("VAULT EMPTY",
+            style = MaterialTheme.typography.labelLarge.copy(letterSpacing = 2.sp),
+            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(0.5f))
+        Spacer(Modifier.height(6.dp))
+        Text("Tap + to encrypt and upload a file",
             style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
-        )
+            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(0.35f))
     }
 }
 
@@ -620,26 +922,21 @@ fun EmptySearchState(modifier: Modifier = Modifier) {
         verticalArrangement = Arrangement.Center,
         modifier = modifier.padding(32.dp)
     ) {
-        Icon(Icons.Outlined.Search, null, tint = VaultOutline, modifier = Modifier.size(64.dp))
+        Icon(Icons.Outlined.Search, null,
+            tint = MaterialTheme.colorScheme.outline.copy(0.4f), modifier = Modifier.size(40.dp))
         Spacer(Modifier.height(16.dp))
-        Text("No files match your search", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        Spacer(Modifier.height(8.dp))
-        Text(
-            "Try different keywords or clear the filter",
+        Text("NO RESULTS",
+            style = MaterialTheme.typography.labelLarge.copy(letterSpacing = 2.sp),
+            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(0.45f))
+        Spacer(Modifier.height(6.dp))
+        Text("Try different keywords or clear the filter",
             style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
-        )
+            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(0.3f))
     }
 }
 
-// ── Vault thumbnail image (Task 4) ────────────────────────────────────────────
+// ── Vault thumbnail image ──────────────────────────────────────────────────────
 
-/**
- * Displays a thumbnail for an encrypted vault file.
- * Decrypts in memory via Coil + [VaultThumbnailFetcher]; never writes plaintext to disk.
- * Shows a shimmer placeholder while loading.
- * Gated by [showThumbnails]; falls back to icon when false or on error.
- */
 @Composable
 fun VaultThumbnailImage(
     file: com.darkvault.app.model.VaultFile,
@@ -655,66 +952,45 @@ fun VaultThumbnailImage(
             com.darkvault.app.VaultSession.dek != null &&
             (HomeViewModel.isImageMime(mime) || HomeViewModel.isVideoMime(mime) || mime == "application/pdf")
 
-    if (canShowThumb) {
-        val context = androidx.compose.ui.platform.LocalContext.current
-        val imageLoader = androidx.compose.runtime.remember(context) { buildVaultImageLoader(context) }
-        val request = VaultThumbnailRequest(
-            file = file,
-            password = password!!,
-            account = account!!
-        )
+    val primary = MaterialTheme.colorScheme.primary
+    val bgColor = MaterialTheme.colorScheme.background
 
-        val infiniteTransition = rememberInfiniteTransition(label = "shimmer")
-        val shimmerAlpha by infiniteTransition.animateFloat(
-            initialValue = 0.2f,
-            targetValue = 0.5f,
+    if (canShowThumb) {
+        val context     = androidx.compose.ui.platform.LocalContext.current
+        val imageLoader = remember(context) { buildVaultImageLoader(context) }
+        val request     = VaultThumbnailRequest(file = file, password = password!!, account = account!!)
+
+        val shimmerAnim = rememberInfiniteTransition(label = "shimmer")
+        val shimmerAlpha by shimmerAnim.animateFloat(
+            initialValue = 0.15f, targetValue = 0.40f,
             animationSpec = infiniteRepeatable(tween(900), RepeatMode.Reverse),
             label = "shimmerAlpha"
         )
 
         coil.compose.SubcomposeAsyncImage(
             model = coil.request.ImageRequest.Builder(context)
-                .data(request)
-                .diskCachePolicy(coil.request.CachePolicy.DISABLED)
-                .crossfade(true)
-                .build(),
+                .data(request).diskCachePolicy(coil.request.CachePolicy.DISABLED).crossfade(true).build(),
             imageLoader = imageLoader,
             contentDescription = null,
-            contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+            contentScale = ContentScale.Crop,
             loading = {
-                // Shimmer placeholder while loading
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .background(VaultBackground)
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .background(CyanPrimary.copy(alpha = shimmerAlpha))
-                    )
+                Box(Modifier.fillMaxSize().background(bgColor)) {
+                    Box(Modifier.fillMaxSize().background(primary.copy(shimmerAlpha)))
                 }
             },
             error = {
-                // Fallback to file type icon on error
                 Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
-                    Icon(
-                        fileTypeIcon(file.originalName, file.originalMimeType),
-                        null,
-                        tint = CyanPrimary.copy(alpha = 0.7f),
-                        modifier = Modifier.size(iconSize)
-                    )
+                    Icon(fileTypeIcon(file.originalName, file.originalMimeType), null,
+                        tint = primary.copy(0.6f), modifier = Modifier.size(iconSize))
                 }
             },
             modifier = modifier
         )
     } else {
-        // Fallback: plain icon when thumbnails disabled, file is a video, or DEK is null
         Icon(
-            if (file.isFolder) Icons.Outlined.Folder
-            else fileTypeIcon(file.originalName, file.originalMimeType),
+            if (file.isFolder) Icons.Outlined.Folder else fileTypeIcon(file.originalName, file.originalMimeType),
             null,
-            tint = if (file.isFolder) CyanPrimary else CyanPrimary.copy(alpha = 0.7f),
+            tint = if (file.isFolder) primary else primary.copy(0.65f),
             modifier = Modifier.size(iconSize)
         )
     }
@@ -727,36 +1003,33 @@ fun fileTypeIcon(name: String, mime: String = ""): ImageVector {
     if (HomeViewModel.isVideoMime(mime)) return Icons.Outlined.VideoFile
     if (HomeViewModel.isAudioMime(mime)) return Icons.Outlined.MusicNote
     if (mime == "application/pdf") return Icons.Outlined.PictureAsPdf
-    val ext = name.substringAfterLast('.', "").lowercase()
-    return when (ext) {
+    return when (name.substringAfterLast('.', "").lowercase()) {
         "jpg", "jpeg", "png", "gif", "webp", "bmp", "heic" -> Icons.Outlined.Image
-        "mp4", "mkv", "avi", "mov", "webm" -> Icons.Outlined.VideoFile
-        "mp3", "aac", "flac", "wav", "ogg", "m4a" -> Icons.Outlined.MusicNote
-        "pdf" -> Icons.Outlined.PictureAsPdf
+        "mp4", "mkv", "avi", "mov", "webm"                 -> Icons.Outlined.VideoFile
+        "mp3", "aac", "flac", "wav", "ogg", "m4a"         -> Icons.Outlined.MusicNote
+        "pdf"                                               -> Icons.Outlined.PictureAsPdf
         else -> Icons.AutoMirrored.Outlined.InsertDriveFile
     }
 }
 
 fun formatSize(bytes: Long): String = when {
-    bytes <= 0L -> "—"
-    bytes < 1024L -> "$bytes B"
-    bytes < 1024L * 1024L -> "${"%.1f".format(bytes / 1024.0)} KB"
+    bytes <= 0L                    -> "—"
+    bytes < 1024L                  -> "$bytes B"
+    bytes < 1024L * 1024L         -> "${"%.1f".format(bytes / 1024.0)} KB"
     bytes < 1024L * 1024L * 1024L -> "${"%.1f".format(bytes / (1024.0 * 1024.0))} MB"
-    else -> "${"%.2f".format(bytes / (1024.0 * 1024.0 * 1024.0))} GB"
+    else                           -> "${"%.2f".format(bytes / (1024.0 * 1024.0 * 1024.0))} GB"
 }
 
 private fun formatDate(iso: String): String {
     return try {
         val inst = java.time.Instant.parse(iso)
-        val ldt = java.time.LocalDateTime.ofInstant(inst, java.time.ZoneId.systemDefault())
-        val now = java.time.LocalDate.now()
+        val ldt  = java.time.LocalDateTime.ofInstant(inst, java.time.ZoneId.systemDefault())
+        val now  = java.time.LocalDate.now()
         val date = ldt.toLocalDate()
         when {
-            date == now -> "Today ${"%02d:%02d".format(ldt.hour, ldt.minute)}"
+            date == now              -> "Today ${"%02d:%02d".format(ldt.hour, ldt.minute)}"
             date == now.minusDays(1) -> "Yesterday"
             else -> "${date.dayOfMonth} ${date.month.name.take(3).lowercase().replaceFirstChar { it.uppercase() }} ${date.year}"
         }
-    } catch (_: Exception) {
-        iso.take(10)
-    }
+    } catch (_: Exception) { iso.take(10) }
 }
