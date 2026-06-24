@@ -1,0 +1,132 @@
+name: "🐛 Bug Report"
+description: "Something is broken or behaving unexpectedly."
+title: "[Bug] "
+labels: ["bug", "needs-triage"]
+assignees: ["parthivkumarnikku"]
+
+body:
+  - type: markdown
+    attributes:
+      value: |
+        **Before submitting:** Search existing issues to avoid duplicates.
+        **Security vulnerability?** Do NOT use this form. See [SECURITY.md](../SECURITY.md).
+
+  - type: dropdown
+    id: component
+    attributes:
+      label: "Affected Component"
+      description: "Which part of darkVault is broken?"
+      options:
+        - "Unlock / Authentication"
+        - "Password Change"
+        - "Biometric"
+        - "File Upload"
+        - "File Download"
+        - "File Preview (image/video/audio/PDF/text)"
+        - "Thumbnails"
+        - "Folder Navigation"
+        - "Trash / Restore"
+        - "Export / Local Backup"
+        - "Settings"
+        - "Google Drive Sync"
+        - "Notifications"
+        - "Recovery Key"
+        - "Developer Options"
+        - "UI / Theme / Appearance"
+        - "Performance / Speed"
+        - "Other"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: severity
+    attributes:
+      label: "Severity"
+      options:
+        - "Critical — data loss, vault inaccessible, or encryption broken"
+        - "High — core feature completely broken"
+        - "Medium — feature broken but workaround exists"
+        - "Low — minor visual or non-critical issue"
+    validations:
+      required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: "What happened?"
+      description: "Clear description of the bug. What did you expect vs what actually happened?"
+      placeholder: |
+        Expected: ...
+        Actual: ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: "Steps to Reproduce"
+      description: "Exact steps to trigger the bug. Be specific."
+      placeholder: |
+        1. Open app
+        2. Go to ...
+        3. Tap ...
+        4. Bug occurs
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: "Logs (if available)"
+      description: |
+        Paste logcat output here. In darkVault: Developer Options → Log Viewer → Copy All Logs.
+        Filter tag: `darkVault`
+      render: "text"
+      placeholder: "Paste logs here..."
+
+  - type: input
+    id: app_version
+    attributes:
+      label: "darkVault Version / Commit"
+      placeholder: "e.g. v1.0.0 or commit abc1234"
+    validations:
+      required: true
+
+  - type: input
+    id: android_version
+    attributes:
+      label: "Android Version"
+      placeholder: "e.g. Android 14 (API 34)"
+    validations:
+      required: true
+
+  - type: input
+    id: device
+    attributes:
+      label: "Device"
+      placeholder: "e.g. Pixel 8 Pro, Samsung Galaxy S24"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: reproducible
+    attributes:
+      label: "Is this reproducible?"
+      options:
+        - "Always"
+        - "Sometimes"
+        - "Only happened once"
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: "Checklist"
+      options:
+        - label: "I searched existing issues and this is not a duplicate."
+          required: true
+        - label: "This is NOT a security vulnerability (those go to SECURITY.md)."
+          required: true
+        - label: "I am on the latest version of darkVault."
+          required: true

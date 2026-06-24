@@ -1,0 +1,85 @@
+name: "✨ Feature Request"
+description: "Suggest a new feature or enhancement for darkVault."
+title: "[Feature] "
+labels: ["enhancement", "needs-triage"]
+assignees: ["parthivkumarnikku"]
+
+body:
+  - type: markdown
+    attributes:
+      value: |
+        **Before submitting:** Check if this feature is already in the roadmap or an existing issue.
+        Feature requests that weaken security, require external servers, or violate the zero-knowledge model will be declined by design.
+
+  - type: dropdown
+    id: category
+    attributes:
+      label: "Feature Category"
+      options:
+        - "Security / Encryption"
+        - "File Management"
+        - "UI / UX"
+        - "Performance"
+        - "Accessibility"
+        - "Google Drive Integration"
+        - "Preview / Thumbnails"
+        - "Settings"
+        - "Notifications"
+        - "Platform / Adaptive Layout"
+        - "Developer / Debug Tools"
+        - "Other"
+    validations:
+      required: true
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: "What problem does this solve?"
+      description: "Describe the pain point. What can't you do today?"
+      placeholder: "Currently I can't..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: solution
+    attributes:
+      label: "Proposed Solution"
+      description: "What would you like to see? How should it work?"
+      placeholder: "I would like..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: "Alternatives Considered"
+      description: "Any workarounds you've tried, or other approaches you considered."
+
+  - type: dropdown
+    id: security_impact
+    attributes:
+      label: "Does this feature touch encryption, authentication, or key management?"
+      options:
+        - "No — purely UI/UX or convenience"
+        - "Yes — affects security model (describe carefully below)"
+        - "Unsure"
+    validations:
+      required: true
+
+  - type: textarea
+    id: security_notes
+    attributes:
+      label: "Security Considerations (if applicable)"
+      description: "If this touches auth, crypto, or Drive access — explain how you'd keep the zero-knowledge model intact."
+
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: "Checklist"
+      options:
+        - label: "I searched existing issues and this is not a duplicate."
+          required: true
+        - label: "This feature does not require external servers beyond Google Drive."
+          required: true
+        - label: "This feature does not require storing the master password anywhere."
+          required: true

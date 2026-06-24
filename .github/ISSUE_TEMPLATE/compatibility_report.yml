@@ -1,0 +1,72 @@
+name: "📱 Compatibility Report"
+description: "darkVault doesn't work correctly on your device, Android version, or form factor."
+title: "[Compat] "
+labels: ["compatibility", "needs-triage"]
+assignees: ["parthivkumarnikku"]
+
+body:
+  - type: markdown
+    attributes:
+      value: |
+        darkVault supports Android 8.0+ (API 26+). If you're on an older version, it's not officially supported.
+        Tablet, foldable, and large-screen issues are especially valuable — please report them.
+
+  - type: dropdown
+    id: form_factor
+    attributes:
+      label: "Form Factor"
+      options:
+        - "Phone (standard)"
+        - "Tablet"
+        - "Foldable (folded)"
+        - "Foldable (unfolded)"
+        - "Large screen / desktop mode"
+        - "Wear OS (not officially supported)"
+    validations:
+      required: true
+
+  - type: input
+    id: device
+    attributes:
+      label: "Device model"
+      placeholder: "e.g. Samsung Galaxy Z Fold 5"
+    validations:
+      required: true
+
+  - type: input
+    id: android
+    attributes:
+      label: "Android version (API level)"
+      placeholder: "e.g. Android 14 (API 34) — One UI 6.1"
+    validations:
+      required: true
+
+  - type: textarea
+    id: issue
+    attributes:
+      label: "What doesn't work?"
+      description: "Describe the UI/UX or functional problem on your specific device."
+    validations:
+      required: true
+
+  - type: textarea
+    id: screenshots
+    attributes:
+      label: "Screenshots or screen recording"
+      description: "Drag and drop images here. Especially useful for layout issues."
+
+  - type: input
+    id: app_version
+    attributes:
+      label: "darkVault Version / Commit"
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: checklist
+    attributes:
+      options:
+        - label: "I searched existing issues and this is not a duplicate."
+          required: true
+        - label: "My Android version is 8.0 (API 26) or higher."
+          required: true

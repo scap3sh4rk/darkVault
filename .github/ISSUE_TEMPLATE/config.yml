@@ -1,0 +1,14 @@
+blank_issues_enabled: false
+
+contact_links:
+  - name: "🔐 Security Vulnerability (Private)"
+    url: https://github.com/parthivkumarnikku/darkVault/security/advisories/new
+    about: "Report exploitable vulnerabilities here — private, not public."
+
+  - name: "📧 Email (Security / Private)"
+    url: mailto:develop@parthiv.sec
+    about: "Security issues that need direct contact."
+
+  - name: "💬 General Discussion"
+    url: https://github.com/parthivkumarnikku/darkVault/discussions
+    about: "Questions, ideas, and general conversation — not bug reports."

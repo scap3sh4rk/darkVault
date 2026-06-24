@@ -1,0 +1,72 @@
+name: "🔒 Security Issue (Non-Critical)"
+description: "Report a low-severity security concern that is NOT an exploitable vulnerability."
+title: "[Security] "
+labels: ["security", "needs-triage"]
+assignees: ["parthivkumarnikku"]
+
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ## ⚠️ Read before continuing
+
+        **Exploitable vulnerabilities** (authentication bypass, encryption flaws, data exposure, key leakage) must be reported privately:
+        - GitHub Advisory: https://github.com/parthivkumarnikku/darkVault/security/advisories
+        - Email: develop@parthiv.sec
+
+        **This form is only for low-risk security observations** — hardening suggestions, security UX issues, or theoretical concerns with no direct exploit path.
+
+        Using this public form for exploitable vulnerabilities puts users at risk. Don't do it.
+
+  - type: dropdown
+    id: type
+    attributes:
+      label: "Type of Security Concern"
+      options:
+        - "Security UX issue (confusing flow that could mislead users)"
+        - "Hardening suggestion (not currently broken, but could be stronger)"
+        - "Dependency with known CVE (low severity, no direct impact)"
+        - "Theoretical / academic concern (no practical exploit)"
+        - "Documentation gap (security model not clearly communicated)"
+    validations:
+      required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: "Description"
+      description: "Describe the concern. What's the theoretical risk?"
+    validations:
+      required: true
+
+  - type: textarea
+    id: suggestion
+    attributes:
+      label: "Suggested Hardening"
+      description: "How would you address this?"
+
+  - type: dropdown
+    id: confirm_low_severity
+    attributes:
+      label: "Confirm this is low severity"
+      options:
+        - "Yes — no direct exploit path, no user data at risk"
+        - "I'm unsure — might be higher severity"
+    validations:
+      required: true
+
+  - type: markdown
+    attributes:
+      value: |
+        If you selected "I'm unsure" above — please close this and use the private advisory channel instead.
+
+  - type: checkboxes
+    id: checklist
+    attributes:
+      options:
+        - label: "This concern cannot be used to access vault contents without the master password."
+          required: true
+        - label: "This concern cannot bypass authentication."
+          required: true
+        - label: "I understand that exploitable vulnerabilities must go through the private channel."
+          required: true

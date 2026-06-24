@@ -1,0 +1,87 @@
+name: "⚡ Performance Report"
+description: "App feels slow, laggy, or uses too much battery/memory."
+title: "[Perf] "
+labels: ["performance", "needs-triage"]
+assignees: ["parthivkumarnikku"]
+
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Performance issues in darkVault can have a different root cause than typical apps — large file encryption is CPU-intensive by design. Please provide as much detail as possible so we can distinguish between expected behavior and actual regressions.
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: "Where is it slow?"
+      options:
+        - "App startup / cold start"
+        - "Vault unlock"
+        - "File list loading"
+        - "Thumbnail loading"
+        - "File upload"
+        - "File download"
+        - "File preview (image/video/audio/PDF)"
+        - "Folder navigation"
+        - "Search / filter"
+        - "Settings screen"
+        - "UI animations / transitions"
+        - "Battery drain"
+        - "Memory usage / OOM crash"
+        - "Other"
+    validations:
+      required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: "Describe the performance issue"
+      description: "What exactly feels slow? Does it happen always or only with large files/many files?"
+    validations:
+      required: true
+
+  - type: input
+    id: file_count
+    attributes:
+      label: "Approximate file count in your vault"
+      placeholder: "e.g. ~50 files, ~500 files"
+
+  - type: input
+    id: file_size
+    attributes:
+      label: "File sizes involved (if relevant)"
+      placeholder: "e.g. mostly <1MB photos, or 500MB video files"
+
+  - type: textarea
+    id: metrics
+    attributes:
+      label: "Any metrics you captured"
+      description: "Approximate wait times, CPU/memory from Android Studio profiler, battery stats, etc."
+      placeholder: |
+        - Unlock takes ~8 seconds
+        - Thumbnails take 3-4s each to appear
+        - Memory usage spikes to 800MB on large video preview
+
+  - type: input
+    id: app_version
+    attributes:
+      label: "darkVault Version / Commit"
+    validations:
+      required: true
+
+  - type: input
+    id: device
+    attributes:
+      label: "Device + Android Version"
+      placeholder: "e.g. Pixel 6, Android 13"
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: checklist
+    attributes:
+      options:
+        - label: "I searched existing issues and this is not a duplicate."
+          required: true
+        - label: "I am on the latest version of darkVault."
+          required: true
