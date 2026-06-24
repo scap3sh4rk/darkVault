@@ -188,6 +188,24 @@ body {
   color: #03f0fc !important;
 }
 
+/* Download button — last tab styled as a pill */
+.md-tabs__item:last-child .md-tabs__link {
+  color: #03f0fc !important;
+  border: 1.5px solid rgba(3, 240, 252, 0.55);
+  border-radius: 20px;
+  padding: 0.25rem 1rem !important;
+  margin-left: 0.5rem;
+  margin-top: 0.35rem;
+  line-height: 1.6;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+
+.md-tabs__item:last-child .md-tabs__link:hover {
+  background: rgba(3, 240, 252, 0.12) !important;
+  border-color: #03f0fc;
+  color: #03f0fc !important;
+}
+
 /* ── Sidebar nav ───────────────────────────────────────────── */
 .md-sidebar {
   background: #090e0f;
