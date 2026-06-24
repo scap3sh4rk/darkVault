@@ -1,0 +1,61 @@
+name: Update APK download link
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: write
+
+jobs:
+  update-link:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - name: Get APK download URL from release
+        id: apk
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          URL=$(gh release view "${{ github.event.release.tag_name }}" \
+            --json assets \
+            --jq '.assets[] | select(.name | endswith(".apk")) | .browserDownloadUrl' \
+            | head -1)
+          echo "url=$URL" >> $GITHUB_OUTPUT
+
+      - name: Update download link in mkdocs.yml
+        run: |
+          python3 - <<'EOF'
+          import re
+
+          url = "${{ steps.apk.outputs.url }}"
+          if not url:
+              print("No APK asset found in release — skipping update")
+              exit(0)
+
+          with open("mkdocs.yml") as f:
+              content = f.read()
+
+          updated = re.sub(
+              r'- "Download.*?":.*',
+              f'- "Download ↓": {url}',
+              content
+          )
+
+          with open("mkdocs.yml", "w") as f:
+              f.write(updated)
+
+          print(f"Updated APK link to: {url}")
+          EOF
+
+      - name: Commit and push updated link
+        run: |
+          git config user.name  "Parthiv Kumar Nikku"
+          git config user.email "develop@parthiv.sec"
+          git add mkdocs.yml
+          git diff --cached --quiet && echo "No changes" && exit 0
+          git commit -m "update APK download link for ${{ github.event.release.tag_name }}"
+          git push origin main
