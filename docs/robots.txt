@@ -1,0 +1,12 @@
+# robots.txt for darkVault Documentation
+# https://scap3sh4rk.github.io/darkVault/
+
+User-agent: *
+Allow: /
+
+# Prevent indexing of Git metadata if exposed
+Disallow: /.git/
+Disallow: /.github/
+
+# Sitemap location
+Sitemap: https://scap3sh4rk.github.io/darkVault/sitemap.xml
