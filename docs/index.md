@@ -85,6 +85,10 @@ The DEK is the actual key that encrypts your files. It is itself encrypted (wrap
 
 ---
 
+## Privacy Policy
+
+📄 [Download the Privacy Policy (DOCX)](./privacy/darkVault_Privacy_Policy.docx)
+
 ## Source
 
 [github.com/scap3sh4rk/darkVault](https://github.com/scap3sh4rk/darkVault)
