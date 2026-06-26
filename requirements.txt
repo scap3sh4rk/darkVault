@@ -1,3 +1,4 @@
 mkdocs-material>=9.5
+mkdocs-sitemap
 pillow>=10.0
 cairosvg>=2.7

@@ -48,6 +48,7 @@ plugins:
         background_color: "#0A0A0A"
         color: "#00D4FF"
         font_family: Inter
+  - sitemap
 
 extra_css:
   - stylesheets/extra.css
