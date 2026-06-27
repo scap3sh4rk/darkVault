@@ -6,8 +6,12 @@
    See https://developer.android.com/about/versions/12/backup-restore
 -->
 <full-backup-content>
-    <!--
-   <include domain="sharedpref" path="."/>
-   <exclude domain="sharedpref" path="device.xml"/>
--->
+    <!-- Exclude local encrypted cache directories and upload staging.
+         vault_cache/ and folder_meta/ contain encrypted ciphertext and metadata;
+         encrypt_staging/ contains in-progress encrypted uploads.
+         None of these should roam to other devices — the encryption keys do not
+         follow the device, so the backed-up ciphertext would be unreadable anyway. -->
+    <exclude domain="file" path="vault_cache/"/>
+    <exclude domain="file" path="folder_meta/"/>
+    <exclude domain="cache" path="encrypt_staging/"/>
 </full-backup-content>

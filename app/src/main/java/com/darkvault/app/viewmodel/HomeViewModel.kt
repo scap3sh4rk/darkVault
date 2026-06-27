@@ -12,6 +12,9 @@ import androidx.documentfile.provider.DocumentFile
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.darkvault.app.VaultSession
+import com.darkvault.app.cache.EncryptedFileCache
+import com.darkvault.app.cache.FolderMetadataStore
+import com.darkvault.app.cache.LocalVaultCache
 import com.darkvault.app.crypto.CryptoManager
 import com.darkvault.app.data.PreferencesManager
 import com.darkvault.app.drive.DriveApiClient
@@ -236,11 +239,23 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         VaultSession.signedInAccount = account
         viewModelScope.launch {
             _uiState.value = HomeUiState.Loading
+
+            // Stale-while-revalidate: serve last-known listing from FolderMetadataStore instantly
+            val dek = VaultSession.dek
+            if (dek != null && _folderStack.value.isNotEmpty()) {
+                val cachedItems = FolderMetadataStore.get(
+                    getApplication(), _folderStack.value.last().id, dek
+                )
+                if (cachedItems != null) {
+                    _rawItems.value = cachedItems
+                    _uiState.value = HomeUiState.Success(cachedItems)
+                }
+            }
+
             runCatching {
                 val client = DriveApiClient(getApplication(), account)
                 val folderId = ensureFolder(client)
 
-                // Navigate to root on first load
                 if (_folderStack.value.isEmpty()) {
                     _folderStack.value = listOf(FolderEntry(folderId, "darkVault"))
                 }
@@ -250,9 +265,14 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             }.onSuccess { items ->
                 _rawItems.value = items
                 _uiState.value = HomeUiState.Success(items)
-                _lastSyncedMs.value = System.currentTimeMillis() // Task 7
+                _lastSyncedMs.value = System.currentTimeMillis()
+                // Persist updated listing for next cold-start
+                dek?.let { FolderMetadataStore.put(getApplication(), _folderStack.value.last().id, items, it) }
             }.onFailure { e ->
-                _uiState.value = HomeUiState.Error(e.message ?: "Failed to load files")
+                if (_uiState.value is HomeUiState.Loading) {
+                    _uiState.value = HomeUiState.Error(e.message ?: "Failed to load files")
+                }
+                // If we already served stale data, keep showing it rather than replacing with error
             }
 
             if (refreshStorage) loadStorageInfo(account)
@@ -263,8 +283,9 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             runCatching {
                 val client = DriveApiClient(getApplication(), account)
-                val rootFolderId = _folderStack.value.firstOrNull()?.id ?: return@runCatching null
-                client.getStorageInfo(rootFolderId)
+                // Use the already-loaded listing to compute vault bytes — avoids a second listItems call
+                val vaultUsedBytes = _rawItems.value.filter { !it.isFolder }.sumOf { it.size }
+                client.getStorageQuotaOnly(vaultUsedBytes)
             }.onSuccess { info ->
                 _storageInfo.value = info
             }
@@ -296,24 +317,39 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     private fun loadItemsForCurrentFolder(account: GoogleSignInAccount) {
         viewModelScope.launch {
             val currentId = _folderStack.value.last().id
-            // Stale-while-revalidate: emit cached data immediately so the user sees something
-            val cached = folderCache[currentId]
-            if (cached != null) {
-                _rawItems.value = cached
-                _uiState.value = HomeUiState.Success(cached)
+            val dek       = VaultSession.dek
+
+            // 1. In-memory cache (fastest, always try first)
+            val memCached = folderCache[currentId]
+            if (memCached != null) {
+                _rawItems.value = memCached
+                _uiState.value  = HomeUiState.Success(memCached)
             } else {
-                _uiState.value = HomeUiState.Loading
+                // 2. Disk metadata store (encrypted, survives process death)
+                val diskCached = if (dek != null) FolderMetadataStore.get(getApplication(), currentId, dek) else null
+                if (diskCached != null) {
+                    folderCache[currentId] = diskCached
+                    _rawItems.value = diskCached
+                    _uiState.value  = HomeUiState.Success(diskCached)
+                } else {
+                    _uiState.value = HomeUiState.Loading
+                }
             }
+
+            // 3. Always revalidate from Drive in the background
             runCatching {
                 DriveApiClient(getApplication(), account).listItems(currentId)
             }.onSuccess { items ->
                 folderCache[currentId] = items
                 _rawItems.value = items
-                _uiState.value = HomeUiState.Success(items)
+                _uiState.value  = HomeUiState.Success(items)
                 _lastSyncedMs.value = System.currentTimeMillis()
+                dek?.let { FolderMetadataStore.put(getApplication(), currentId, items, it) }
             }.onFailure { e ->
-                if (cached == null) _uiState.value = HomeUiState.Error(e.message ?: "Failed to load folder")
-                // If we had cached data, keep showing it (don't replace with error)
+                // Keep showing stale data if we have it; only surface error on a true miss
+                if (folderCache[currentId] == null) {
+                    _uiState.value = HomeUiState.Error(e.message ?: "Failed to load folder")
+                }
             }
         }
     }
@@ -468,15 +504,23 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             _operationState.value = OperationState.InProgress(file.originalName, "Downloading…")
             runCatching {
-                val client = DriveApiClient(getApplication(), account)
-
-                val encBytes = client.downloadFileWithProgress(file.id) { dl, total ->
-                    val pct = if (total > 0) dl.toFloat() / total else 0f
-                    _operationState.value = OperationState.InProgress(
-                        file.originalName,
-                        "Downloading… ${(pct * 100).toInt()}%",
-                        pct
-                    )
+                // Check memory/disk cache; only show download progress on a true miss
+                val memHit  = EncryptedFileCache.get(file.id, file.modifiedTime)
+                val diskHit = if (memHit == null) LocalVaultCache.getEncryptedBytes(getApplication(), file.id, file.modifiedTime) else null
+                val encBytes = when {
+                    memHit  != null -> memHit
+                    diskHit != null -> { EncryptedFileCache.put(file.id, file.modifiedTime, diskHit); diskHit }
+                    else -> {
+                        val bytes = DriveApiClient(getApplication(), account)
+                            .downloadFileWithProgress(file.id) { dl, total ->
+                                val pct = if (total > 0) dl.toFloat() / total else 0f
+                                _operationState.value = OperationState.InProgress(
+                                    file.originalName, "Downloading… ${(pct * 100).toInt()}%", pct
+                                )
+                            }
+                        EncryptedFileCache.put(file.id, file.modifiedTime, bytes)
+                        bytes
+                    }
                 }
 
                 _operationState.value = OperationState.InProgress(file.originalName, "Decrypting…")
@@ -485,7 +529,6 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                     CryptoManager.decrypt(java.io.ByteArrayInputStream(encBytes), out, password, VaultSession.dek)
                     out.toByteArray()
                 }
-
                 saveToDownloads(file.originalName, decrypted, file.originalMimeType)
             }.onSuccess { path ->
                 _operationState.value = OperationState.Done("Saved to $path")
@@ -503,8 +546,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     suspend fun decryptToMemory(file: VaultFile, password: String, account: GoogleSignInAccount): ByteArray? {
         return withContext(Dispatchers.IO) {
             runCatching {
-                val client = DriveApiClient(getApplication(), account)
-                val encBytes = client.downloadFile(file.id)
+                val encBytes = fetchEncryptedBytes(file, account)
                 withContext(Dispatchers.Default) {
                     val out = ByteArrayOutputStream()
                     CryptoManager.decrypt(java.io.ByteArrayInputStream(encBytes), out, password, VaultSession.dek)
@@ -512,6 +554,58 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                 }
             }.getOrNull()
         }
+    }
+
+    /** Clears all local encrypted caches and folder metadata. Drive data is preserved. */
+    fun clearLocalCache() {
+        viewModelScope.launch(Dispatchers.IO) {
+            LocalVaultCache.clear(getApplication())
+            FolderMetadataStore.clear(getApplication())
+            EncryptedFileCache.clear()
+            folderCache.clear()
+        }
+    }
+
+    /** Pin or unpin a file for offline access. */
+    fun setOfflinePinned(fileId: String, pinned: Boolean) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val account = cachedAccount ?: return@launch
+            val file    = _rawItems.value.firstOrNull { it.id == fileId } ?: return@launch
+            if (pinned) {
+                // Download encrypted bytes and store in LocalVaultCache with isPinned=true
+                val dek = VaultSession.dek ?: return@launch
+                runCatching {
+                    val encBytes = DriveApiClient(getApplication(), account).downloadFile(file.id)
+                    LocalVaultCache.put(
+                        context      = getApplication(),
+                        fileId       = file.id,
+                        modifiedTime = file.modifiedTime,
+                        encryptedBytes = encBytes,
+                        dek          = dek,
+                        isPinned     = true
+                    )
+                }
+            } else {
+                LocalVaultCache.setPinned(getApplication(), fileId, false)
+            }
+        }
+    }
+
+    /**
+     * Returns encrypted bytes for [file] using the cache hierarchy:
+     * memory cache → disk cache → Drive download.
+     */
+    private suspend fun fetchEncryptedBytes(file: VaultFile, account: GoogleSignInAccount): ByteArray {
+        EncryptedFileCache.get(file.id, file.modifiedTime)?.let { return it }
+
+        LocalVaultCache.getEncryptedBytes(getApplication(), file.id, file.modifiedTime)?.let { cached ->
+            EncryptedFileCache.put(file.id, file.modifiedTime, cached)
+            return cached
+        }
+
+        val bytes = DriveApiClient(getApplication(), account).downloadFile(file.id)
+        EncryptedFileCache.put(file.id, file.modifiedTime, bytes)
+        return bytes
     }
 
     // Batch download selected files → Downloads/darkVault-loc
@@ -678,6 +772,11 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         filterType.value = FilterType.ALL
         _operationState.value = OperationState.Idle
         _trashedItems.value = emptyList()
+        // Clear all local caches on sign-out — next user must not see previous user's file metadata
+        viewModelScope.launch(Dispatchers.IO) {
+            LocalVaultCache.clear(getApplication())
+            FolderMetadataStore.clear(getApplication())
+        }
     }
 
     private suspend fun ensureFolder(client: DriveApiClient): String {

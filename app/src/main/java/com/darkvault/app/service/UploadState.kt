@@ -4,6 +4,7 @@ import android.net.Uri
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import java.io.File
 import java.util.concurrent.ConcurrentLinkedDeque
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.CopyOnWriteArraySet
@@ -14,6 +15,21 @@ data class UploadJob(
     val originalName: String,
     val mimeType: String,
     val fileSize: Long,
+    val folderId: String
+)
+
+/**
+ * Produced by the encryption worker after the file has been encrypted to a local staging file.
+ * Consumed by the upload worker.
+ */
+data class ReadyToUploadJob(
+    val id: String,               // same UUID as the originating UploadJob
+    val mainFile: File,           // encrypted staging file (ciphertext, safe at rest)
+    val thumbFile: File?,         // encrypted thumbnail staging file, or null
+    val originalName: String,
+    val uploadName: String,       // resolved after conflict dialog
+    val mimeType: String,
+    val originalSize: Long,       // original plaintext size, for UI display
     val folderId: String
 )
 

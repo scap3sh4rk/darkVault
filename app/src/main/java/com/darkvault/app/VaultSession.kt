@@ -1,5 +1,6 @@
 package com.darkvault.app
 
+import com.darkvault.app.cache.EncryptedFileCache
 import com.google.android.gms.auth.api.signin.GoogleSignInAccount
 
 /**
@@ -16,9 +17,10 @@ object VaultSession {
     /** The vault DEK (256-bit AES key). Non-null after successful unlock with Drive access. */
     @Volatile var dek: ByteArray? = null
 
-    /** Zeros out and clears the in-memory DEK. Call on lock/sign-out. */
+    /** Zeros out the DEK and clears all session-scoped caches. Call on lock/sign-out. */
     fun clearDek() {
         dek?.let { java.util.Arrays.fill(it, 0) }
         dek = null
+        EncryptedFileCache.clear()
     }
 }

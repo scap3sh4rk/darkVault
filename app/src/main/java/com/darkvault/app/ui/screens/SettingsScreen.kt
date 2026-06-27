@@ -184,7 +184,17 @@ fun SettingsScreen(
     val fontKey by prefs.appFont.collectAsState(initial = "inter")
     val failedAttempts by authViewModel.failedAttempts.collectAsState()
     val lockoutUntilMs by authViewModel.lockoutUntilMs.collectAsState()
+    val cacheCap by prefs.cacheCap.collectAsState(initial = 500)
     // storageInfo is accessed inline via homeViewModel below (avoid conditional collectAsState)
+
+    var localCacheUsedBytes by remember { mutableStateOf(0L) }
+    androidx.compose.runtime.LaunchedEffect(Unit) {
+        localCacheUsedBytes = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            com.darkvault.app.cache.LocalVaultCache.usedBytes(context)
+        }
+    }
+    var showClearCacheDialog by remember { mutableStateOf(false) }
+    var cacheCapExpanded by remember { mutableStateOf(false) }
 
     val biometricAvailable = remember { BiometricHelper.isAvailable(context) }
     var autoLockExpanded by remember { mutableStateOf(false) }
@@ -796,6 +806,53 @@ fun SettingsScreen(
 
                 HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f))
 
+                // Local cache cap
+                SettingRow(
+                    icon = { Icon(Icons.Outlined.Storage, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(22.dp)) },
+                    title = "Local cache limit",
+                    subtitle = "Max encrypted data cached on device"
+                ) {
+                    val capOptions = listOf(100 to "100 MB", 250 to "250 MB", 500 to "500 MB", 1000 to "1 GB", 2000 to "2 GB", 5000 to "5 GB")
+                    ExposedDropdownMenuBox(expanded = cacheCapExpanded, onExpandedChange = { cacheCapExpanded = it }) {
+                        OutlinedTextField(
+                            value = capOptions.firstOrNull { it.first == cacheCap }?.second ?: "${cacheCap} MB",
+                            onValueChange = {},
+                            readOnly = true,
+                            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(cacheCapExpanded) },
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedBorderColor = MaterialTheme.colorScheme.primary,
+                                unfocusedBorderColor = MaterialTheme.colorScheme.outline,
+                                focusedTextColor = MaterialTheme.colorScheme.onSurface,
+                                unfocusedTextColor = MaterialTheme.colorScheme.onSurface
+                            ),
+                            modifier = Modifier.menuAnchor().fillMaxWidth(0.52f)
+                        )
+                        ExposedDropdownMenu(expanded = cacheCapExpanded, onDismissRequest = { cacheCapExpanded = false }) {
+                            capOptions.forEach { (mb, label) ->
+                                DropdownMenuItem(
+                                    text = { Text(label, color = if (cacheCap == mb) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface) },
+                                    onClick = { scope.launch { prefs.setCacheCap(mb) }; cacheCapExpanded = false }
+                                )
+                            }
+                        }
+                    }
+                }
+
+                HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f))
+
+                // Clear local cache
+                SettingRow(
+                    icon = { Icon(Icons.Outlined.FolderZip, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(22.dp)) },
+                    title = "Clear local cache",
+                    subtitle = "On-device: ${com.darkvault.app.ui.components.formatSize(localCacheUsedBytes)}"
+                ) {
+                    TextButton(onClick = { showClearCacheDialog = true }) {
+                        Text("Clear", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.labelMedium)
+                    }
+                }
+
+                HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f))
+
                 // Storage quota
                 SettingRow(
                     icon = { Icon(Icons.Outlined.Storage, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(22.dp)) },
@@ -1044,6 +1101,30 @@ fun SettingsScreen(
                             }
                         }) { Text("Copy", color = MaterialTheme.colorScheme.primary) }
                     }
+                )
+            }
+
+            if (showClearCacheDialog) {
+                AlertDialog(
+                    onDismissRequest = { showClearCacheDialog = false },
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                    title = { Text("Clear Local Cache?", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface) },
+                    text = {
+                        Text(
+                            "All locally cached encrypted files and folder listings will be deleted. Files remain on Google Drive — they'll be re-downloaded when accessed.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    },
+                    confirmButton = {
+                        TextButton(onClick = {
+                            homeViewModel?.clearLocalCache()
+                            localCacheUsedBytes = 0L
+                            showClearCacheDialog = false
+                            scope.launch { snackbarHost.showSnackbar("Local cache cleared") }
+                        }) { Text("Clear", color = MaterialTheme.colorScheme.error) }
+                    },
+                    dismissButton = { TextButton(onClick = { showClearCacheDialog = false }) { Text("Cancel") } }
                 )
             }
 

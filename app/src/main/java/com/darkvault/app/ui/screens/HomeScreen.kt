@@ -216,6 +216,7 @@ fun HomeScreen(
     var previewFile by remember { mutableStateOf<VaultFile?>(null) }
     var showMoreMenu by remember { mutableStateOf(false) }
     var longPressFile by remember { mutableStateOf<VaultFile?>(null) }
+    var longPressFilePinned by remember { mutableStateOf(false) }
     var showFileInfo by remember { mutableStateOf<VaultFile?>(null) }
     var showRenameDialog by remember { mutableStateOf<VaultFile?>(null) }
     var renameText by remember { mutableStateOf("") }
@@ -290,6 +291,13 @@ fun HomeScreen(
             }
             else -> Unit
         }
+    }
+
+    LaunchedEffect(longPressFile) {
+        val f = longPressFile
+        longPressFilePinned = if (f != null && !f.isFolder)
+            com.darkvault.app.cache.LocalVaultCache.isPinned(context, f.id)
+        else false
     }
 
     // Recovery key first-time display
@@ -1237,6 +1245,24 @@ fun HomeScreen(
                             },
                             modifier = Modifier.fillMaxWidth()
                         ) { Text("Download", color = MaterialTheme.colorScheme.primary) }
+                        TextButton(
+                            onClick = {
+                                val newPinned = !longPressFilePinned
+                                homeViewModel.setOfflinePinned(file.id, newPinned)
+                                longPressFile = null
+                                scope.launch {
+                                    snackbarHostState.showSnackbar(
+                                        if (newPinned) "Saving for offline…" else "Removed from offline storage"
+                                    )
+                                }
+                            },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text(
+                                if (longPressFilePinned) "Remove from Offline" else "Make Available Offline",
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                        }
                     }
                     TextButton(
                         onClick = { showFileInfo = file; longPressFile = null },

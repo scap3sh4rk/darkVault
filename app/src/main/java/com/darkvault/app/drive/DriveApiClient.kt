@@ -223,8 +223,11 @@ class DriveApiClient(
                     )
                 } else {
                     val appProps = obj.getAsJsonObject("appProperties") ?: return@mapNotNull null
+                    // Skip thumbnail companion files — they are surfaced via VaultFile.thumbnailFileId
+                    if (appProps.get("role")?.asString == "thumbnail") return@mapNotNull null
                     val originalName = appProps.get("originalName")?.asString ?: return@mapNotNull null
                     val originalMime = appProps.get("originalMimeType")?.asString ?: "application/octet-stream"
+                    val thumbnailFileId = appProps.get("thumbnailId")?.asString
                     VaultFile(
                         id = id,
                         name = name,
@@ -233,7 +236,8 @@ class DriveApiClient(
                         size = obj.get("size")?.asLong ?: 0L,
                         createdTime = createdTime,
                         modifiedTime = modifiedTime,
-                        isFolder = false
+                        isFolder = false,
+                        thumbnailFileId = thumbnailFileId
                     )
                 }
             }
@@ -380,6 +384,7 @@ class DriveApiClient(
     /**
      * Starts a Drive resumable upload session.
      * [clientId] is the UploadJob UUID, stored in appProperties for idempotent retries.
+     * [thumbnailId] is the Drive file ID of a pre-uploaded thumbnail companion, if any.
      */
     suspend fun startResumableSession(
         fileName: String,
@@ -387,14 +392,16 @@ class DriveApiClient(
         originalMimeType: String,
         folderId: String,
         totalBytes: Long,
-        clientId: String = ""
+        clientId: String = "",
+        thumbnailId: String = ""
     ): String = withContext(Dispatchers.IO) {
         val t = token()
         val escapedFile = fileName.replace("\\", "\\\\").replace("\"", "\\\"")
         val escapedOrig = originalName.take(100).replace("\\", "\\\\").replace("\"", "\\\"")
         val escapedMime = originalMimeType.take(100).replace("\\", "\\\\").replace("\"", "\\\"")
-        val clientIdProp = if (clientId.isNotEmpty()) ""","clientId":"$clientId"""" else ""
-        val metaJson = """{"name":"$escapedFile","parents":["$folderId"],"appProperties":{"originalName":"$escapedOrig","originalMimeType":"$escapedMime","updatedAt":"${System.currentTimeMillis()}"$clientIdProp}}"""
+        val clientIdProp  = if (clientId.isNotEmpty())  ""","clientId":"$clientId""""   else ""
+        val thumbProp     = if (thumbnailId.isNotEmpty()) ""","thumbnailId":"$thumbnailId"""" else ""
+        val metaJson = """{"name":"$escapedFile","parents":["$folderId"],"appProperties":{"originalName":"$escapedOrig","originalMimeType":"$escapedMime","updatedAt":"${System.currentTimeMillis()}"$clientIdProp$thumbProp}}"""
 
         val resp = http.newCall(
             Request.Builder()
@@ -409,7 +416,31 @@ class DriveApiClient(
         resp.header("Location") ?: error("No Location header in resumable upload response")
     }
 
-    /** Uploads chunks to an active session. Returns Drive file ID on completion. */
+    /**
+     * Starts a resumable session for an encrypted thumbnail file.
+     * The thumbnail's [mainClientId] links it back to the main UploadJob UUID.
+     */
+    suspend fun startThumbnailSession(
+        jobId: String,
+        folderId: String,
+        totalBytes: Long
+    ): String = withContext(Dispatchers.IO) {
+        val t = token()
+        val metaJson = """{"name":"${jobId}_thumb.vault","parents":["$folderId"],"appProperties":{"role":"thumbnail","mainClientId":"$jobId","clientId":"${jobId}_thumb"}}"""
+        val resp = http.newCall(
+            Request.Builder()
+                .url("https://www.googleapis.com/upload/drive/v3/files?uploadType=resumable&fields=id")
+                .addHeader("Authorization", "Bearer $t")
+                .addHeader("X-Upload-Content-Type", "application/octet-stream")
+                .addHeader("X-Upload-Content-Length", totalBytes.toString())
+                .post(metaJson.toRequestBody("application/json; charset=UTF-8".toMediaType()))
+                .build()
+        ).execute()
+        if (!resp.isSuccessful) error("Failed to start thumbnail session: ${resp.code}")
+        resp.header("Location") ?: error("No Location header in thumbnail upload response")
+    }
+
+    /** Uploads chunks to an active session from a ByteArray. Returns Drive file ID on completion. */
     suspend fun uploadChunked(
         sessionUri: String,
         data: ByteArray,
@@ -449,6 +480,61 @@ class DriveApiClient(
                     onProgress(offset, total)
                 }
                 else -> error("Upload chunk failed: ${resp.code} at offset $offset")
+            }
+        }
+        error("Upload finished without receiving file ID")
+    }
+
+    /**
+     * Uploads chunks to an active session reading directly from [file] on disk.
+     * Avoids buffering the entire encrypted file in RAM.
+     * Returns the Drive file ID on completion.
+     */
+    suspend fun uploadChunkedFromFile(
+        sessionUri: String,
+        file: java.io.File,
+        startOffset: Long = 0L,
+        onProgress: suspend (uploaded: Long, total: Long) -> Unit
+    ): String = withContext(Dispatchers.IO) {
+        val total = file.length()
+        // ponytail: 256 KB chunk matches Drive's recommended minimum for resumable uploads
+        val buf = ByteArray(256 * 1024)
+        var offset = startOffset
+
+        java.io.RandomAccessFile(file, "r").use { raf ->
+            while (offset < total) {
+                val remaining = total - offset
+                val chunkLen = minOf(buf.size.toLong(), remaining).toInt()
+                raf.seek(offset)
+                raf.readFully(buf, 0, chunkLen)
+                val end = offset + chunkLen - 1
+
+                val resp = withRetry {
+                    http.newCall(
+                        Request.Builder()
+                            .url(sessionUri)
+                            .addHeader("Content-Range", "bytes $offset-$end/$total")
+                            .put(buf.copyOf(chunkLen).toRequestBody("application/octet-stream".toMediaType()))
+                            .build()
+                    ).execute().also { r ->
+                        if (r.code != 200 && r.code != 201 && r.code != 308) {
+                            error("Chunk upload failed: ${r.code} at offset $offset")
+                        }
+                    }
+                }
+
+                when (resp.code) {
+                    200, 201 -> {
+                        onProgress(total, total)
+                        return@withContext gson.fromJson(resp.body!!.string(), JsonObject::class.java)
+                            .get("id").asString
+                    }
+                    308 -> {
+                        offset = end + 1
+                        onProgress(offset, total)
+                    }
+                    else -> error("Chunk upload failed: ${resp.code}")
+                }
             }
         }
         error("Upload finished without receiving file ID")
@@ -568,7 +654,11 @@ class DriveApiClient(
 
     // ── Storage quota ──────────────────────────────────────────────────────
 
-    suspend fun getStorageInfo(vaultFolderId: String): StorageInfo = withContext(Dispatchers.IO) {
+    /**
+     * Fetches Drive quota and builds StorageInfo using [knownVaultBytes] supplied by the
+     * caller (who already has the listing). Avoids a redundant listItems API call.
+     */
+    suspend fun getStorageQuotaOnly(knownVaultBytes: Long): StorageInfo = withContext(Dispatchers.IO) {
         val t = token()
         val aboutResp = http.newCall(
             Request.Builder()
@@ -576,20 +666,23 @@ class DriveApiClient(
                 .addHeader("Authorization", "Bearer $t")
                 .build()
         ).execute()
-
         val limit: Long
         val totalUsed: Long
         if (aboutResp.isSuccessful) {
             val quota = gson.fromJson(aboutResp.body!!.string(), JsonObject::class.java)
                 .getAsJsonObject("storageQuota")
-            limit = quota?.get("limit")?.asLong ?: -1L
+            limit     = quota?.get("limit")?.asLong ?: -1L
             totalUsed = quota?.get("usage")?.asLong ?: 0L
         } else {
             limit = -1L; totalUsed = 0L
         }
+        StorageInfo(knownVaultBytes, totalUsed, limit)
+    }
 
+    /** Legacy overload kept for call-sites that don't have the listing in hand. */
+    suspend fun getStorageInfo(vaultFolderId: String): StorageInfo {
         val vaultUsed = listItems(vaultFolderId).filter { !it.isFolder }.sumOf { it.size }
-        StorageInfo(vaultUsed, totalUsed, limit)
+        return getStorageQuotaOnly(vaultUsed)
     }
 
     // ── vault.key management ───────────────────────────────────────────────

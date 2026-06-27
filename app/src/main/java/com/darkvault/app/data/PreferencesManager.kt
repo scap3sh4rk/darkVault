@@ -48,6 +48,8 @@ class PreferencesManager(private val context: Context) {
         private val KEY_DEV_OPTIONS_ENABLED = booleanPreferencesKey("dev_options_enabled")
         // App font preference
         private val KEY_FONT = stringPreferencesKey("app_font")
+        // Local vault cache cap in MB (default 500)
+        private val KEY_CACHE_CAP_MB = intPreferencesKey("cache_cap_mb")
     }
 
     // ── Auth ──────────────────────────────────────────────────────────────
@@ -206,6 +208,14 @@ class PreferencesManager(private val context: Context) {
 
     suspend fun setAppFont(key: String) {
         context.dataStore.edit { it[KEY_FONT] = key }
+    }
+
+    // ── Local vault cache ─────────────────────────────────────────────────────
+
+    val cacheCap: Flow<Int> = context.dataStore.data.map { it[KEY_CACHE_CAP_MB] ?: 500 }
+
+    suspend fun setCacheCap(mb: Int) {
+        context.dataStore.edit { it[KEY_CACHE_CAP_MB] = mb.coerceIn(100, 10_000) }
     }
 
     // ── Reset ─────────────────────────────────────────────────────────────
