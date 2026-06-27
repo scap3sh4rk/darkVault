@@ -22,6 +22,7 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.darkvault.app.BuildConfig
 import com.darkvault.app.ui.screens.HomeScreen
+import com.darkvault.app.ui.screens.OfflineFilesScreen
 import com.darkvault.app.ui.screens.SetupScreen
 import com.darkvault.app.ui.screens.SettingsScreen
 import com.darkvault.app.ui.screens.SignInScreen
@@ -38,6 +39,7 @@ private const val ROUTE_UNLOCK   = "unlock"
 private const val ROUTE_HOME     = "home"
 private const val ROUTE_SETTINGS = "settings"
 private const val ROUTE_TRASH    = "trash"
+private const val ROUTE_OFFLINE  = "offline"
 
 // ── Transition presets ─────────────────────────────────────────────────────────
 
@@ -129,10 +131,11 @@ fun DarkVaultNavGraph(authViewModel: AuthViewModel) {
             exitTransition  = { depthExit }
         ) {
             HomeScreen(
-                authViewModel         = authViewModel,
-                homeViewModel         = homeViewModel,
-                onNavigateToSettings  = { navController.navigate(ROUTE_SETTINGS) },
-                onNavigateToTrash     = { navController.navigate(ROUTE_TRASH) },
+                authViewModel          = authViewModel,
+                homeViewModel          = homeViewModel,
+                onNavigateToSettings   = { navController.navigate(ROUTE_SETTINGS) },
+                onNavigateToTrash      = { navController.navigate(ROUTE_TRASH) },
+                onNavigateToOffline    = { navController.navigate(ROUTE_OFFLINE) },
                 onNavigateToDebugPanel = {
                     if (BuildConfig.DEBUG) navController.navigate("debug_panel")
                 }
@@ -167,6 +170,17 @@ fun DarkVaultNavGraph(authViewModel: AuthViewModel) {
             exitTransition  = { slideDownExit }
         ) {
             TrashScreen(
+                homeViewModel = homeViewModel,
+                onBack        = { navController.popBackStack() }
+            )
+        }
+
+        composable(
+            ROUTE_OFFLINE,
+            enterTransition = { slideUpEnter },
+            exitTransition  = { slideDownExit }
+        ) {
+            OfflineFilesScreen(
                 homeViewModel = homeViewModel,
                 onBack        = { navController.popBackStack() }
             )

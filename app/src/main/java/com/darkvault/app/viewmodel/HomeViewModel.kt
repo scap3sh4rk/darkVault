@@ -4,6 +4,7 @@ import android.app.Application
 import android.content.ContentResolver
 import android.content.ContentValues
 import android.content.Intent
+import android.net.ConnectivityManager
 import android.net.Uri
 import android.os.Build
 import android.os.Environment
@@ -154,9 +155,18 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         result
     }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
-    // Task 4: Recents — 8 most recently modified non-folder files
-    val recentItems: StateFlow<List<VaultFile>> = _rawItems.map { items ->
-        items.filter { !it.isFolder && it.modifiedTime.isNotEmpty() }
+    // ── Offline state ──────────────────────────────────────────────────────
+    private val _isOffline = MutableStateFlow(false)
+    val isOffline: StateFlow<Boolean> = _isOffline
+
+    private val _offlineFiles = MutableStateFlow<List<VaultFile>>(emptyList())
+    val offlineFiles: StateFlow<List<VaultFile>> = _offlineFiles
+
+    // ── Recents — 8 most recently modified non-folder files across ALL known folders
+    val recentItems: StateFlow<List<VaultFile>> = _rawItems.map {
+        folderCache.values.flatten()
+            .filter { !it.isFolder && it.modifiedTime.isNotEmpty() }
+            .distinctBy { it.id }
             .sortedByDescending { it.modifiedTime }
             .take(8)
     }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
@@ -263,16 +273,33 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                 val currentId = _folderStack.value.last().id
                 client.listItems(currentId)
             }.onSuccess { items ->
+                _isOffline.value = false
+                folderCache[_folderStack.value.last().id] = items
                 _rawItems.value = items
                 _uiState.value = HomeUiState.Success(items)
                 _lastSyncedMs.value = System.currentTimeMillis()
                 // Persist updated listing for next cold-start
                 dek?.let { FolderMetadataStore.put(getApplication(), _folderStack.value.last().id, items, it) }
+                refreshOfflineFiles()
             }.onFailure { e ->
+                val offline = e is java.io.IOException
+                _isOffline.value = offline
+                if (offline) refreshOfflineFiles()
                 if (_uiState.value is HomeUiState.Loading) {
-                    _uiState.value = HomeUiState.Error(e.message ?: "Failed to load files")
+                    // Serve FolderMetadataStore as last resort before showing error
+                    val folderId = _folderStack.value.lastOrNull()?.id
+                    val diskFallback = if (dek != null && folderId != null)
+                        FolderMetadataStore.get(getApplication(), folderId, dek) else null
+                    if (diskFallback != null) {
+                        _rawItems.value = diskFallback
+                        _uiState.value = HomeUiState.Success(diskFallback)
+                    } else {
+                        _uiState.value = HomeUiState.Error(
+                            if (offline) "No internet connection — no cached data available"
+                            else (e.message ?: "Failed to load files")
+                        )
+                    }
                 }
-                // If we already served stale data, keep showing it rather than replacing with error
             }
 
             if (refreshStorage) loadStorageInfo(account)
@@ -340,15 +367,21 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             runCatching {
                 DriveApiClient(getApplication(), account).listItems(currentId)
             }.onSuccess { items ->
+                _isOffline.value = false
                 folderCache[currentId] = items
                 _rawItems.value = items
                 _uiState.value  = HomeUiState.Success(items)
                 _lastSyncedMs.value = System.currentTimeMillis()
                 dek?.let { FolderMetadataStore.put(getApplication(), currentId, items, it) }
+                refreshOfflineFiles()
             }.onFailure { e ->
-                // Keep showing stale data if we have it; only surface error on a true miss
+                _isOffline.value = e is java.io.IOException
+                // Keep showing stale data; only surface error if we have nothing cached at all
                 if (folderCache[currentId] == null) {
-                    _uiState.value = HomeUiState.Error(e.message ?: "Failed to load folder")
+                    _uiState.value = HomeUiState.Error(
+                        if (e is java.io.IOException) "No internet connection — no cached data available"
+                        else (e.message ?: "Failed to load folder")
+                    )
                 }
             }
         }
@@ -570,24 +603,48 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     fun setOfflinePinned(fileId: String, pinned: Boolean) {
         viewModelScope.launch(Dispatchers.IO) {
             val account = cachedAccount ?: return@launch
-            val file    = _rawItems.value.firstOrNull { it.id == fileId } ?: return@launch
+            // Look up the file across all known folders, not just the current one
+            val file = folderCache.values.flatten().firstOrNull { it.id == fileId }
+                ?: _rawItems.value.firstOrNull { it.id == fileId }
+                ?: return@launch
             if (pinned) {
-                // Download encrypted bytes and store in LocalVaultCache with isPinned=true
                 val dek = VaultSession.dek ?: return@launch
                 runCatching {
                     val encBytes = DriveApiClient(getApplication(), account).downloadFile(file.id)
                     LocalVaultCache.put(
-                        context      = getApplication(),
-                        fileId       = file.id,
-                        modifiedTime = file.modifiedTime,
+                        context        = getApplication(),
+                        fileId         = file.id,
+                        modifiedTime   = file.modifiedTime,
                         encryptedBytes = encBytes,
-                        dek          = dek,
-                        isPinned     = true
+                        dek            = dek,
+                        isPinned       = true
                     )
                 }
             } else {
                 LocalVaultCache.setPinned(getApplication(), fileId, false)
             }
+            refreshOfflineFiles()
+        }
+    }
+
+    /** Rebuilds the offline files list from pinned cache entries + known folder metadata. */
+    fun refreshOfflineFiles() {
+        viewModelScope.launch(Dispatchers.IO) {
+            val dek = VaultSession.dek ?: return@launch
+            val pinnedIds = LocalVaultCache.pinnedFileIds(getApplication())
+            if (pinnedIds.isEmpty()) { _offlineFiles.value = emptyList(); return@launch }
+
+            val fromCache = folderCache.values.flatten()
+                .filter { it.id in pinnedIds }
+                .distinctBy { it.id }
+
+            val foundIds = fromCache.map { it.id }.toSet()
+            val missing  = pinnedIds - foundIds
+            val fromDisk = if (missing.isNotEmpty())
+                FolderMetadataStore.allCachedFiles(getApplication(), dek).filter { it.id in missing }.distinctBy { it.id }
+            else emptyList()
+
+            _offlineFiles.value = (fromCache + fromDisk).sortedByDescending { it.modifiedTime }
         }
     }
 

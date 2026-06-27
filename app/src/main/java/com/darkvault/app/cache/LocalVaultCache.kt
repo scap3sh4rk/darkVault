@@ -128,6 +128,12 @@ object LocalVaultCache {
         withContext(Dispatchers.IO) { loadIndex(dir(context))[fileId]?.isPinned ?: false }
     }
 
+    suspend fun pinnedFileIds(context: Context): Set<String> = mutex.withLock {
+        withContext(Dispatchers.IO) {
+            loadIndex(dir(context)).values.filter { it.isPinned }.map { it.fileId }.toSet()
+        }
+    }
+
     suspend fun setPinned(context: Context, fileId: String, pinned: Boolean) = mutex.withLock {
         withContext(Dispatchers.IO) {
             val dir = dir(context)

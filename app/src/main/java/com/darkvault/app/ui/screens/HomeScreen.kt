@@ -173,6 +173,7 @@ fun HomeScreen(
     homeViewModel: HomeViewModel,
     onNavigateToSettings: () -> Unit,
     onNavigateToTrash: () -> Unit = {},
+    onNavigateToOffline: () -> Unit = {},
     onNavigateToDebugPanel: () -> Unit = {}
 ) {
     val context = LocalContext.current
@@ -198,6 +199,7 @@ fun HomeScreen(
     val pendingConflict by homeViewModel.pendingConflict.collectAsState()
     val uploadIsPaused by homeViewModel.uploadIsPaused.collectAsState()
     val canGoBack by homeViewModel.canGoBack.collectAsState()
+    val isOffline by homeViewModel.isOffline.collectAsState()
     // Task 4 — thumbnail gating flags
     val thumbnailsEnabled by homeViewModel.thumbnailsEnabled.collectAsState()
     val imagePreviewEnabled by homeViewModel.imagePreviewEnabled.collectAsState()
@@ -490,6 +492,14 @@ fun HomeScreen(
                                         }
                                     )
                                     DropdownMenuItem(
+                                        text = { Text("Offline files") },
+                                        leadingIcon = { Icon(Icons.Outlined.Download, null) },
+                                        onClick = {
+                                            showMoreMenu = false
+                                            onNavigateToOffline()
+                                        }
+                                    )
+                                    DropdownMenuItem(
                                         text = { Text("Settings") },
                                         leadingIcon = { Icon(Icons.Outlined.Settings, null) },
                                         onClick = {
@@ -684,6 +694,33 @@ fun HomeScreen(
                     color = MaterialTheme.colorScheme.outline,
                     modifier = Modifier.padding(horizontal = 16.dp, vertical = 2.dp)
                 )
+            }
+
+            // Offline banner
+            AnimatedVisibility(visible = isOffline, enter = expandVertically(), exit = shrinkVertically()) {
+                androidx.compose.foundation.layout.Box(
+                    modifier = androidx.compose.ui.Modifier
+                        .fillMaxWidth()
+                        .background(
+                            androidx.compose.ui.graphics.Color(0xFFF59E0B).copy(alpha = 0.15f),
+                            androidx.compose.foundation.shape.RoundedCornerShape(0.dp)
+                        )
+                        .padding(horizontal = 16.dp, vertical = 8.dp)
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Icon(
+                            Icons.Outlined.Download,
+                            contentDescription = null,
+                            tint = androidx.compose.ui.graphics.Color(0xFFF59E0B),
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Text(
+                            "You're offline — showing cached files",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = androidx.compose.ui.graphics.Color(0xFFF59E0B)
+                        )
+                    }
+                }
             }
 
             val isRefreshing = uiState is HomeUiState.Loading

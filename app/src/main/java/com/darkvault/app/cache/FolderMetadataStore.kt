@@ -49,6 +49,20 @@ object FolderMetadataStore {
             } catch (_: Exception) { /* non-fatal; Drive is always the source of truth */ }
         }
 
+    /** Returns all VaultFile objects from every cached folder listing. Used for offline file index. */
+    suspend fun allCachedFiles(context: Context, dek: ByteArray): List<VaultFile> =
+        withContext(Dispatchers.IO) {
+            metaDir(context).listFiles()
+                ?.filter { it.extension == "vault" }
+                ?.flatMap { file ->
+                    try {
+                        val enc = file.readBytes()
+                        val json = VaultKeyManager.decryptWithDek(enc, dek).toString(Charsets.UTF_8)
+                        gson.fromJson<List<VaultFile>>(json, listType) ?: emptyList()
+                    } catch (_: Exception) { emptyList() }
+                } ?: emptyList()
+        }
+
     /** Deletes all cached folder listings. */
     suspend fun clear(context: Context) = withContext(Dispatchers.IO) {
         metaDir(context).listFiles()?.forEach { it.delete() }
