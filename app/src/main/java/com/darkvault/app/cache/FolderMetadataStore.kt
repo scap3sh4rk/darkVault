@@ -59,7 +59,10 @@ object FolderMetadataStore {
                         val enc = file.readBytes()
                         val json = VaultKeyManager.decryptWithDek(enc, dek).toString(Charsets.UTF_8)
                         gson.fromJson<List<VaultFile>>(json, listType) ?: emptyList()
-                    } catch (_: Exception) { emptyList() }
+                    } catch (_: Exception) {
+                        file.delete() // corrupted or encrypted with a different DEK — remove it
+                        emptyList()
+                    }
                 } ?: emptyList()
         }
 

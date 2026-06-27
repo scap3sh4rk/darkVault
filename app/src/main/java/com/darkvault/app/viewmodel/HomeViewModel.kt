@@ -206,8 +206,9 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
 
     private var cachedFolderId: String? = null
     private var cachedAccount: GoogleSignInAccount? = null
-    // In-memory cache per folder ID → list of vault files for stale-while-revalidate
-    private val folderCache = mutableMapOf<String, List<VaultFile>>()
+    // ConcurrentHashMap so reads (recentItems, refreshOfflineFiles on IO) and writes
+    // (loadFiles/loadItemsForCurrentFolder on IO) never race or produce CME.
+    private val folderCache = java.util.concurrent.ConcurrentHashMap<String, List<VaultFile>>()
 
     init {
         // Observe upload events from the foreground service
@@ -596,6 +597,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             FolderMetadataStore.clear(getApplication())
             EncryptedFileCache.clear()
             folderCache.clear()
+            _offlineFiles.value = emptyList()
         }
     }
 
@@ -603,22 +605,31 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     fun setOfflinePinned(fileId: String, pinned: Boolean) {
         viewModelScope.launch(Dispatchers.IO) {
             val account = cachedAccount ?: return@launch
-            // Look up the file across all known folders, not just the current one
             val file = folderCache.values.flatten().firstOrNull { it.id == fileId }
                 ?: _rawItems.value.firstOrNull { it.id == fileId }
                 ?: return@launch
             if (pinned) {
                 val dek = VaultSession.dek ?: return@launch
+                val maxBytes = prefs.cacheCap.first() * 1024L * 1024L
                 runCatching {
-                    val encBytes = DriveApiClient(getApplication(), account).downloadFile(file.id)
-                    LocalVaultCache.put(
-                        context        = getApplication(),
-                        fileId         = file.id,
-                        modifiedTime   = file.modifiedTime,
-                        encryptedBytes = encBytes,
-                        dek            = dek,
-                        isPinned       = true
+                    // Skip download if the encrypted bytes are already in local cache
+                    val alreadyCached = LocalVaultCache.getEncryptedBytes(
+                        getApplication(), file.id, file.modifiedTime
                     )
+                    if (alreadyCached != null) {
+                        LocalVaultCache.setPinned(getApplication(), file.id, true)
+                    } else {
+                        val encBytes = DriveApiClient(getApplication(), account).downloadFile(file.id)
+                        LocalVaultCache.put(
+                            context        = getApplication(),
+                            fileId         = file.id,
+                            modifiedTime   = file.modifiedTime,
+                            encryptedBytes = encBytes,
+                            dek            = dek,
+                            maxBytes       = maxBytes,
+                            isPinned       = true
+                        )
+                    }
                 }
             } else {
                 LocalVaultCache.setPinned(getApplication(), fileId, false)
@@ -824,15 +835,18 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         _folderStack.value = emptyList()
         _storageInfo.value = null
         _lastSyncedMs.value = 0L
+        _isOffline.value = false
+        _offlineFiles.value = emptyList()
         selectedIds.value = emptySet()
         searchQuery.value = ""
         filterType.value = FilterType.ALL
         _operationState.value = OperationState.Idle
         _trashedItems.value = emptyList()
-        // Clear all local caches on sign-out — next user must not see previous user's file metadata
+        // Clear all local caches on sign-out — next user must not see previous user's data
         viewModelScope.launch(Dispatchers.IO) {
             LocalVaultCache.clear(getApplication())
             FolderMetadataStore.clear(getApplication())
+            EncryptedFileCache.clear()
         }
     }
 

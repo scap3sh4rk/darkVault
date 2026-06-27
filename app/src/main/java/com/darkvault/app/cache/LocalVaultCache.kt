@@ -22,9 +22,8 @@ object LocalVaultCache {
 
     private val mutex = Mutex()
 
-    // In-memory index: fileId → IndexEntry
-    // Null means "not yet loaded from disk"
-    @Volatile private var index: MutableMap<String, IndexEntry>? = null
+    // In-memory index: fileId → IndexEntry. Always accessed inside mutex.
+    private var index: MutableMap<String, IndexEntry>? = null
 
     data class IndexEntry(
         val fileId: String,
@@ -201,7 +200,11 @@ object LocalVaultCache {
             sb.append("""{"fileId":"${e.fileId}","size":${e.encryptedSize},"mt":"${e.modifiedTime}","la":${e.lastAccessedMs},"pin":${e.isPinned}}""")
         }
         sb.append(']')
-        File(dir, INDEX_FILE).writeText(sb.toString())
+        // Write to a temp file first, then rename atomically so a mid-write crash never
+        // produces a half-written index (which would silently clear the entire cache).
+        val tmp = File(dir, "$INDEX_FILE.tmp")
+        tmp.writeText(sb.toString())
+        tmp.renameTo(File(dir, INDEX_FILE))
         index = idx.toMutableMap()
     }
 

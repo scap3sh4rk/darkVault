@@ -1,5 +1,6 @@
 package com.darkvault.app.ui.screens
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -54,12 +55,14 @@ import kotlinx.coroutines.launch
 @Composable
 fun OfflineFilesScreen(
     homeViewModel: HomeViewModel,
-    onBack: () -> Unit
+    onBack: () -> Unit,
+    onDownloadFile: (VaultFile) -> Unit = {}
 ) {
     val scope = rememberCoroutineScope()
     val snackbarHost = remember { SnackbarHostState() }
 
     val offlineFiles by homeViewModel.offlineFiles.collectAsState()
+    var selectedFile by remember { mutableStateOf<VaultFile?>(null) }
     var fileToUnpin by remember { mutableStateOf<VaultFile?>(null) }
 
     Scaffold(
@@ -92,7 +95,10 @@ fun OfflineFilesScreen(
                 contentAlignment = Alignment.Center,
                 modifier = Modifier.fillMaxSize().padding(padding)
             ) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
                     Icon(
                         Icons.Outlined.CloudOff,
                         contentDescription = null,
@@ -127,7 +133,8 @@ fun OfflineFilesScreen(
                 }
                 items(offlineFiles, key = { it.id }) { file ->
                     OfflineFileRow(
-                        file   = file,
+                        file    = file,
+                        onClick = { selectedFile = file },
                         onUnpin = { fileToUnpin = file }
                     )
                 }
@@ -135,6 +142,41 @@ fun OfflineFilesScreen(
         }
     }
 
+    // Per-file action dialog
+    selectedFile?.let { file ->
+        AlertDialog(
+            onDismissRequest = { selectedFile = null },
+            containerColor = MaterialTheme.colorScheme.surfaceVariant,
+            title = {
+                Text(
+                    file.originalName,
+                    style = MaterialTheme.typography.titleMedium,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    TextButton(
+                        onClick = {
+                            selectedFile = null
+                            onDownloadFile(file)
+                            scope.launch { snackbarHost.showSnackbar("Saving \"${file.originalName}\" to Downloads…") }
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    ) { Text("Save to Downloads", color = MaterialTheme.colorScheme.primary) }
+                    TextButton(
+                        onClick = { fileToUnpin = file; selectedFile = null },
+                        modifier = Modifier.fillMaxWidth()
+                    ) { Text("Remove from Offline", color = MaterialTheme.colorScheme.error) }
+                }
+            },
+            confirmButton = {},
+            dismissButton = { TextButton(onClick = { selectedFile = null }) { Text("Cancel") } }
+        )
+    }
+
+    // Unpin confirmation dialog
     fileToUnpin?.let { file ->
         AlertDialog(
             onDismissRequest = { fileToUnpin = null },
@@ -162,12 +204,13 @@ fun OfflineFilesScreen(
 @Composable
 private fun OfflineFileRow(
     file: VaultFile,
+    onClick: () -> Unit,
     onUnpin: () -> Unit
 ) {
     Card(
         shape = RoundedCornerShape(10.dp),
         colors = CardDefaults.cardColors(containerColor = VaultSurfaceVariant),
-        modifier = Modifier.fillMaxWidth()
+        modifier = Modifier.fillMaxWidth().clickable(onClick = onClick)
     ) {
         Row(
             verticalAlignment = Alignment.CenterVertically,

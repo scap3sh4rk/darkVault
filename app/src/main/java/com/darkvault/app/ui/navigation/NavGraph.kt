@@ -180,9 +180,15 @@ fun DarkVaultNavGraph(authViewModel: AuthViewModel) {
             enterTransition = { slideUpEnter },
             exitTransition  = { slideDownExit }
         ) {
+            val password       by authViewModel.masterPassword.collectAsState()
+            val currentAccount  = remember { GoogleSignIn.getLastSignedInAccount(context) }
             OfflineFilesScreen(
-                homeViewModel = homeViewModel,
-                onBack        = { navController.popBackStack() }
+                homeViewModel  = homeViewModel,
+                onBack         = { navController.popBackStack() },
+                onDownloadFile = { file ->
+                    val pwd = password; val acc = currentAccount
+                    if (pwd != null && acc != null) homeViewModel.downloadAndDecrypt(file, pwd, acc)
+                }
             )
         }
 
