@@ -1086,41 +1086,43 @@ fun SettingsScreen(
                     enter = expandVertically(tween(300, easing = FastOutSlowInEasing)) + fadeIn(tween(250, easing = FastOutSlowInEasing)),
                     exit = shrinkVertically(tween(250)) + fadeOut(tween(200))
                 ) {
-                    HorizontalDivider(thickness = 0.5.dp, color = MaterialTheme.colorScheme.outline)
+                    Column {
+                        HorizontalDivider(thickness = 0.5.dp, color = MaterialTheme.colorScheme.outline)
 
-                    // NFC enrollment — always shown when dev mode is on
-                    val devNfcSubtitle = when {
-                        !nfcHardwarePresent -> "NFC hardware not detected on this device"
-                        !nfcAvailable -> "Enable NFC in system settings first"
-                        nfcEnabled -> "Enrolled — tap card or tag to unlock"
-                        else -> "Tap only (quick) or Tap + PIN (two-factor)"
-                    }
-                    SettingRow(
-                        icon = { Icon(Icons.Outlined.Security, null, tint = if (nfcEnabled) SecureGreen else MaterialTheme.colorScheme.primary, modifier = Modifier.size(22.dp)) },
-                        title = "NFC unlock",
-                        subtitle = devNfcSubtitle
-                    ) {
-                        when {
-                            !nfcHardwarePresent || !nfcAvailable -> { /* no action */ }
-                            nfcEnabled -> TextButton(onClick = { showNfcRemoveDialog = true }) {
-                                Text("Remove", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.labelMedium)
-                            }
-                            else -> TextButton(onClick = { showNfcEnrollDialog = true }) {
-                                Text("Set up", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelMedium)
+                        // NFC enrollment — always shown when dev mode is on
+                        val devNfcSubtitle = when {
+                            !nfcHardwarePresent -> "NFC hardware not detected on this device"
+                            !nfcAvailable -> "Enable NFC in system settings first"
+                            nfcEnabled -> "Enrolled — tap card or tag to unlock"
+                            else -> "Tap only (quick) or Tap + PIN (two-factor)"
+                        }
+                        SettingRow(
+                            icon = { Icon(Icons.Outlined.Security, null, tint = if (nfcEnabled) SecureGreen else MaterialTheme.colorScheme.primary, modifier = Modifier.size(22.dp)) },
+                            title = "NFC unlock",
+                            subtitle = devNfcSubtitle
+                        ) {
+                            when {
+                                !nfcHardwarePresent || !nfcAvailable -> { /* no action */ }
+                                nfcEnabled -> TextButton(onClick = { showNfcRemoveDialog = true }) {
+                                    Text("Remove", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.labelMedium)
+                                }
+                                else -> TextButton(onClick = { showNfcEnrollDialog = true }) {
+                                    Text("Set up", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelMedium)
+                                }
                             }
                         }
-                    }
 
-                    HorizontalDivider(thickness = 0.5.dp, color = MaterialTheme.colorScheme.outline)
+                        HorizontalDivider(thickness = 0.5.dp, color = MaterialTheme.colorScheme.outline)
 
-                    if (BuildConfig.DEBUG) {
-                        SettingRow(
-                            icon = { Icon(Icons.Outlined.BugReport, null, tint = VaultError, modifier = Modifier.size(22.dp)) },
-                            title = "Developer options",
-                            subtitle = "Diagnostics, fault injection, log viewer"
-                        ) {
-                            IconButton(onClick = onNavigateToDebugPanel) {
-                                Icon(Icons.AutoMirrored.Outlined.ArrowForward, null, tint = MaterialTheme.colorScheme.primary)
+                        if (BuildConfig.DEBUG) {
+                            SettingRow(
+                                icon = { Icon(Icons.Outlined.BugReport, null, tint = VaultError, modifier = Modifier.size(22.dp)) },
+                                title = "Developer options",
+                                subtitle = "Diagnostics, fault injection, log viewer"
+                            ) {
+                                IconButton(onClick = onNavigateToDebugPanel) {
+                                    Icon(Icons.AutoMirrored.Outlined.ArrowForward, null, tint = MaterialTheme.colorScheme.primary)
+                                }
                             }
                         }
                     }
