@@ -368,7 +368,7 @@ fun SettingsScreen(
         }
     }
 
-    val devOptionsEnabled by prefs.devOptionsEnabled.collectAsState(initial = true)
+    val devOptionsEnabled by prefs.devOptionsEnabled.collectAsState(initial = false)
 
     // Biometric prompt for enrollment
     val biometricPrompt = remember(activity) {
@@ -685,12 +685,12 @@ fun SettingsScreen(
 
                 HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f))
 
-                // NFC unlock row — always visible; enrollment is in Developer options
+                // NFC unlock row — status only; enrollment and removal are in Developer options
                 val nfcSubtitle = when {
                     !nfcHardwarePresent -> "Not available on this device"
                     !nfcAvailable -> "Enable NFC in system settings to use this feature"
                     nfcEnabled -> "Enrolled — tap card or tag to unlock"
-                    else -> "Set up in Developer options"
+                    else -> "Enable Developer options to set up NFC unlock"
                 }
                 val nfcIconTint = when {
                     !nfcHardwarePresent || !nfcAvailable -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
@@ -701,13 +701,7 @@ fun SettingsScreen(
                     icon = { Icon(Icons.Outlined.Security, null, tint = nfcIconTint, modifier = Modifier.size(22.dp)) },
                     title = "NFC unlock",
                     subtitle = nfcSubtitle
-                ) {
-                    if (nfcEnabled) {
-                        TextButton(onClick = { showNfcRemoveDialog = true }) {
-                            Text("Disable", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.labelMedium)
-                        }
-                    }
-                }
+                ) {}
 
                 HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f))
 

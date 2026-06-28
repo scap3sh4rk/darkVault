@@ -336,7 +336,9 @@ fun UnlockScreen(viewModel: AuthViewModel) {
                 onShowRecovery       = { showRecoveryDialog = true },
                 onShowSwitchAccount  = { showSwitchAccountDialog = true },
                 switchSignInError    = switchSignInError,
-                nfcEnabled           = nfcEnabled && nfcAvailable
+                nfcEnabled           = nfcEnabled && nfcAvailable,
+                nfcError             = nfcError,
+                onClearNfcError      = { viewModel.clearNfcError() }
             )
         }
 
@@ -642,7 +644,9 @@ private fun FullUnlockContent(
     onShowRecovery: () -> Unit,
     onShowSwitchAccount: () -> Unit,
     switchSignInError: String?,
-    nfcEnabled: Boolean = false
+    nfcEnabled: Boolean = false,
+    nfcError: String? = null,
+    onClearNfcError: () -> Unit = {}
 ) {
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -762,12 +766,41 @@ private fun FullUnlockContent(
         }
 
         if (nfcEnabled) {
-            Spacer(modifier = Modifier.height(8.dp))
-            Text(
-                "or tap your NFC card",
-                style = MaterialTheme.typography.bodySmall,
-                color = CyanPrimary.copy(0.4f)
-            )
+            Spacer(modifier = Modifier.height(20.dp))
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.Center,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(8.dp))
+                    .border(1.dp, CyanPrimary.copy(alpha = 0.3f), RoundedCornerShape(8.dp))
+                    .padding(horizontal = 16.dp, vertical = 12.dp)
+            ) {
+                Icon(
+                    Icons.Outlined.Nfc,
+                    contentDescription = null,
+                    tint = CyanPrimary.copy(0.8f),
+                    modifier = Modifier.size(20.dp)
+                )
+                Spacer(Modifier.width(10.dp))
+                Text(
+                    "TAP NFC CARD TO UNLOCK",
+                    style = MaterialTheme.typography.labelSmall.copy(letterSpacing = 1.5.sp),
+                    color = CyanPrimary.copy(0.75f)
+                )
+            }
+            nfcError?.let { err ->
+                Spacer(modifier = Modifier.height(6.dp))
+                Text(
+                    err,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error
+                )
+                LaunchedEffect(err) {
+                    delay(4_000L)
+                    onClearNfcError()
+                }
+            }
         }
 
         Spacer(modifier = Modifier.weight(0.62f))
