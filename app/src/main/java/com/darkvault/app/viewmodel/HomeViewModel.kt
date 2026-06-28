@@ -1,3 +1,5 @@
+@file:OptIn(kotlinx.coroutines.FlowPreview::class)
+
 package com.darkvault.app.viewmodel
 
 import android.app.Application
@@ -35,6 +37,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
@@ -81,6 +84,9 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     private val _storageInfo = MutableStateFlow<StorageInfo?>(null)
     val storageInfo: StateFlow<StorageInfo?> = _storageInfo
 
+    private val _isCalculatingStorage = MutableStateFlow(false)
+    val isCalculatingStorage: StateFlow<Boolean> = _isCalculatingStorage
+
     // Task 7: Last synced timestamp
     private val _lastSyncedMs = MutableStateFlow<Long>(0L)
     val lastSyncedMs: StateFlow<Long> = _lastSyncedMs
@@ -119,7 +125,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
 
     // Derived: apply search, filter and sort to raw items
     val displayItems: StateFlow<List<VaultFile>> = combine(
-        _rawItems, searchQuery, filterType, sortOrder
+        _rawItems, searchQuery.debounce(300L), filterType, sortOrder
     ) { items, query, filter, sort ->
         var result = items
 
@@ -161,6 +167,14 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
 
     private val _offlineFiles = MutableStateFlow<List<VaultFile>>(emptyList())
     val offlineFiles: StateFlow<List<VaultFile>> = _offlineFiles
+
+    // ConcurrentHashMap so reads (recentItems, refreshOfflineFiles on IO) and writes
+    // (loadFiles/loadItemsForCurrentFolder on IO) never race or produce CME.
+    // Declared HERE — before recentItems — because recentItems is eagerly collected on init
+    // and accesses folderCache.values(); if declared after, the backing field is null at that point.
+    private val folderCache    = java.util.concurrent.ConcurrentHashMap<String, List<VaultFile>>()
+    // ponytail: per-folder Drive sync timestamp; skip revalidation if < 60 s old
+    private val folderSyncTime = java.util.concurrent.ConcurrentHashMap<String, Long>()
 
     // ── Recents — 8 most recently modified non-folder files across ALL known folders
     val recentItems: StateFlow<List<VaultFile>> = _rawItems.map {
@@ -206,9 +220,6 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
 
     private var cachedFolderId: String? = null
     private var cachedAccount: GoogleSignInAccount? = null
-    // ConcurrentHashMap so reads (recentItems, refreshOfflineFiles on IO) and writes
-    // (loadFiles/loadItemsForCurrentFolder on IO) never race or produce CME.
-    private val folderCache = java.util.concurrent.ConcurrentHashMap<String, List<VaultFile>>()
 
     init {
         // Observe upload events from the foreground service
@@ -311,12 +322,34 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             runCatching {
                 val client = DriveApiClient(getApplication(), account)
-                // Use the already-loaded listing to compute vault bytes — avoids a second listItems call
-                val vaultUsedBytes = _rawItems.value.filter { !it.isFolder }.sumOf { it.size }
-                client.getStorageQuotaOnly(vaultUsedBytes)
+                val knownBytes = folderCache.values.flatten().filter { !it.isFolder }.sumOf { it.size }
+                client.getStorageQuotaOnly(knownBytes)
             }.onSuccess { info ->
                 _storageInfo.value = info
             }
+        }
+    }
+
+    /** BFS across all vault folders to get the true total size. Updates storageInfo when done. */
+    fun calculateVaultSize(account: GoogleSignInAccount) {
+        if (_isCalculatingStorage.value) return
+        viewModelScope.launch {
+            _isCalculatingStorage.value = true
+            runCatching {
+                val client = DriveApiClient(getApplication(), account)
+                val rootId = cachedFolderId ?: error("Vault not loaded yet")
+                var total = 0L
+                val queue = ArrayDeque<String>()
+                queue.add(rootId)
+                while (queue.isNotEmpty()) {
+                    val items = client.listItems(queue.removeFirst())
+                    items.forEach { if (it.isFolder) queue.add(it.id) else total += it.size }
+                }
+                val current = _storageInfo.value
+                if (current != null) current.copy(usedByVaultBytes = total)
+                else client.getStorageQuotaOnly(total)
+            }.onSuccess { _storageInfo.value = it }
+            _isCalculatingStorage.value = false
         }
     }
 
@@ -364,12 +397,17 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                 }
             }
 
-            // 3. Always revalidate from Drive in the background
+            // 3. Revalidate from Drive — skip if cache is fresh (< 60 s)
+            val lastSync = folderSyncTime[currentId] ?: 0L
+            if (System.currentTimeMillis() - lastSync < 60_000L && folderCache.containsKey(currentId)) {
+                return@launch
+            }
             runCatching {
                 DriveApiClient(getApplication(), account).listItems(currentId)
             }.onSuccess { items ->
                 _isOffline.value = false
                 folderCache[currentId] = items
+                folderSyncTime[currentId] = System.currentTimeMillis()
                 _rawItems.value = items
                 _uiState.value  = HomeUiState.Success(items)
                 _lastSyncedMs.value = System.currentTimeMillis()
@@ -545,15 +583,21 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                     memHit  != null -> memHit
                     diskHit != null -> { EncryptedFileCache.put(file.id, file.modifiedTime, diskHit); diskHit }
                     else -> {
-                        val bytes = DriveApiClient(getApplication(), account)
-                            .downloadFileWithProgress(file.id) { dl, total ->
-                                val pct = if (total > 0) dl.toFloat() / total else 0f
-                                _operationState.value = OperationState.InProgress(
-                                    file.originalName, "Downloading… ${(pct * 100).toInt()}%", pct
-                                )
-                            }
-                        EncryptedFileCache.put(file.id, file.modifiedTime, bytes)
-                        bytes
+                        val staging = File(getApplication<Application>().cacheDir, "dl_${file.id}.vault")
+                        try {
+                            DriveApiClient(getApplication(), account)
+                                .downloadFileTo(file.id, staging) { dl, total ->
+                                    val pct = if (total > 0) dl.toFloat() / total else 0f
+                                    _operationState.value = OperationState.InProgress(
+                                        file.originalName, "Downloading… ${(pct * 100).toInt()}%", pct
+                                    )
+                                }
+                            val bytes = staging.readBytes()
+                            EncryptedFileCache.put(file.id, file.modifiedTime, bytes)
+                            bytes
+                        } finally {
+                            staging.delete()
+                        }
                     }
                 }
 
@@ -563,7 +607,20 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                     CryptoManager.decrypt(java.io.ByteArrayInputStream(encBytes), out, password, VaultSession.dek)
                     out.toByteArray()
                 }
-                saveToDownloads(file.originalName, decrypted, file.originalMimeType)
+                val path = saveToDownloads(file.originalName, decrypted, file.originalMimeType)
+                // Auto-pin: reuse already-fetched encBytes — no re-download needed
+                VaultSession.dek?.let { dek ->
+                    runCatching {
+                        val maxBytes = prefs.cacheCap.first() * 1024L * 1024L
+                        if (diskHit != null) {
+                            LocalVaultCache.setPinned(getApplication(), file.id, true)
+                        } else {
+                            LocalVaultCache.put(getApplication(), file.id, file.modifiedTime, encBytes, dek, maxBytes, isPinned = true)
+                        }
+                        refreshOfflineFiles()
+                    }
+                }
+                path
             }.onSuccess { path ->
                 _operationState.value = OperationState.Done("Saved to $path")
             }.onFailure { e ->
@@ -619,16 +676,21 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                     if (alreadyCached != null) {
                         LocalVaultCache.setPinned(getApplication(), file.id, true)
                     } else {
-                        val encBytes = DriveApiClient(getApplication(), account).downloadFile(file.id)
-                        LocalVaultCache.put(
-                            context        = getApplication(),
-                            fileId         = file.id,
-                            modifiedTime   = file.modifiedTime,
-                            encryptedBytes = encBytes,
-                            dek            = dek,
-                            maxBytes       = maxBytes,
-                            isPinned       = true
-                        )
+                        val staging = File(getApplication<Application>().cacheDir, "pin_${file.id}.vault")
+                        try {
+                            DriveApiClient(getApplication(), account).downloadFileTo(file.id, staging)
+                            LocalVaultCache.promoteFromStaging(
+                                context      = getApplication(),
+                                fileId       = file.id,
+                                modifiedTime = file.modifiedTime,
+                                stagingFile  = staging,
+                                dek          = dek,
+                                maxBytes     = maxBytes,
+                                isPinned     = true
+                            )
+                        } finally {
+                            if (staging.exists()) staging.delete()
+                        }
                     }
                 }
             } else {
@@ -830,6 +892,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         cachedAccount = null
         cachedFolderId = null
         folderCache.clear()
+        folderSyncTime.clear()
         _rawItems.value = emptyList()
         _uiState.value = HomeUiState.NotSignedIn
         _folderStack.value = emptyList()

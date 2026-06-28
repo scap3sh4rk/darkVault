@@ -80,6 +80,12 @@ fun DarkVaultNavGraph(authViewModel: AuthViewModel) {
     LaunchedEffect(Unit) { authViewModel.initializeAuth() }
 
     LaunchedEffect(authState) {
+        // Clear all per-user Drive state on sign-out (SignIn) and account switch (CheckingVault).
+        // This prevents the previous user's folder stack, offline list, and cached metadata
+        // from being visible to — or used by — the next signed-in account.
+        if (authState is AuthState.SignIn || authState is AuthState.CheckingVault) {
+            homeViewModel.clearDriveState()
+        }
         val targetRoute = when (authState) {
             is AuthState.Init,
             is AuthState.CheckingVault,
@@ -184,6 +190,8 @@ fun DarkVaultNavGraph(authViewModel: AuthViewModel) {
             val currentAccount  = remember { GoogleSignIn.getLastSignedInAccount(context) }
             OfflineFilesScreen(
                 homeViewModel  = homeViewModel,
+                password       = password,
+                account        = currentAccount,
                 onBack         = { navController.popBackStack() },
                 onDownloadFile = { file ->
                     val pwd = password; val acc = currentAccount

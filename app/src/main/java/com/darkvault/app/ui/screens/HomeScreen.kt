@@ -1495,7 +1495,7 @@ private fun BreadcrumbRow(
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun VaultGridItem(
+internal fun VaultGridItem(
     item: VaultFile,
     columns: Int,
     isSelected: Boolean,
@@ -1675,7 +1675,7 @@ private fun RecentFileCard(
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun ImagePreviewDialog(
+internal fun ImagePreviewDialog(
     file: VaultFile,
     homeViewModel: HomeViewModel,
     password: String?,
@@ -1869,7 +1869,7 @@ private fun InfoRow(label: String, value: String) {
 
 // ── MIME helpers ──────────────────────────────────────────────────────────────
 
-private fun isTextMime(mime: String): Boolean =
+internal fun isTextMime(mime: String): Boolean =
     mime.startsWith("text/") ||
     mime in setOf(
         "application/json", "application/xml", "application/xhtml+xml",
@@ -1880,9 +1880,9 @@ private fun isTextMime(mime: String): Boolean =
         "application/ld+json", "application/manifest+json"
     )
 
-private enum class PreviewKind { IMAGE, VIDEO, AUDIO, PDF, TEXT, NONE }
+internal enum class PreviewKind { IMAGE, VIDEO, AUDIO, PDF, TEXT, NONE }
 
-private fun previewKind(mime: String): PreviewKind = when {
+internal fun previewKind(mime: String): PreviewKind = when {
     HomeViewModel.isImageMime(mime) -> PreviewKind.IMAGE
     mime.startsWith("video/") -> PreviewKind.VIDEO
     mime.startsWith("audio/") -> PreviewKind.AUDIO
@@ -1894,7 +1894,7 @@ private fun previewKind(mime: String): PreviewKind = when {
 // ── Text preview dialog ───────────────────────────────────────────────────────
 
 @Composable
-private fun TextPreviewDialog(
+internal fun TextPreviewDialog(
     file: VaultFile,
     homeViewModel: HomeViewModel,
     password: String?,

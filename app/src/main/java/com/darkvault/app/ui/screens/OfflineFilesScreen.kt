@@ -1,27 +1,28 @@
 package com.darkvault.app.ui.screens
 
-import androidx.compose.foundation.clickable
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.GridItemSpan
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
+import androidx.compose.material.icons.automirrored.outlined.ViewList
 import androidx.compose.material.icons.outlined.CloudOff
-import androidx.compose.material.icons.outlined.PushPin
+import androidx.compose.material.icons.outlined.GridView
+import androidx.compose.material.icons.outlined.GridOn
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -45,16 +46,17 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.darkvault.app.model.VaultFile
-import com.darkvault.app.ui.components.fileTypeIcon
-import com.darkvault.app.ui.components.formatSize
-import com.darkvault.app.ui.theme.VaultSurfaceVariant
+import com.darkvault.app.ui.components.VaultFileCard
 import com.darkvault.app.viewmodel.HomeViewModel
+import com.darkvault.app.viewmodel.ViewLayout
 import kotlinx.coroutines.launch
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 fun OfflineFilesScreen(
     homeViewModel: HomeViewModel,
+    password: String?,
+    account: com.google.android.gms.auth.api.signin.GoogleSignInAccount?,
     onBack: () -> Unit,
     onDownloadFile: (VaultFile) -> Unit = {}
 ) {
@@ -62,8 +64,24 @@ fun OfflineFilesScreen(
     val snackbarHost = remember { SnackbarHostState() }
 
     val offlineFiles by homeViewModel.offlineFiles.collectAsState()
-    var selectedFile by remember { mutableStateOf<VaultFile?>(null) }
+    var viewLayout by remember { mutableStateOf(ViewLayout.LIST) }
+    var actionFile by remember { mutableStateOf<VaultFile?>(null) }
     var fileToUnpin by remember { mutableStateOf<VaultFile?>(null) }
+
+    var previewFile by remember { mutableStateOf<VaultFile?>(null) }
+    var textPreviewFile by remember { mutableStateOf<VaultFile?>(null) }
+    var videoPreviewFile by remember { mutableStateOf<VaultFile?>(null) }
+    var audioPreviewFile by remember { mutableStateOf<VaultFile?>(null) }
+    var pdfPreviewFile by remember { mutableStateOf<VaultFile?>(null) }
+
+    fun openPreview(file: VaultFile) = when (previewKind(file.originalMimeType)) {
+        PreviewKind.IMAGE -> previewFile = file
+        PreviewKind.VIDEO -> videoPreviewFile = file
+        PreviewKind.AUDIO -> audioPreviewFile = file
+        PreviewKind.PDF   -> pdfPreviewFile = file
+        PreviewKind.TEXT  -> textPreviewFile = file
+        PreviewKind.NONE  -> actionFile = file
+    }
 
     Scaffold(
         topBar = {
@@ -80,6 +98,25 @@ fun OfflineFilesScreen(
                         Icon(
                             Icons.AutoMirrored.Outlined.ArrowBack,
                             "Back",
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                },
+                actions = {
+                    IconButton(onClick = {
+                        viewLayout = when (viewLayout) {
+                            ViewLayout.LIST  -> ViewLayout.GRID2
+                            ViewLayout.GRID2 -> ViewLayout.GRID3
+                            ViewLayout.GRID3 -> ViewLayout.LIST
+                        }
+                    }) {
+                        Icon(
+                            imageVector = when (viewLayout) {
+                                ViewLayout.LIST  -> Icons.Outlined.GridView
+                                ViewLayout.GRID2 -> Icons.Outlined.GridOn
+                                ViewLayout.GRID3 -> Icons.AutoMirrored.Outlined.ViewList
+                            },
+                            contentDescription = "Change layout",
                             tint = MaterialTheme.colorScheme.primary
                         )
                     }
@@ -118,34 +155,88 @@ fun OfflineFilesScreen(
                 }
             }
         } else {
-            LazyColumn(
-                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-                modifier = Modifier.fillMaxSize().padding(padding)
-            ) {
-                item {
-                    Text(
-                        "${offlineFiles.size} file${if (offlineFiles.size != 1) "s" else ""} saved for offline access",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.outline,
-                        modifier = Modifier.padding(horizontal = 4.dp, vertical = 4.dp)
-                    )
-                }
-                items(offlineFiles, key = { it.id }) { file ->
-                    OfflineFileRow(
-                        file    = file,
-                        onClick = { selectedFile = file },
-                        onUnpin = { fileToUnpin = file }
-                    )
+            AnimatedContent(targetState = viewLayout, label = "layout") { layout ->
+                when (layout) {
+                    ViewLayout.LIST -> {
+                        LazyColumn(
+                            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp),
+                            modifier = Modifier.fillMaxSize().padding(padding)
+                        ) {
+                            item {
+                                Text(
+                                    "${offlineFiles.size} file${if (offlineFiles.size != 1) "s" else ""} saved for offline access",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.outline,
+                                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 4.dp)
+                                )
+                            }
+                            items(offlineFiles, key = { it.id }) { file ->
+                                val kind = previewKind(file.originalMimeType)
+                                VaultFileCard(
+                                    file             = file,
+                                    onClick          = { openPreview(file) },
+                                    onPreview        = if (kind != PreviewKind.NONE) ({ openPreview(file) }) else null,
+                                    onDownload       = {
+                                        onDownloadFile(file)
+                                        scope.launch { snackbarHost.showSnackbar("Saving \"${file.originalName}\" to Downloads…") }
+                                    },
+                                    onDelete         = { fileToUnpin = file },
+                                    onMoreActions    = { actionFile = file },
+                                    onLongPress      = { actionFile = file },
+                                    showThumbnail    = true,
+                                    thumbnailPassword = password,
+                                    thumbnailAccount  = account
+                                )
+                            }
+                        }
+                    }
+
+                    ViewLayout.GRID2, ViewLayout.GRID3 -> {
+                        val columns = if (layout == ViewLayout.GRID2) 2 else 3
+                        LazyVerticalGrid(
+                            columns = GridCells.Fixed(columns),
+                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp),
+                            modifier = Modifier.fillMaxSize().padding(padding)
+                        ) {
+                            item(span = { GridItemSpan(columns) }) {
+                                Text(
+                                    "${offlineFiles.size} file${if (offlineFiles.size != 1) "s" else ""} saved for offline access",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.outline,
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(horizontal = 4.dp, vertical = 4.dp)
+                                )
+                            }
+                            items(offlineFiles, key = { it.id }) { file ->
+                                VaultGridItem(
+                                    item             = file,
+                                    columns          = columns,
+                                    isSelected       = false,
+                                    isSelectionMode  = false,
+                                    onTap            = { openPreview(file) },
+                                    onLongPress      = { actionFile = file },
+                                    onMoreActions    = { actionFile = file },
+                                    showThumbnail    = true,
+                                    thumbnailPassword = password,
+                                    thumbnailAccount  = account
+                                )
+                            }
+                        }
+                    }
                 }
             }
         }
     }
 
-    // Per-file action dialog
-    selectedFile?.let { file ->
+    // Action dialog: preview, save, unpin
+    actionFile?.let { file ->
+        val kind = previewKind(file.originalMimeType)
         AlertDialog(
-            onDismissRequest = { selectedFile = null },
+            onDismissRequest = { actionFile = null },
             containerColor = MaterialTheme.colorScheme.surfaceVariant,
             title = {
                 Text(
@@ -157,26 +248,32 @@ fun OfflineFilesScreen(
             },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    if (kind != PreviewKind.NONE) {
+                        TextButton(
+                            onClick = { openPreview(file); actionFile = null },
+                            modifier = Modifier.fillMaxWidth()
+                        ) { Text("Preview", color = MaterialTheme.colorScheme.primary) }
+                    }
                     TextButton(
                         onClick = {
-                            selectedFile = null
+                            actionFile = null
                             onDownloadFile(file)
                             scope.launch { snackbarHost.showSnackbar("Saving \"${file.originalName}\" to Downloads…") }
                         },
                         modifier = Modifier.fillMaxWidth()
                     ) { Text("Save to Downloads", color = MaterialTheme.colorScheme.primary) }
                     TextButton(
-                        onClick = { fileToUnpin = file; selectedFile = null },
+                        onClick = { fileToUnpin = file; actionFile = null },
                         modifier = Modifier.fillMaxWidth()
                     ) { Text("Remove from Offline", color = MaterialTheme.colorScheme.error) }
                 }
             },
             confirmButton = {},
-            dismissButton = { TextButton(onClick = { selectedFile = null }) { Text("Cancel") } }
+            dismissButton = { TextButton(onClick = { actionFile = null }) { Text("Cancel") } }
         )
     }
 
-    // Unpin confirmation dialog
+    // Unpin confirmation
     fileToUnpin?.let { file ->
         AlertDialog(
             onDismissRequest = { fileToUnpin = null },
@@ -199,55 +296,11 @@ fun OfflineFilesScreen(
             dismissButton = { TextButton(onClick = { fileToUnpin = null }) { Text("Cancel") } }
         )
     }
-}
 
-@Composable
-private fun OfflineFileRow(
-    file: VaultFile,
-    onClick: () -> Unit,
-    onUnpin: () -> Unit
-) {
-    Card(
-        shape = RoundedCornerShape(10.dp),
-        colors = CardDefaults.cardColors(containerColor = VaultSurfaceVariant),
-        modifier = Modifier.fillMaxWidth().clickable(onClick = onClick)
-    ) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp)
-        ) {
-            Icon(
-                imageVector = fileTypeIcon(file.originalMimeType),
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(28.dp)
-            )
-            Spacer(Modifier.width(12.dp))
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    file.originalName,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-                Text(
-                    buildString {
-                        append(formatSize(file.size))
-                        if (file.modifiedTime.isNotEmpty()) append(" · ${file.modifiedTime.take(10)}")
-                    },
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-            IconButton(onClick = onUnpin) {
-                Icon(
-                    Icons.Outlined.PushPin,
-                    contentDescription = "Remove from offline",
-                    tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(20.dp)
-                )
-            }
-        }
-    }
+    // Preview dialogs — all work offline because decryptToMemory checks LocalVaultCache first
+    previewFile?.let { ImagePreviewDialog(it, homeViewModel, password, account, onDismiss = { previewFile = null }) }
+    textPreviewFile?.let { TextPreviewDialog(it, homeViewModel, password, account, onDismiss = { textPreviewFile = null }) }
+    videoPreviewFile?.let { VideoPreviewDialog(it, homeViewModel, password, account, onDismiss = { videoPreviewFile = null }) }
+    audioPreviewFile?.let { AudioPreviewDialog(it, homeViewModel, password, account, onDismiss = { audioPreviewFile = null }) }
+    pdfPreviewFile?.let { PdfPreviewDialog(it, homeViewModel, password, account, onDismiss = { pdfPreviewFile = null }) }
 }

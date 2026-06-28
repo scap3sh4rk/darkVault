@@ -181,66 +181,54 @@ class DriveApiClient(
 
     // ── File listing ───────────────────────────────────────────────────────
 
-    /** Returns both .vault files and sub-folders inside [folderId]. */
+    private fun parseVaultFileElement(el: com.google.gson.JsonElement, skipThumbnails: Boolean): VaultFile? {
+        val obj          = el.asJsonObject
+        val id           = obj.get("id")?.asString           ?: return null
+        val name         = obj.get("name")?.asString         ?: return null
+        val mimeType     = obj.get("mimeType")?.asString     ?: ""
+        val createdTime  = obj.get("createdTime")?.asString  ?: ""
+        val modifiedTime = obj.get("modifiedTime")?.asString ?: ""
+        return if (mimeType == "application/vnd.google-apps.folder") {
+            VaultFile(id = id, name = name, originalName = name, originalMimeType = mimeType,
+                size = 0L, createdTime = createdTime, modifiedTime = modifiedTime, isFolder = true)
+        } else {
+            val appProps     = obj.getAsJsonObject("appProperties") ?: return null
+            if (skipThumbnails && appProps.get("role")?.asString == "thumbnail") return null
+            val originalName = appProps.get("originalName")?.asString                    ?: return null
+            val originalMime = appProps.get("originalMimeType")?.asString ?: "application/octet-stream"
+            val thumbnailId  = if (skipThumbnails) appProps.get("thumbnailId")?.asString else null
+            VaultFile(id = id, name = name, originalName = originalName, originalMimeType = originalMime,
+                size = obj.get("size")?.asLong ?: 0L, createdTime = createdTime, modifiedTime = modifiedTime,
+                isFolder = false, thumbnailFileId = thumbnailId)
+        }
+    }
+
+    /** Returns both .vault files and sub-folders inside [folderId], fetching all pages. */
     suspend fun listItems(folderId: String): List<VaultFile> = withRetry {
         withContext(Dispatchers.IO) {
-            val t = token()
-            val q = java.net.URLEncoder.encode("'$folderId' in parents and trashed=false", "UTF-8")
-            val fields = "files(id,name,size,createdTime,modifiedTime,mimeType,appProperties)"
-            val resp = okHttpExecuteWithDiag(
-                Request.Builder()
-                    .url("https://www.googleapis.com/drive/v3/files?q=$q&fields=$fields&orderBy=name")
-                    .addHeader("Authorization", "Bearer $t")
-                    .build(),
-                "listItems"
-            )
-
-            if (!resp.isSuccessful) {
-                error("listItems failed: ${resp.code}")
-            }
-
-            val body = gson.fromJson(resp.body!!.string(), JsonObject::class.java)
-            val files = body.getAsJsonArray("files") ?: return@withContext emptyList()
-
-            files.mapNotNull { el ->
-                val obj = el.asJsonObject
-                val id = obj.get("id")?.asString ?: return@mapNotNull null
-                val name = obj.get("name")?.asString ?: return@mapNotNull null
-                val mimeType = obj.get("mimeType")?.asString ?: ""
-                val createdTime = obj.get("createdTime")?.asString ?: ""
-                val modifiedTime = obj.get("modifiedTime")?.asString ?: ""
-
-                if (mimeType == "application/vnd.google-apps.folder") {
-                    VaultFile(
-                        id = id,
-                        name = name,
-                        originalName = name,
-                        originalMimeType = mimeType,
-                        size = 0L,
-                        createdTime = createdTime,
-                        modifiedTime = modifiedTime,
-                        isFolder = true
-                    )
-                } else {
-                    val appProps = obj.getAsJsonObject("appProperties") ?: return@mapNotNull null
-                    // Skip thumbnail companion files — they are surfaced via VaultFile.thumbnailFileId
-                    if (appProps.get("role")?.asString == "thumbnail") return@mapNotNull null
-                    val originalName = appProps.get("originalName")?.asString ?: return@mapNotNull null
-                    val originalMime = appProps.get("originalMimeType")?.asString ?: "application/octet-stream"
-                    val thumbnailFileId = appProps.get("thumbnailId")?.asString
-                    VaultFile(
-                        id = id,
-                        name = name,
-                        originalName = originalName,
-                        originalMimeType = originalMime,
-                        size = obj.get("size")?.asLong ?: 0L,
-                        createdTime = createdTime,
-                        modifiedTime = modifiedTime,
-                        isFolder = false,
-                        thumbnailFileId = thumbnailFileId
-                    )
+            val t        = token()
+            val q        = java.net.URLEncoder.encode("'$folderId' in parents and trashed=false", "UTF-8")
+            val allFiles = mutableListOf<VaultFile>()
+            var pageToken: String? = null
+            do {
+                val url = buildString {
+                    append("https://www.googleapis.com/drive/v3/files?q=$q")
+                    append("&fields=nextPageToken,files(id,name,size,createdTime,modifiedTime,mimeType,appProperties)")
+                    append("&pageSize=1000&orderBy=name")
+                    if (pageToken != null) append("&pageToken=$pageToken")
                 }
-            }
+                val resp = okHttpExecuteWithDiag(
+                    Request.Builder().url(url).addHeader("Authorization", "Bearer $t").build(),
+                    "listItems"
+                )
+                if (!resp.isSuccessful) error("listItems failed: ${resp.code}")
+                val body = gson.fromJson(resp.body!!.string(), JsonObject::class.java)
+                body.getAsJsonArray("files")
+                    ?.mapNotNull { parseVaultFileElement(it, skipThumbnails = true) }
+                    ?.let { allFiles.addAll(it) }
+                pageToken = body.get("nextPageToken")?.asString
+            } while (pageToken != null)
+            allFiles
         }
     }
 
@@ -250,36 +238,29 @@ class DriveApiClient(
     /** Lists vault files (and folders) inside [folderId] that have been moved to Drive trash. */
     suspend fun listTrashedVaultFiles(folderId: String): List<VaultFile> = withRetry {
         withContext(Dispatchers.IO) {
-            val t = token()
-            val q = java.net.URLEncoder.encode("'$folderId' in parents and trashed=true", "UTF-8")
-            val fields = "files(id,name,size,createdTime,modifiedTime,mimeType,appProperties)"
-            val resp = http.newCall(
-                Request.Builder()
-                    .url("https://www.googleapis.com/drive/v3/files?q=$q&fields=$fields&orderBy=name")
-                    .addHeader("Authorization", "Bearer $t")
-                    .build()
-            ).execute()
-            if (!resp.isSuccessful) error("listTrashedVaultFiles failed: ${resp.code}")
-            val body = gson.fromJson(resp.body!!.string(), JsonObject::class.java)
-            val files = body.getAsJsonArray("files") ?: return@withContext emptyList()
-            files.mapNotNull { el ->
-                val obj = el.asJsonObject
-                val id = obj.get("id")?.asString ?: return@mapNotNull null
-                val name = obj.get("name")?.asString ?: return@mapNotNull null
-                val mimeType = obj.get("mimeType")?.asString ?: ""
-                val createdTime = obj.get("createdTime")?.asString ?: ""
-                val modifiedTime = obj.get("modifiedTime")?.asString ?: ""
-                if (mimeType == "application/vnd.google-apps.folder") {
-                    VaultFile(id = id, name = name, originalName = name, originalMimeType = mimeType,
-                        size = 0L, createdTime = createdTime, modifiedTime = modifiedTime, isFolder = true)
-                } else {
-                    val appProps = obj.getAsJsonObject("appProperties") ?: return@mapNotNull null
-                    val originalName = appProps.get("originalName")?.asString ?: return@mapNotNull null
-                    val originalMime = appProps.get("originalMimeType")?.asString ?: "application/octet-stream"
-                    VaultFile(id = id, name = name, originalName = originalName, originalMimeType = originalMime,
-                        size = obj.get("size")?.asLong ?: 0L, createdTime = createdTime, modifiedTime = modifiedTime, isFolder = false)
+            val t        = token()
+            val q        = java.net.URLEncoder.encode("'$folderId' in parents and trashed=true", "UTF-8")
+            val allFiles = mutableListOf<VaultFile>()
+            var pageToken: String? = null
+            do {
+                val url = buildString {
+                    append("https://www.googleapis.com/drive/v3/files?q=$q")
+                    append("&fields=nextPageToken,files(id,name,size,createdTime,modifiedTime,mimeType,appProperties)")
+                    append("&pageSize=1000&orderBy=name")
+                    if (pageToken != null) append("&pageToken=$pageToken")
                 }
-            }
+                val resp = okHttpExecuteWithDiag(
+                    Request.Builder().url(url).addHeader("Authorization", "Bearer $t").build(),
+                    "listTrashedVaultFiles"
+                )
+                if (!resp.isSuccessful) error("listTrashedVaultFiles failed: ${resp.code}")
+                val body = gson.fromJson(resp.body!!.string(), JsonObject::class.java)
+                body.getAsJsonArray("files")
+                    ?.mapNotNull { parseVaultFileElement(it, skipThumbnails = false) }
+                    ?.let { allFiles.addAll(it) }
+                pageToken = body.get("nextPageToken")?.asString
+            } while (pageToken != null)
+            allFiles
         }
     }
 
@@ -609,6 +590,39 @@ class DriveApiClient(
         }
     }
 
+    /** Streams the Drive file directly to [destFile], avoiding ByteArrayOutputStream double-copy. */
+    suspend fun downloadFileTo(
+        fileId: String,
+        destFile: java.io.File,
+        onProgress: suspend (downloaded: Long, total: Long) -> Unit = { _, _ -> }
+    ) = withRetry {
+        withContext(Dispatchers.IO) {
+            val t    = token()
+            val resp = okHttpExecuteWithDiag(
+                Request.Builder()
+                    .url("https://www.googleapis.com/drive/v3/files/$fileId?alt=media")
+                    .addHeader("Authorization", "Bearer $t")
+                    .build(),
+                "downloadFileTo/$fileId"
+            )
+            if (!resp.isSuccessful) error("Download failed: ${resp.code}")
+            val body  = resp.body ?: error("Empty download response")
+            val total = body.contentLength()
+            var downloaded = 0L
+            val buf = ByteArray(65536)
+            body.byteStream().use { input ->
+                destFile.outputStream().use { output ->
+                    var read: Int
+                    while (input.read(buf).also { read = it } != -1) {
+                        output.write(buf, 0, read)
+                        downloaded += read
+                        if (total > 0) onProgress(downloaded, total)
+                    }
+                }
+            }
+        }
+    }
+
     // ── Delete / Trash ─────────────────────────────────────────────────────
 
     /** Permanently deletes the file from Drive. */
@@ -653,6 +667,40 @@ class DriveApiClient(
     }
 
     // ── Storage quota ──────────────────────────────────────────────────────
+
+    /**
+     * Counts bytes used by all vault files in Drive (data files + thumbnails) using a flat
+     * appProperties search — avoids recursive per-folder traversal and works across all
+     * nesting depths.
+     */
+    suspend fun countVaultFileBytes(): Long = withContext(Dispatchers.IO) {
+        val t = token()
+        // Data files have originalName; thumbnails have role='thumbnail' — both count toward storage
+        val q = java.net.URLEncoder.encode(
+            "(appProperties has { key='originalName' } or appProperties has { key='role' and value='thumbnail' }) and trashed=false",
+            "UTF-8"
+        )
+        var total = 0L
+        var pageToken: String? = null
+        do {
+            val url = buildString {
+                append("https://www.googleapis.com/drive/v3/files?q=$q")
+                append("&fields=nextPageToken,files(size)&pageSize=1000")
+                if (pageToken != null) append("&pageToken=$pageToken")
+            }
+            val resp = okHttpExecuteWithDiag(
+                Request.Builder().url(url).addHeader("Authorization", "Bearer $t").build(),
+                "countVaultFileBytes"
+            )
+            if (!resp.isSuccessful) error("countVaultFileBytes failed: ${resp.code}")
+            val body = gson.fromJson(resp.body!!.string(), JsonObject::class.java)
+            body.getAsJsonArray("files")?.forEach { el ->
+                total += el.asJsonObject.get("size")?.asLong ?: 0L
+            }
+            pageToken = body.get("nextPageToken")?.asString
+        } while (pageToken != null)
+        total
+    }
 
     /**
      * Fetches Drive quota and builds StorageInfo using [knownVaultBytes] supplied by the
