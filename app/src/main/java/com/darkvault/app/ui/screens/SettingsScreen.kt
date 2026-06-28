@@ -1439,6 +1439,7 @@ fun SettingsScreen(
                                             onValueChange = { if (it.all { c -> c.isDigit() } && it.length <= 8) nfcEnrollPin = it },
                                             label = "NFC PIN (4–8 digits)",
                                             isPassword = true,
+                                            keyboardType = androidx.compose.ui.text.input.KeyboardType.NumberPassword,
                                             modifier = Modifier.fillMaxWidth()
                                         )
                                     }

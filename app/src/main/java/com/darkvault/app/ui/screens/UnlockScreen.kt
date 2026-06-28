@@ -70,27 +70,22 @@ import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.semantics.disabled
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import androidx.fragment.app.FragmentActivity
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
 import com.darkvault.app.crypto.BiometricHelper
 import com.darkvault.app.crypto.BiometricKeyManager
 import com.darkvault.app.data.PreferencesManager
-import com.darkvault.app.nfc.NfcTagEvent
 import com.darkvault.app.nfc.NfcTagManager
-import com.darkvault.app.nfc.NfcTagType
 import com.darkvault.app.ui.components.CyberButton
 import com.darkvault.app.ui.components.VaultLogo
 import com.darkvault.app.ui.components.VaultTextField
-import com.darkvault.app.ui.theme.AlertAmber
 import com.darkvault.app.ui.theme.CyanPrimary
 import com.darkvault.app.ui.theme.GlassHighlight
-import com.darkvault.app.ui.theme.SecureGreen
 import com.darkvault.app.ui.theme.VaultSurfaceVariant
 import com.darkvault.app.viewmodel.AuthState
 import com.darkvault.app.viewmodel.AuthViewModel
@@ -118,16 +113,6 @@ fun UnlockScreen(viewModel: AuthViewModel) {
 
     val nfcAvailable = remember { NfcTagManager.isAvailable(context) }
 
-    // Real-time NFC tag detection banner state
-    var lastTagEvent by remember { mutableStateOf<NfcTagEvent?>(null) }
-    LaunchedEffect(Unit) {
-        NfcTagManager.tagFlow.collect { event ->
-            lastTagEvent = event
-            delay(4_000L)
-            lastTagEvent = null
-        }
-    }
-
     // NFC PIN entry dialog
     var nfcPinInput by remember { mutableStateOf("") }
     if (nfcPinRequired) {
@@ -146,6 +131,7 @@ fun UnlockScreen(viewModel: AuthViewModel) {
                         onValueChange = { if (it.all { c -> c.isDigit() } && it.length <= 8) nfcPinInput = it },
                         label = "PIN",
                         isPassword = true,
+                        keyboardType = KeyboardType.NumberPassword,
                         modifier = Modifier.fillMaxWidth()
                     )
                 }
@@ -354,30 +340,6 @@ fun UnlockScreen(viewModel: AuthViewModel) {
             )
         }
 
-        // Floating NFC tag detection banner (shows for 4 seconds after a tag scan)
-        lastTagEvent?.let { event ->
-            val (bannerColor, bannerText) = when (event.type) {
-                NfcTagType.WRITABLE -> SecureGreen to "NFC tag detected — writable"
-                NfcTagType.READONLY -> AlertAmber to "Bank card detected — read-only, PPSE+UID used"
-                NfcTagType.UNKNOWN  -> MaterialTheme.colorScheme.error to "Unsupported NFC tag"
-            }
-            AnimatedVisibility(
-                visible = lastTagEvent != null,
-                enter = fadeIn(),
-                exit = fadeOut(),
-                modifier = Modifier.align(Alignment.TopCenter).padding(top = 56.dp)
-            ) {
-                Box(
-                    modifier = Modifier
-                        .padding(horizontal = 24.dp)
-                        .background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(8.dp))
-                        .border(1.dp, bannerColor.copy(alpha = 0.6f), RoundedCornerShape(8.dp))
-                        .padding(horizontal = 16.dp, vertical = 10.dp)
-                ) {
-                    Text(bannerText, style = MaterialTheme.typography.bodySmall, color = bannerColor)
-                }
-            }
-        }
     }
 
     // ── Switch account dialog ─────────────────────────────────────────────────

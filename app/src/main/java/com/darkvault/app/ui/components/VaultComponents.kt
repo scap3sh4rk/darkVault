@@ -45,7 +45,10 @@ import androidx.compose.material.icons.outlined.Folder
 import androidx.compose.material.icons.outlined.FolderOpen
 import androidx.compose.material.icons.outlined.Image
 import androidx.compose.material.icons.automirrored.outlined.InsertDriveFile
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.outlined.LockOpen
+import androidx.compose.material.icons.outlined.Visibility
+import androidx.compose.material.icons.outlined.VisibilityOff
 import androidx.compose.material.icons.outlined.MoreVert
 import androidx.compose.material.icons.outlined.MusicNote
 import androidx.compose.material.icons.outlined.PauseCircleOutline
@@ -87,6 +90,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
@@ -121,9 +125,11 @@ fun VaultTextField(
     isPassword: Boolean = false,
     isError: Boolean = false,
     errorMessage: String? = null,
-    leadingIcon: ImageVector? = null
+    leadingIcon: ImageVector? = null,
+    keyboardType: KeyboardType = KeyboardType.Text
 ) {
     var isFocused by remember { mutableStateOf(false) }
+    var passwordVisible by remember { mutableStateOf(false) }
     val glowElevation by animateFloatAsState(
         targetValue = if (isFocused) 8f else 0f,
         animationSpec = tween(200),
@@ -131,6 +137,11 @@ fun VaultTextField(
     )
     val primary        = MaterialTheme.colorScheme.primary
     val containerColor = MaterialTheme.colorScheme.surfaceVariant
+
+    // Auto-hide password when user types while visible
+    val wrappedOnValueChange: (String) -> Unit = if (isPassword && passwordVisible) {
+        { v -> passwordVisible = false; onValueChange(v) }
+    } else onValueChange
 
     Column(modifier = modifier) {
         Box(
@@ -147,13 +158,24 @@ fun VaultTextField(
         ) {
             OutlinedTextField(
                 value = value,
-                onValueChange = onValueChange,
+                onValueChange = wrappedOnValueChange,
                 label = { Text(label) },
                 isError = isError,
                 singleLine = true,
-                visualTransformation = if (isPassword) PasswordVisualTransformation()
+                visualTransformation = if (isPassword && !passwordVisible) PasswordVisualTransformation()
                                        else VisualTransformation.None,
+                keyboardOptions = KeyboardOptions(keyboardType = keyboardType),
                 leadingIcon = leadingIcon?.let { { Icon(it, contentDescription = null) } },
+                trailingIcon = if (isPassword) {
+                    {
+                        IconButton(onClick = { passwordVisible = !passwordVisible }) {
+                            Icon(
+                                imageVector = if (passwordVisible) Icons.Outlined.VisibilityOff else Icons.Outlined.Visibility,
+                                contentDescription = if (passwordVisible) "Hide" else "Show"
+                            )
+                        }
+                    }
+                } else null,
                 shape = RoundedCornerShape(10.dp),
                 colors = OutlinedTextFieldDefaults.colors(
                     focusedBorderColor           = primary,
