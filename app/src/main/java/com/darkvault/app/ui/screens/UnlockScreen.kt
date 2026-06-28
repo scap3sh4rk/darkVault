@@ -37,6 +37,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.AccountCircle
 import androidx.compose.material.icons.outlined.Fingerprint
+import androidx.compose.material.icons.outlined.Nfc
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
@@ -74,12 +75,19 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import androidx.fragment.app.FragmentActivity
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import com.darkvault.app.crypto.BiometricHelper
 import com.darkvault.app.crypto.BiometricKeyManager
 import com.darkvault.app.data.PreferencesManager
+import com.darkvault.app.nfc.NfcTagEvent
+import com.darkvault.app.nfc.NfcTagManager
+import com.darkvault.app.nfc.NfcTagType
 import com.darkvault.app.ui.components.CyberButton
 import com.darkvault.app.ui.components.VaultLogo
 import com.darkvault.app.ui.components.VaultTextField
+import com.darkvault.app.ui.theme.AlertAmber
 import com.darkvault.app.ui.theme.CyanPrimary
 import com.darkvault.app.ui.theme.GlassHighlight
 import com.darkvault.app.ui.theme.SecureGreen
@@ -99,11 +107,64 @@ fun UnlockScreen(viewModel: AuthViewModel) {
     val authError         by viewModel.authError.collectAsState()
     val biometricEnabled  by viewModel.biometricEnabled.collectAsState()
     val authState         by viewModel.authState.collectAsState()
+    val nfcEnabled        by viewModel.nfcEnabled.collectAsState()
+    val nfcPinRequired    by viewModel.nfcPinRequired.collectAsState()
+    val nfcError          by viewModel.nfcError.collectAsState()
 
     val context  = LocalContext.current
     val activity = context as FragmentActivity
     val prefs    = remember { PreferencesManager(context) }
     val scope    = rememberCoroutineScope()
+
+    val nfcAvailable = remember { NfcTagManager.isAvailable(context) }
+
+    // Real-time NFC tag detection banner state
+    var lastTagEvent by remember { mutableStateOf<NfcTagEvent?>(null) }
+    LaunchedEffect(Unit) {
+        NfcTagManager.tagFlow.collect { event ->
+            lastTagEvent = event
+            delay(4_000L)
+            lastTagEvent = null
+        }
+    }
+
+    // NFC PIN entry dialog
+    var nfcPinInput by remember { mutableStateOf("") }
+    if (nfcPinRequired) {
+        AlertDialog(
+            onDismissRequest = {
+                nfcPinInput = ""
+                viewModel.cancelNfcPin()
+            },
+            containerColor = VaultSurfaceVariant,
+            title = { Text("Enter NFC PIN", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("Enter your NFC unlock PIN to continue.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    VaultTextField(
+                        value = nfcPinInput,
+                        onValueChange = { if (it.all { c -> c.isDigit() } && it.length <= 8) nfcPinInput = it },
+                        label = "PIN",
+                        isPassword = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    enabled = nfcPinInput.isNotBlank(),
+                    onClick = {
+                        val pin = nfcPinInput
+                        nfcPinInput = ""
+                        viewModel.submitNfcPin(pin)
+                    }
+                ) { Text("Unlock", color = MaterialTheme.colorScheme.primary) }
+            },
+            dismissButton = {
+                TextButton(onClick = { nfcPinInput = ""; viewModel.cancelNfcPin() }) { Text("Cancel") }
+            }
+        )
+    }
 
     var password         by remember { mutableStateOf("") }
     var biometricError   by remember { mutableStateOf<String?>(null) }
@@ -271,7 +332,10 @@ fun UnlockScreen(viewModel: AuthViewModel) {
                 canUseBiometric    = canUseBiometric,
                 biometricError     = biometricError,
                 onBiometricTap     = { biometricError = null; launchBiometric() },
-                onUsePassword      = { viewModel.revertToVaultLock() }
+                onUsePassword      = { viewModel.revertToVaultLock() },
+                nfcEnabled         = nfcEnabled && nfcAvailable,
+                nfcError           = nfcError,
+                onClearNfcError    = { viewModel.clearNfcError() }
             )
         } else {
             FullUnlockContent(
@@ -285,8 +349,34 @@ fun UnlockScreen(viewModel: AuthViewModel) {
                 onUnlock             = { if (password.isNotBlank() && timeLeftMs == 0L) viewModel.unlock(password) },
                 onShowRecovery       = { showRecoveryDialog = true },
                 onShowSwitchAccount  = { showSwitchAccountDialog = true },
-                switchSignInError    = switchSignInError
+                switchSignInError    = switchSignInError,
+                nfcEnabled           = nfcEnabled && nfcAvailable
             )
+        }
+
+        // Floating NFC tag detection banner (shows for 4 seconds after a tag scan)
+        lastTagEvent?.let { event ->
+            val (bannerColor, bannerText) = when (event.type) {
+                NfcTagType.WRITABLE -> SecureGreen to "NFC tag detected — writable"
+                NfcTagType.READONLY -> AlertAmber to "Bank card detected — read-only, PPSE+UID used"
+                NfcTagType.UNKNOWN  -> MaterialTheme.colorScheme.error to "Unsupported NFC tag"
+            }
+            AnimatedVisibility(
+                visible = lastTagEvent != null,
+                enter = fadeIn(),
+                exit = fadeOut(),
+                modifier = Modifier.align(Alignment.TopCenter).padding(top = 56.dp)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .padding(horizontal = 24.dp)
+                        .background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(8.dp))
+                        .border(1.dp, bannerColor.copy(alpha = 0.6f), RoundedCornerShape(8.dp))
+                        .padding(horizontal = 16.dp, vertical = 10.dp)
+                ) {
+                    Text(bannerText, style = MaterialTheme.typography.bodySmall, color = bannerColor)
+                }
+            }
         }
     }
 
@@ -415,7 +505,10 @@ private fun AppLockedContent(
     canUseBiometric: Boolean,
     biometricError: String?,
     onBiometricTap: () -> Unit,
-    onUsePassword: () -> Unit
+    onUsePassword: () -> Unit,
+    nfcEnabled: Boolean = false,
+    nfcError: String? = null,
+    onClearNfcError: () -> Unit = {}
 ) {
     val anim = rememberInfiniteTransition(label = "biometric_anim")
     val outerPulse by anim.animateFloat(
@@ -449,67 +542,113 @@ private fun AppLockedContent(
 
         Spacer(modifier = Modifier.height(52.dp))
 
-        // Biometric fingerprint ring target
-        Box(
-            contentAlignment = Alignment.Center,
-            modifier = Modifier
-                .size(96.dp)
-                .clickable(
-                    interactionSource = remember { MutableInteractionSource() },
-                    indication = null,
-                    onClick = onBiometricTap
-                )
-        ) {
-            // Outer breathing ring
-            Canvas(Modifier.size(96.dp)) {
-                drawCircle(
-                    color = CyanPrimary.copy(outerPulse * 0.4f),
-                    radius = size.minDimension / 2f,
-                    style = androidx.compose.ui.graphics.drawscope.Fill
-                )
-                drawCircle(
-                    color = CyanPrimary.copy(outerPulse),
-                    radius = size.minDimension / 2f - 1f,
-                    style = Stroke(1.dp.toPx())
-                )
-            }
-            // Inner ring
-            Canvas(Modifier.size(72.dp)) {
-                drawCircle(
-                    color = CyanPrimary.copy(innerPulse),
-                    radius = size.minDimension / 2f - 1f,
-                    style = Stroke(1.dp.toPx())
-                )
-            }
-            // Fingerprint icon center
+        // ── Primary unlock target — biometric ring (only if biometric is enrolled) ───
+        if (canUseBiometric) {
             Box(
                 contentAlignment = Alignment.Center,
                 modifier = Modifier
-                    .size(52.dp)
-                    .clip(CircleShape)
-                    .background(MaterialTheme.colorScheme.surfaceVariant)
-                    .border(1.dp, Brush.radialGradient(listOf(GlassHighlight, CyanPrimary.copy(0.3f))), CircleShape)
+                    .size(96.dp)
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null,
+                        onClick = onBiometricTap
+                    )
             ) {
-                Icon(
-                    Icons.Outlined.Fingerprint, "Unlock with biometric",
-                    tint = CyanPrimary,
-                    modifier = Modifier.size(28.dp)
-                )
+                Canvas(Modifier.size(96.dp)) {
+                    drawCircle(
+                        color = CyanPrimary.copy(outerPulse * 0.4f),
+                        radius = size.minDimension / 2f,
+                        style = androidx.compose.ui.graphics.drawscope.Fill
+                    )
+                    drawCircle(
+                        color = CyanPrimary.copy(outerPulse),
+                        radius = size.minDimension / 2f - 1f,
+                        style = Stroke(1.dp.toPx())
+                    )
+                }
+                Canvas(Modifier.size(72.dp)) {
+                    drawCircle(
+                        color = CyanPrimary.copy(innerPulse),
+                        radius = size.minDimension / 2f - 1f,
+                        style = Stroke(1.dp.toPx())
+                    )
+                }
+                Box(
+                    contentAlignment = Alignment.Center,
+                    modifier = Modifier
+                        .size(52.dp)
+                        .clip(CircleShape)
+                        .background(MaterialTheme.colorScheme.surfaceVariant)
+                        .border(1.dp, Brush.radialGradient(listOf(GlassHighlight, CyanPrimary.copy(0.3f))), CircleShape)
+                ) {
+                    Icon(
+                        Icons.Outlined.Fingerprint, "Unlock with biometric",
+                        tint = CyanPrimary,
+                        modifier = Modifier.size(28.dp)
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(14.dp))
+
+            Text(
+                "TAP TO UNLOCK",
+                style = MaterialTheme.typography.labelSmall.copy(letterSpacing = 2.5.sp),
+                color = CyanPrimary.copy(0.55f)
+            )
+
+            biometricError?.let { err ->
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(err, style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error)
             }
         }
 
-        Spacer(modifier = Modifier.height(14.dp))
+        // ── NFC unlock prompt ──────────────────────────────────────────────────────
+        if (nfcEnabled) {
+            Spacer(modifier = Modifier.height(if (canUseBiometric) 28.dp else 0.dp))
 
-        Text(
-            "TAP TO UNLOCK",
-            style = MaterialTheme.typography.labelSmall.copy(letterSpacing = 2.5.sp),
-            color = CyanPrimary.copy(0.55f)
-        )
+            if (!canUseBiometric) {
+                // NFC is the only quick-unlock method — make it the primary visual target
+                Icon(
+                    Icons.Outlined.Nfc,
+                    contentDescription = "Tap NFC card",
+                    tint = CyanPrimary,
+                    modifier = Modifier.size(64.dp)
+                )
+                Spacer(modifier = Modifier.height(14.dp))
+                Text(
+                    "TAP NFC CARD TO UNLOCK",
+                    style = MaterialTheme.typography.labelSmall.copy(letterSpacing = 2.5.sp),
+                    color = CyanPrimary.copy(0.75f)
+                )
+            } else {
+                // NFC is a secondary option alongside biometric
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.Center,
+                    modifier = Modifier
+                        .background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(8.dp))
+                        .border(1.dp, CyanPrimary.copy(alpha = 0.3f), RoundedCornerShape(8.dp))
+                        .padding(horizontal = 20.dp, vertical = 10.dp)
+                ) {
+                    Text(
+                        "TAP NFC CARD TO UNLOCK",
+                        style = MaterialTheme.typography.labelSmall.copy(letterSpacing = 1.5.sp),
+                        color = CyanPrimary.copy(0.7f)
+                    )
+                }
+            }
 
-        biometricError?.let { err ->
-            Spacer(modifier = Modifier.height(8.dp))
-            Text(err, style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.error)
+            nfcError?.let { err ->
+                Spacer(modifier = Modifier.height(6.dp))
+                Text(err, style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error)
+                LaunchedEffect(err) {
+                    delay(4_000L)
+                    onClearNfcError()
+                }
+            }
         }
 
         Spacer(modifier = Modifier.height(36.dp))
@@ -540,7 +679,8 @@ private fun FullUnlockContent(
     onUnlock: () -> Unit,
     onShowRecovery: () -> Unit,
     onShowSwitchAccount: () -> Unit,
-    switchSignInError: String?
+    switchSignInError: String?,
+    nfcEnabled: Boolean = false
 ) {
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -656,6 +796,15 @@ private fun FullUnlockContent(
                 "Forgot password? Use recovery key",
                 color = MaterialTheme.colorScheme.onSurfaceVariant.copy(0.4f),
                 style = MaterialTheme.typography.bodySmall
+            )
+        }
+
+        if (nfcEnabled) {
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                "or tap your NFC card",
+                style = MaterialTheme.typography.bodySmall,
+                color = CyanPrimary.copy(0.4f)
             )
         }
 

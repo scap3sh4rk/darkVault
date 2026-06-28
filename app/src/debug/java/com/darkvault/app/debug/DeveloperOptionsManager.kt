@@ -140,6 +140,31 @@ object DeveloperOptionsManager {
         vaultKeyPresentOnDrive.value = present
     }
 
+    // ── Section H: NFC diagnostics ───────────────────────────────────────
+
+    val nfcEnrolled = MutableStateFlow(false)
+    val nfcMode = MutableStateFlow("—")
+    val nfcTagType = MutableStateFlow("—")
+    val nfcLastTagId = MutableStateFlow("—")  // first 4 bytes of tag.id, hex
+
+    fun onNfcEnrolled(tagType: String, mode: String) {
+        nfcEnrolled.value = true
+        nfcTagType.value = tagType
+        nfcMode.value = mode
+    }
+
+    fun onNfcTagDetected(tagType: String, uidPrefix: String) {
+        nfcTagType.value = tagType
+        nfcLastTagId.value = uidPrefix
+    }
+
+    fun onNfcCleared() {
+        nfcEnrolled.value = false
+        nfcMode.value = "—"
+        nfcTagType.value = "—"
+        nfcLastTagId.value = "—"
+    }
+
     // ── Reset helpers ─────────────────────────────────────────────────────
 
     fun resetAll() {
@@ -161,5 +186,9 @@ object DeveloperOptionsManager {
         simulateUploadFailure.value = false
         integrityCheckResult.value = null
         capturedLogs.value = ""
+        nfcEnrolled.value = false
+        nfcMode.value = "—"
+        nfcTagType.value = "—"
+        nfcLastTagId.value = "—"
     }
 }

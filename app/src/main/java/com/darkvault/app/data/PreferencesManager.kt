@@ -50,6 +50,16 @@ class PreferencesManager(private val context: Context) {
         private val KEY_FONT = stringPreferencesKey("app_font")
         // Local vault cache cap in MB (default 500)
         private val KEY_CACHE_CAP_MB = intPreferencesKey("cache_cap_mb")
+
+        // NFC unlock
+        private val KEY_NFC_ENABLED = booleanPreferencesKey("nfc_enabled")
+        private val KEY_NFC_MODE = stringPreferencesKey("nfc_mode")           // "tap_only" | "tap_pin"
+        private val KEY_NFC_TAG_TYPE = stringPreferencesKey("nfc_tag_type")   // "writable" | "readonly"
+        private val KEY_NFC_BINDING_SALT = stringPreferencesKey("nfc_binding_salt")  // 32-byte device-specific salt
+        private val KEY_NFC_PIN_SALT = stringPreferencesKey("nfc_pin_salt")   // 16-byte salt, tap_pin only
+        private val KEY_NFC_IV = stringPreferencesKey("nfc_iv")               // 12-byte GCM IV for password blob
+        private val KEY_NFC_CT = stringPreferencesKey("nfc_ct")               // AES-GCM(nfc_kek, master_password)
+        private val KEY_NFC_WRAPPED_DEK = stringPreferencesKey("nfc_wrapped_dek")  // VaultKeyManager.wrapDek(dek, nfc_kek)
     }
 
     // ── Auth ──────────────────────────────────────────────────────────────
@@ -216,6 +226,64 @@ class PreferencesManager(private val context: Context) {
 
     suspend fun setCacheCap(mb: Int) {
         context.dataStore.edit { it[KEY_CACHE_CAP_MB] = mb.coerceIn(100, 10_000) }
+    }
+
+    // ── NFC unlock ────────────────────────────────────────────────────────────
+
+    data class NfcCredentials(
+        val mode: String,
+        val tagType: String,
+        val bindingSalt: ByteArray,
+        val iv: ByteArray,
+        val ct: ByteArray,
+        val wrappedDek: ByteArray
+    )
+
+    val nfcEnabled: Flow<Boolean> = context.dataStore.data.map { it[KEY_NFC_ENABLED] ?: false }
+
+    suspend fun saveNfcCredentials(
+        mode: String,
+        tagType: String,
+        bindingSalt: ByteArray,
+        iv: ByteArray,
+        ct: ByteArray,
+        wrappedDek: ByteArray
+    ) {
+        context.dataStore.edit {
+            it[KEY_NFC_ENABLED] = true
+            it[KEY_NFC_MODE] = mode
+            it[KEY_NFC_TAG_TYPE] = tagType
+            it[KEY_NFC_BINDING_SALT] = Base64.encodeToString(bindingSalt, Base64.DEFAULT)
+            it.remove(KEY_NFC_PIN_SALT)  // not used in derivation; clear any stale value from old enrollments
+            it[KEY_NFC_IV] = Base64.encodeToString(iv, Base64.DEFAULT)
+            it[KEY_NFC_CT] = Base64.encodeToString(ct, Base64.DEFAULT)
+            it[KEY_NFC_WRAPPED_DEK] = Base64.encodeToString(wrappedDek, Base64.DEFAULT)
+        }
+    }
+
+    suspend fun getNfcCredentials(): NfcCredentials? {
+        val prefs = context.dataStore.data.first()
+        if (prefs[KEY_NFC_ENABLED] != true) return null
+        val mode = prefs[KEY_NFC_MODE] ?: return null
+        val tagType = prefs[KEY_NFC_TAG_TYPE] ?: return null
+        val bindingSalt = prefs[KEY_NFC_BINDING_SALT]?.let { Base64.decode(it, Base64.DEFAULT) } ?: return null
+        val iv = prefs[KEY_NFC_IV]?.let { Base64.decode(it, Base64.DEFAULT) } ?: return null
+        val ct = prefs[KEY_NFC_CT]?.let { Base64.decode(it, Base64.DEFAULT) } ?: return null
+        val wrappedDek = prefs[KEY_NFC_WRAPPED_DEK]?.let { Base64.decode(it, Base64.DEFAULT) } ?: return null
+        return NfcCredentials(mode, tagType, bindingSalt, iv, ct, wrappedDek)
+    }
+
+    suspend fun clearNfcCredentials() {
+        context.dataStore.edit {
+            it.remove(KEY_NFC_ENABLED)
+            it.remove(KEY_NFC_MODE)
+            it.remove(KEY_NFC_TAG_TYPE)
+            it.remove(KEY_NFC_BINDING_SALT)
+            it.remove(KEY_NFC_PIN_SALT)
+            it.remove(KEY_NFC_IV)
+            it.remove(KEY_NFC_CT)
+            it.remove(KEY_NFC_WRAPPED_DEK)
+        }
     }
 
     // ── Reset ─────────────────────────────────────────────────────────────

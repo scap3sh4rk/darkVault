@@ -19,7 +19,9 @@ import androidx.compose.ui.platform.LocalView
 import androidx.core.content.ContextCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import androidx.lifecycle.lifecycleScope
+import android.content.Intent
 import com.darkvault.app.data.PreferencesManager
+import com.darkvault.app.nfc.NfcTagManager
 import com.darkvault.app.service.UploadForegroundService
 import com.darkvault.app.ui.navigation.DarkVaultNavGraph
 import com.darkvault.app.ui.theme.DarkVaultTheme
@@ -106,6 +108,22 @@ class MainActivity : AppCompatActivity() {
     override fun onStart() {
         super.onStart()
         authViewModel.onAppForeground()
+    }
+
+    override fun onResume() {
+        super.onResume()
+        NfcTagManager.enableForeground(this)
+    }
+
+    override fun onPause() {
+        super.onPause()
+        NfcTagManager.disableForeground(this)
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        NfcTagManager.onNewIntent(intent, lifecycleScope)
     }
 
     private fun observeAppLifecycle() { /* handled via onStop/onStart */ }
