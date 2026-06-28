@@ -92,7 +92,7 @@ Only with the Recovery Key shown at setup. There is no backdoor, no master key, 
 
 When you lock the app manually or the auto-lock timer fires without biometric enabled, the DEK (Data Encryption Key) is **zeroed** from RAM — every byte of the 32-byte key array is overwritten with zeros using `Arrays.fill(dek, 0)`, then the reference is set to null. The key is not recoverable from memory after this point.
 
-When biometric unlock is enabled and the app locks automatically (e.g., you switch to another app), the DEK remains in RAM but the app enters `AppLocked` state — a fingerprint is required to resume. The DEK is still cleared when you lock manually.
+When biometric or NFC unlock is enabled and the app locks automatically (e.g., you switch to another app), the DEK remains in RAM but the app enters `AppLocked` state — a fingerprint or NFC tag is required to resume. The DEK is still cleared when you lock manually.
 
 ---
 
@@ -198,13 +198,73 @@ Sign in with your Google account. The app will find `vault.key` on your Drive, a
 
 ### 19. Can darkVault work offline?
 
-Partially. If you have previously unlocked with your password while online, the PBKDF2 hash is cached locally. The app can verify your password offline using this hash. However, it cannot load the DEK (which requires downloading `vault.key`) or encrypt/decrypt files (which requires the DEK). You can browse the file list if it was cached, but cannot open or upload files while offline.
+Yes — for files you have marked as available offline (pinned files).
+
+Here is exactly how it works:
+
+**After every successful online unlock,** darkVault saves a small bundle to your device's private storage:
+- `cached_kek_salt` — the 16-byte salt used in key derivation
+- `cached_wrapped_dek` — your encryption key (DEK), locked with the same password you use to unlock
+
+This bundle is **pure ciphertext** — it is useless without your master password. Nothing that could decrypt your files is stored in plain form.
+
+**When you unlock offline,** darkVault:
+1. Checks your password against the locally stored hash (no network needed)
+2. Re-derives the KEK from your password + cached salt
+3. Unwraps the DEK from the cached bundle
+4. Loads the DEK into memory — exactly as if you had unlocked online
+
+Once the DEK is in memory, any file stored in the local encrypted cache (i.e., pinned files) can be decrypted and viewed normally.
+
+**What works offline:**
+- Unlocking with your master password
+- Viewing pinned (offline-available) files
+- Browsing the cached folder listing
+
+**What does NOT work offline:**
+- Uploading new files (requires Drive)
+- Viewing non-pinned files (not cached locally)
+- Password change, recovery key rotation, or any Drive operation
+
+### 20. How do I make files available offline?
+
+Long-press any file in the home screen and tap **"Make available offline"** (or the pin icon). darkVault downloads and saves the encrypted file to your device's private storage. It will be accessible the next time you unlock offline, as long as you have unlocked online at least once since pinning it.
+
+Pinned files are excluded from the automatic LRU cache eviction — they stay on your device until you explicitly unpin them or permanently delete them.
+
+### 21. Does the offline cache store my files in plaintext?
+
+No. The local cache stores files in exactly the same encrypted format as they exist on Google Drive — AES-256-GCM encrypted with your DEK. The only difference is that the files are stored in your device's app-private `filesDir` rather than on Drive. They require the DEK to decrypt, which requires your master password to unlock.
+
+The local cache is also excluded from Android's automatic backup system — it is never uploaded to Google's backup servers.
+
+### 22. Can I use NFC to unlock darkVault?
+
+Yes, if your device supports NFC and you enable it in Settings. darkVault supports two types of NFC sources:
+
+**Writable NFC tags (blank NDEF tags)**
+The app writes a randomly generated 32-byte secret to the tag. When you tap it, the app reads that secret and uses it as your unlock credential. Treat this tag like a physical key — if someone gets hold of it, they can unlock your vault (but they also need your device, which has its own screen lock).
+
+**Bank cards, transit cards, and other read-only cards**
+You do not need a blank NFC tag. Any ISO-DEP card (bank card, transit card, official ID with NFC) can be enrolled. The app sends a standard EMV query to the card and computes a `SHA-256` hash of the card's hardware identifier and its response. This hash becomes your unlock credential.
+
+**Nothing is ever written to your bank card.** The card is only read from, and it has no way of knowing it is being used by this app.
+
+**What is stored on your device:**
+A cryptographic hash derived from the card's hardware data is stored on your device, encrypted in the same way as your master password (AES-GCM, protected by the Android Keystore). The actual card data is not stored — only a one-way hash that cannot be reversed to recover the card's original values.
+
+**Is this safe?**
+Yes. The hash stored on your device is specific to your exact card. A different card of the same type will produce a different hash. The stored hash alone is not enough to unlock the vault — it is wrapped with a Keystore key that requires biometric confirmation or the physical card to use. Someone who extracts the hash from your device still cannot use it without also having the physical card present at tap time.
+
+NFC unlock behaves identically to biometric unlock for auto-lock: when you leave the app with NFC enrolled and your session active, darkVault immediately enters the `AppLocked` state (NFC or biometric required to resume) rather than starting the full vault-lock timer.
 
 ---
 
 ### 20. Are file names private?
 
 Currently, no. File names are stored in Google Drive's `appProperties` field as plaintext (truncated to 100 characters). Google can see your file names. Only the file contents are encrypted. This is a known limitation and is listed as planned improvement.
+
+---
 
 ---
 

@@ -5,7 +5,7 @@ title: "Privacy Policy"
 # Privacy Policy
 
 **Effective Date:** June 26, 2025
-**Last Updated:** June 26, 2025
+**Last Updated:** June 28, 2026
 
 
 
@@ -29,6 +29,9 @@ The following information is stored exclusively on your device in Android's secu
 * A randomly generated cryptographic salt used for key derivation
 * A vault setup completion flag
 * Encrypted file metadata required for application functionality
+* An offline vault key cache: a randomly generated cryptographic salt (`cached_kek_salt`) and your Data Encryption Key (DEK) in wrapped (ciphertext) form (`cached_wrapped_dek`). This cache enables offline access to your pinned files. The DEK ciphertext is useless without your Master Password — it is stored in exactly the same locked form as the copy on Google Drive and cannot be used to decrypt files without re-deriving the key using your password.
+* If NFC unlock is enabled using a bank card, transit card, or similar ISO-DEP card: a one-way cryptographic hash (`SHA-256`) derived from the card's hardware identifier and its response to a standard EMV proximity query. This hash is stored encrypted in the Android Keystore-protected DataStore and is used solely for vault authentication. The actual card data is never stored. Nothing is written to the card — the card is only read from during enrollment and each unlock attempt.
+* Encrypted copies of files you have marked as available offline, stored in AES-256-GCM encrypted form in the application's private file directory. These files are encrypted with the same key hierarchy used for Google Drive storage and cannot be read without your Master Password.
 
 ## 2.2 Information Stored in Your Google Drive
 
@@ -61,9 +64,11 @@ Your Master Password never leaves your device. All encryption and decryption occ
 | Component            | Implementation                                                                               |
 | -------------------- | -------------------------------------------------------------------------------------------- |
 | Encryption Algorithm | AES-256-GCM                                                                                  |
-| Key Derivation       | PBKDF2WithHmacSHA256 using a unique random salt per user                                     |
+| Key Derivation       | PBKDF2WithHmacSHA256 using a unique random salt per user, 100,000 iterations                |
 | Master Password      | Never stored in any form; only a one-way cryptographic verification hash is retained locally |
 | Encryption Keys      | Derived locally and held in memory only during an active session                             |
+| Offline Key Cache    | DEK stored only in wrapped (ciphertext) form; requires Master Password to unwrap             |
+| Local File Cache     | Pinned files stored in AES-256-GCM encrypted form; excluded from Android Backup             |
 
 ---
 
@@ -107,6 +112,8 @@ The application implements the following protections:
 * Master Password never stored in plaintext
 * Password verification performed using a one-way cryptographic hash
 * Encryption keys exist only in memory during an active unlocked session
+* Offline key cache stores only ciphertext — the DEK is never written to disk in plaintext form
+* Locally cached (pinned) files are stored in AES-256-GCM encrypted form and excluded from Android's automatic backup system
 * Automatic vault lock when the application is backgrounded or terminated
 * `FLAG_SECURE` enabled on sensitive screens to prevent screenshots and recent-app previews
 * HTTPS-only communication with Google Drive API endpoints

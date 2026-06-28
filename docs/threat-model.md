@@ -19,7 +19,9 @@ title: Threat Model
 | KEK (Key Encryption Key) | PBKDF2 output, ephemeral | High |
 | vault.key | Wrapped DEK + kekSalt, stored on Drive | High |
 | Google OAuth token | Grants drive.file scope access | High |
-| DataStore preferences | PBKDF2 hash, salt, biometric blob | Medium |
+| DataStore preferences | PBKDF2 hash, salt, biometric blob, offline vault key cache | Medium |
+| Offline vault key cache | `cached_kek_salt` + `cached_wrapped_dek` — wrapped DEK ciphertext in DataStore; useless without master password | Medium |
+| Encrypted disk cache | `vault_cache/` and `folder_meta/` — AES-GCM encrypted file bytes and folder listings | Medium |
 | File metadata | Names, sizes, MIME types (stored in Drive appProperties) | Low-Medium |
 
 ---
@@ -41,6 +43,15 @@ title: Threat Model
 │   ┌──────────────────────────────────────────────────────────┐  │
 │   │  DataStore (app-private, OS-enforced)                    │  │
 │   │  PBKDF2 hash+salt, encrypted biometric blob, vault ID    │  │
+│   │  cached_kek_salt + cached_wrapped_dek (offline key cache)│  │
+│   │  ↑ ciphertext only — master password required to use     │  │
+│   └──────────────────────────────────────────────────────────┘  │
+│                                                                  │
+│   ┌──────────────────────────────────────────────────────────┐  │
+│   │  filesDir (app-private, OS-enforced)                     │  │
+│   │  vault_cache/ — AES-GCM encrypted file bytes (pinned)    │  │
+│   │  folder_meta/ — AES-GCM encrypted folder listings        │  │
+│   │  Both excluded from Android Backup                       │  │
 │   └──────────────────────────────────────────────────────────┘  │
 └──────────────────────────────────────────────────────────────────┘
          │  HTTPS (TLS 1.2+)
@@ -195,7 +206,26 @@ vault.key deleted
 
 ---
 
-### T10 — Biometric Spoofing
+### T10 — Local Vault Key Cache Exfiltrated
+
+**Scenario:** Attacker reads the app's DataStore (e.g., via root or backup extraction) and obtains `cached_kek_salt` and `cached_wrapped_dek`.
+
+**What the attacker has:**
+- `kekSalt` (16 bytes)
+- `dekWrappedByKek` (60 bytes of AES-GCM ciphertext)
+
+**What the attacker must do to read files:**
+This is structurally identical to **T1** (Drive compromise). The bundle has the same format as `vault.key`. The attacker must brute-force the master password to re-derive the KEK and unwrap the DEK.
+
+**Key difference from T1:** The attacker does NOT need access to the user's Google Drive account — the bundle is on the local device. However, the cryptographic hardness is identical.
+
+**Mitigation:** PBKDF2 at 100,000 iterations. App-private DataStore (OS sandbox). Android FDE at rest.
+
+**Residual risk:** Root / sandbox escape exposes the bundle. Same brute-force constraint as T1 applies.
+
+---
+
+### T11 — Biometric Spoofing
 
 **Scenario:** Attacker uses a fake fingerprint or face scan to bypass biometric unlock.
 
@@ -259,6 +289,8 @@ These are confirmed design limitations. Do not implement partial fixes — each 
 │ Device theft (locked)  │ STRONG            │ DEK zeroed from RAM    │
 │ Device theft (AppLock) │ MODERATE          │ DEK in RAM, biometric  │
 │                        │                   │ gates access           │
+│ Local cache exfiltrated│ STRONG            │ Same as Drive breach;  │
+│ (DataStore / filesDir) │                   │ requires pw brute-force│
 │ Forgotten password     │ MODERATE          │ Recovery Key required  │
 │ Vault.key deletion     │ NONE              │ Permanent loss         │
 │ Rooted device          │ NONE              │ Out of scope           │

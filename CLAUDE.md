@@ -58,20 +58,30 @@ Init → SignIn → CheckingVault → Setup (new user) → Home
 **Key packages:**
 - `crypto/` — `CryptoManager` (file encrypt/decrypt), `VaultKeyManager` (DEK wrap/unwrap), `BiometricKeyManager` (Android Keystore key for biometric), `BiometricHelper`
 - `drive/` — `DriveApiClient`: raw OkHttp calls against Drive REST API v3 with exponential-backoff retry. `getStorageQuotaOnly(knownVaultBytes)` avoids a redundant `listItems` call on the home screen.
-- `data/` — `PreferencesManager`: DataStore-backed persistence for auth state, biometric IV/ciphertext, vault folder ID, settings, cache cap.
+- `data/` — `PreferencesManager`: DataStore-backed persistence for auth state, biometric IV/ciphertext, vault folder ID, settings, cache cap, and the offline vault key cache (`cached_kek_salt` / `cached_wrapped_dek`). See `cacheVaultKeyLocally()` / `getCachedVaultKey()`.
 - `cache/` — three-tier cache layer:
   - `EncryptedFileCache` — session-scoped in-memory LRU (64 MB) of encrypted `ByteArray` values, keyed by `(fileId, modifiedTime)`. Cleared when `VaultSession.clearDek()` is called.
-  - `LocalVaultCache` — persistent encrypted-file disk cache (`filesDir/vault_cache/`). Index is a plain JSON file (no filenames — only opaque IDs, sizes, timestamps). Per-file encrypted metadata sidecar. LRU eviction by `lastAccessedMs`, respecting `isPinned`.
-  - `FolderMetadataStore` — encrypted folder listing cache (`filesDir/folder_meta/`). Enables stale-while-revalidate on cold start: decrypted listing emitted instantly before Drive refresh.
+  - `LocalVaultCache` — persistent encrypted-file disk cache (`filesDir/vault_cache/`). Index is a plain JSON file (no filenames — only opaque IDs, sizes, timestamps). Per-file encrypted metadata sidecar. LRU eviction by `lastAccessedMs`, respecting `isPinned`. `evict(fileId)` removes a single entry (called on permanent delete). Upload-staged entries initially have `modifiedTime=""` and adopt the real Drive timestamp on first access rather than being evicted.
+  - `FolderMetadataStore` — encrypted folder listing cache (`filesDir/folder_meta/`). Enables stale-while-revalidate on cold start: decrypted listing emitted instantly before Drive refresh. `allCachedFiles(dek)` aggregates every cached folder listing — used to build the offline file index.
 - `service/` — `UploadForegroundService` + `UploadState` + `ReadyToUploadJob`: two-stage parallel pipeline. **N=3 encryption workers** (`Dispatchers.Default`) write to `cacheDir/encrypt_staging/<jobId>.vault`; **M=2 upload workers** (`Dispatchers.IO`) consume `ReadyToUploadJob` from a `Channel`. Thumbnail companions (scaled JPEG, re-encrypted with DEK) are generated and uploaded first so their Drive ID can be embedded in the main file's `appProperties.thumbnailId`.
-- `viewmodel/` — `AuthViewModel` (auth state machine + lock/session timers), `HomeViewModel` (file listing, download, delete, trash, `clearLocalCache()`, `setOfflinePinned()`)
+- `viewmodel/` — `AuthViewModel` (auth state machine + lock/session timers + `isOffline` StateFlow), `HomeViewModel` (file listing, download, delete, trash, `clearLocalCache()`, `setOfflinePinned()`). `HomeViewModel` exposes `isOffline` and `offlineFiles` StateFlows; `refreshOfflineFiles()` rebuilds `offlineFiles` from `LocalVaultCache.pinnedFileIds()` + `FolderMetadataStore.allCachedFiles()`. `resetInMemoryState()` clears in-memory state only (called on `CheckingVault`); `clearDriveState()` additionally wipes disk caches (called only on sign-out / account switch).
 - `model/` — `VaultKeyBundle`, `VaultFile` (now has `thumbnailFileId: String?`), `SortOrder`
+
+**Offline unlock path:** After every successful online unlock, `AuthViewModel.tryUnlockWithVaultKey()` calls `prefs.cacheVaultKeyLocally(kekSalt, dekWrappedByKek)` — two DataStore keys (`cached_kek_salt`, `cached_wrapped_dek`) store only the *wrapped* DEK (ciphertext). On offline unlock the local password hash passes first (`CryptoManager.verifyPassword`), then `getCachedVaultKey()` retrieves the bundle, re-derives the KEK from the password, and calls `VaultKeyManager.unwrapDek()` to restore the DEK into `VaultSession` without any Drive call. The cached blob is pure ciphertext — the master password is still required to unlock it.
 
 **Biometric unlock path:** `BiometricKeyManager` stores an AES key in Android Keystore gated by biometric auth. On enrollment, the master password is AES-GCM encrypted with that key and the ciphertext + IV stored in DataStore. On unlock, the biometric cipher decrypts the stored ciphertext to recover the password in-memory — the Keystore key is invalidated if new biometrics are enrolled.
 
+**NFC unlock path:** `NfcTagManager` reads a tag payload and passes it as the password to the normal unlock flow. Enabled/disabled via `PreferencesManager.nfcEnabled`. NFC counts as a quick-unlock method alongside biometric for the background lock decision.
+
 **Lock modes:**
-- *App-locked* (`AuthState.AppLocked`): background lock when biometric is enrolled — DEK stays in memory, only the UI is gated. Biometric re-auth is instant (no Drive call).
-- *Vault-locked* (`AuthState.Unlock`): full lock — DEK is zeroed, password required, Drive call needed to unwrap DEK again.
+- *App-locked* (`AuthState.AppLocked`): background lock when biometric or NFC is enrolled — DEK stays in memory, only the UI is gated. Biometric re-auth is instant (no Drive call).
+- *Vault-locked* (`AuthState.Unlock`): full lock — DEK is zeroed, password required, Drive call (or offline cached bundle) needed to unwrap DEK again.
+
+**Lock trigger flow** (`MainActivity` → `AuthViewModel`):
+- `onStop()` → `onAppBackground()`: if `_sessionPasswordEntered && (biometricEnabled || nfcEnabled)` → immediate `AppLocked`. Otherwise starts `autoLockJob` timer for a full vault lock after `autoLockMinutes`.
+- `onStart()` → `onAppForeground()`: cancels `autoLockJob`; if session has already expired while frozen, calls `lockSessionExpired()` immediately.
+- `_suppressNextLock` (private boolean): set before launching system file/folder pickers so `onStop` doesn't lock mid-picker. Cleared unconditionally on the next `onAppBackground()` call.
+- `biometricAutoLaunch` (StateFlow): set `true` when transitioning to `AppLocked` if biometric is available — `UnlockScreen` observes this to auto-launch the biometric prompt without a button tap.
 
 ## Local storage layout
 
