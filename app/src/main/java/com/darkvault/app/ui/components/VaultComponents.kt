@@ -45,7 +45,11 @@ import androidx.compose.material.icons.outlined.Folder
 import androidx.compose.material.icons.outlined.FolderOpen
 import androidx.compose.material.icons.outlined.Image
 import androidx.compose.material.icons.automirrored.outlined.InsertDriveFile
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.outlined.LockOpen
+import androidx.compose.material.icons.outlined.Visibility
+import androidx.compose.material.icons.outlined.VisibilityOff
 import androidx.compose.material.icons.outlined.MoreVert
 import androidx.compose.material.icons.outlined.MusicNote
 import androidx.compose.material.icons.outlined.PauseCircleOutline
@@ -87,6 +91,8 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
@@ -121,9 +127,13 @@ fun VaultTextField(
     isPassword: Boolean = false,
     isError: Boolean = false,
     errorMessage: String? = null,
-    leadingIcon: ImageVector? = null
+    leadingIcon: ImageVector? = null,
+    keyboardType: KeyboardType = KeyboardType.Text,
+    imeAction: ImeAction = ImeAction.Default,
+    onImeAction: () -> Unit = {}
 ) {
     var isFocused by remember { mutableStateOf(false) }
+    var passwordVisible by remember { mutableStateOf(false) }
     val glowElevation by animateFloatAsState(
         targetValue = if (isFocused) 8f else 0f,
         animationSpec = tween(200),
@@ -131,6 +141,11 @@ fun VaultTextField(
     )
     val primary        = MaterialTheme.colorScheme.primary
     val containerColor = MaterialTheme.colorScheme.surfaceVariant
+
+    // Auto-hide password when user types while visible
+    val wrappedOnValueChange: (String) -> Unit = if (isPassword && passwordVisible) {
+        { v -> passwordVisible = false; onValueChange(v) }
+    } else onValueChange
 
     Column(modifier = modifier) {
         Box(
@@ -147,13 +162,30 @@ fun VaultTextField(
         ) {
             OutlinedTextField(
                 value = value,
-                onValueChange = onValueChange,
+                onValueChange = wrappedOnValueChange,
                 label = { Text(label) },
                 isError = isError,
                 singleLine = true,
-                visualTransformation = if (isPassword) PasswordVisualTransformation()
+                visualTransformation = if (isPassword && !passwordVisible) PasswordVisualTransformation()
                                        else VisualTransformation.None,
+                keyboardOptions = KeyboardOptions(keyboardType = keyboardType, imeAction = imeAction),
+                keyboardActions = KeyboardActions(
+                    onDone   = { onImeAction() },
+                    onNext   = { onImeAction() },
+                    onSearch = { onImeAction() },
+                    onGo     = { onImeAction() }
+                ),
                 leadingIcon = leadingIcon?.let { { Icon(it, contentDescription = null) } },
+                trailingIcon = if (isPassword) {
+                    {
+                        IconButton(onClick = { passwordVisible = !passwordVisible }) {
+                            Icon(
+                                imageVector = if (passwordVisible) Icons.Outlined.VisibilityOff else Icons.Outlined.Visibility,
+                                contentDescription = if (passwordVisible) "Hide" else "Show"
+                            )
+                        }
+                    }
+                } else null,
                 shape = RoundedCornerShape(10.dp),
                 colors = OutlinedTextFieldDefaults.colors(
                     focusedBorderColor           = primary,
@@ -205,7 +237,7 @@ fun CyberButton(
     )
     val shadowAlpha by animateFloatAsState(
         targetValue = if (isPressed && enabled) 0.55f else if (enabled) 0.3f else 0f,
-        animationSpec = tween(90), label = "btn_shadow"
+        animationSpec = tween(150), label = "btn_shadow"
     )
     val shadowElev by animateFloatAsState(
         targetValue = if (!enabled || isLoading) 0f else if (isPressed) 2f else 10f,
@@ -298,7 +330,7 @@ fun VaultLogo(modifier: Modifier = Modifier) {
     )
     val midRotation by anim.animateFloat(
         initialValue = 0f, targetValue = 360f,
-        animationSpec = infiniteRepeatable(tween(22000, easing = LinearEasing)),
+        animationSpec = infiniteRepeatable(tween(14000, easing = LinearEasing)),
         label = "mid_rotate"
     )
     val innerAlpha by anim.animateFloat(
@@ -317,10 +349,7 @@ fun VaultLogo(modifier: Modifier = Modifier) {
         label = "dot_alpha"
     )
 
-    // Theme-aware icon container colors
-    val iconContainerTop = MaterialTheme.colorScheme.surfaceVariant
-    val iconContainerBot = MaterialTheme.colorScheme.surface
-    val primary          = MaterialTheme.colorScheme.primary
+    val primary = MaterialTheme.colorScheme.primary
 
     Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = modifier) {
         Box(contentAlignment = Alignment.Center, modifier = Modifier.size(128.dp)) {
@@ -369,30 +398,11 @@ fun VaultLogo(modifier: Modifier = Modifier) {
                 )
             }
 
-            Box(
-                contentAlignment = Alignment.Center,
-                modifier = Modifier
-                    .size(54.dp)
-                    .shadow(12.dp, RoundedCornerShape(14.dp),
-                            ambientColor = primary.copy(0.22f), spotColor = primary.copy(0.12f))
-                    .clip(RoundedCornerShape(14.dp))
-                    .background(Brush.verticalGradient(listOf(iconContainerTop, iconContainerBot)))
-                    .drawBehind {
-                        drawLine(Color.White.copy(0.12f), Offset(8f, 1f), Offset(size.width - 8f, 1f), 1f)
-                    }
-                    .border(
-                        1.dp,
-                        Brush.verticalGradient(listOf(GlassHighlight, primary.copy(0.25f))),
-                        RoundedCornerShape(14.dp)
-                    )
-                    .padding(9.dp)
-            ) {
-                ComposeImage(
-                    painter = painterResource(R.drawable.icon),
-                    contentDescription = "darkVault",
-                    modifier = Modifier.fillMaxSize()
-                )
-            }
+            ComposeImage(
+                painter = painterResource(R.drawable.icon),
+                contentDescription = "darkVault",
+                modifier = Modifier.size(50.dp)
+            )
         }
 
         Spacer(Modifier.height(22.dp))
@@ -412,10 +422,10 @@ fun VaultLogo(modifier: Modifier = Modifier) {
         ) {
             Canvas(Modifier.size(4.dp)) { drawCircle(SecureGreen.copy(dotAlpha)) }
             Text(
-                "SECURE CLOUD STORAGE",
+                "YOUR FILES, YOUR KEYS, YOUR CONTROL",
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.primary.copy(0.55f),
-                letterSpacing = 3.sp
+                letterSpacing = 1.sp
             )
             Canvas(Modifier.size(4.dp)) { drawCircle(SecureGreen.copy(dotAlpha)) }
         }
@@ -444,7 +454,7 @@ fun VaultFileCard(
     val breatheAnim = rememberInfiniteTransition(label = "card_breathe")
     val borderBreath by breatheAnim.animateFloat(
         initialValue = 0.18f, targetValue = 0.32f,
-        animationSpec = infiniteRepeatable(tween(3800, easing = LinearEasing), RepeatMode.Reverse),
+        animationSpec = infiniteRepeatable(tween(3500, easing = LinearEasing), RepeatMode.Reverse),
         label = "border_breath"
     )
     val tiltDeg by animateFloatAsState(
@@ -588,7 +598,7 @@ fun VaultFolderCard(
     val breatheAnim = rememberInfiniteTransition(label = "folder_breathe")
     val borderBreath by breatheAnim.animateFloat(
         initialValue = 0.25f, targetValue = 0.45f,
-        animationSpec = infiniteRepeatable(tween(3200, easing = LinearEasing), RepeatMode.Reverse),
+        animationSpec = infiniteRepeatable(tween(3500, easing = LinearEasing), RepeatMode.Reverse),
         label = "folder_border"
     )
     val tiltDeg by animateFloatAsState(

@@ -239,10 +239,21 @@ User types password
    mismatch          match
         │                │
         ▼                ▼
- recordFailedAttempt   AuthState.Home
- exponential backoff   (DEK not available offline —
- (30s, 60s … 30 min)   file decrypt blocked until
-                        back online)
+ recordFailedAttempt   getCachedVaultKey() from DataStore
+ exponential backoff       │
+ (30s, 60s … 30 min)   (kekSalt, dekWrappedByKek) found?
+                        │                │
+                       No               Yes
+                        │                │
+                        ▼                ▼
+                  AuthState.Home   PBKDF2(password, kekSalt) → KEK
+                  (DEK null —      AES-GCM unwrap dekWrappedByKek
+                   online unlock    → DEK → VaultSession.dek
+                   needed)          │
+                                    ▼
+                              AuthState.Home
+                              (DEK in memory — pinned
+                               files fully accessible)
 ```
 
 **Exponential backoff schedule:**
@@ -452,19 +463,93 @@ Other files: streamed to ContentResolver output stream for save
 
 ```
 Created:       AuthViewModel.createAndUploadDek()  — first launch (setup)
-Loaded:        AuthViewModel.tryUnlockWithVaultKey() — on each unlock with password
+Loaded:        AuthViewModel.tryUnlockWithVaultKey() — on each online unlock with password
+               AuthViewModel.unlock() offline path  — re-derived from cached vault key bundle
 In memory:     VaultSession.dek (volatile ByteArray?)
 Used by:       CryptoManager.encryptWithDek() / decryptWithDek()
                UploadForegroundService (accesses VaultSession.dek directly)
+               LocalVaultCache.put() / getEncryptedBytes() (encrypts/decrypts disk cache)
+               FolderMetadataStore.put() / get() (encrypts/decrypts folder listings)
+Cached:        After every online unlock, kekSalt + dekWrappedByKek are written to
+               DataStore (cached_kek_salt, cached_wrapped_dek). This is ciphertext —
+               the DEK itself is never written to disk.
 Zeroed:        VaultSession.clearDek() — Arrays.fill(dek, 0); dek = null
 Cleared on:    lockVault(auto=false), signOut(), session timeout, process death
-NOT cleared:   lockVault(auto=true) with biometric enabled → AppLocked state
-               (DEK stays in RAM, fingerprint gates access)
+NOT cleared:   lockVault(auto=true) with biometric/NFC enrolled → AppLocked state
+               (DEK stays in RAM, biometric/NFC gates access)
+Cache cleared: Only on sign-out / account switch (clearDriveState).
+               Cold start (CheckingVault) does NOT wipe the disk cache —
+               it calls resetInMemoryState() which clears only in-memory state.
 ```
 
 ---
 
-## 13. Biometric Credential Storage
+## 13. Offline Vault Key Cache
+
+To support offline unlock with DEK recovery, darkVault stores a minimal bundle in DataStore after every successful online unlock.
+
+**What is stored:**
+
+| DataStore key | Content | Can decrypt files alone? |
+|---------------|---------|--------------------------|
+| `cached_kek_salt` | 16-byte PBKDF2 salt (base64) | No — requires master password |
+| `cached_wrapped_dek` | AES-GCM wrapped DEK (60 bytes, base64) | No — requires master password |
+
+The stored blob is identical in structure to `dekWrappedByKek` in `vault.key` on Drive. It is pure ciphertext — the master password is still required to re-derive the KEK and unwrap the DEK from it.
+
+**Offline unlock path (end to end):**
+
+```
+1. User enters password (no network)
+2. CryptoManager.verifyPassword(password, storedHash, storedSalt) — local check
+   → fail: record attempt, apply backoff
+   → pass: continue
+3. PreferencesManager.getCachedVaultKey() → (kekSalt, dekWrappedByKek)
+   → not found: AuthState.Home with DEK=null (online unlock needed for file access)
+   → found: continue
+4. PBKDF2(password, kekSalt, 100k) → KEK
+5. VaultKeyManager.unwrapDek(dekWrappedByKek, KEK)
+   → AEADBadTagException: DEK restore fails silently (cache corrupt / password changed)
+   → success: DEK → VaultSession.dek
+6. Arrays.fill(KEK, 0) — zeroed in finally block
+7. AuthState.Home — offline pinned files are fully accessible
+```
+
+**Security note:** The cached bundle is cleared when the user signs out (`clearDriveState`). It is NOT cleared on cold start or account check (`CheckingVault` → `resetInMemoryState`) so that pinned files survive the app being cleared from recents.
+
+---
+
+## 14. Three-Tier File Cache
+
+All cached file data is encrypted with the session DEK before writing to disk. Plaintext is never persisted.
+
+```
+Tier 1 — EncryptedFileCache (RAM)
+  64 MB LRU in-process cache. Keyed by (fileId, modifiedTime).
+  Holds raw encrypted ByteArrays. Cleared on VaultSession.clearDek().
+
+Tier 2 — LocalVaultCache (disk: filesDir/vault_cache/)
+  Persistent encrypted-file cache. LRU eviction respects isPinned flag.
+  Index: .index.json (opaque IDs + sizes only — no filenames).
+  Sidecar: <fileId>.meta — AES-GCM encrypted {fileId, modifiedTime, size}.
+  Pinned files survive cache eviction and are accessible offline.
+  evict(fileId) called on permanent Drive deletion.
+  Upload-staged entries have modifiedTime="" and adopt the real Drive
+  timestamp on first access (avoids re-downloading freshly uploaded files).
+
+Tier 3 — FolderMetadataStore (disk: filesDir/folder_meta/)
+  Encrypted folder-listing cache (one file per folder).
+  Enables stale-while-revalidate: cached listing shown instantly on cold
+  start while Drive refresh runs in background.
+  allCachedFiles(dek) aggregates all listings — used to populate the
+  offline file index when Drive is unreachable.
+```
+
+Both disk caches are excluded from Android Auto Backup and device-transfer (`backup_rules.xml`, `data_extraction_rules.xml`).
+
+---
+
+## 15. Biometric Credential Storage
 
 ```
 Android Keystore (hardware-backed on API 30+)
@@ -492,14 +577,14 @@ Unlock:
 
 ---
 
-## 14. Session & Auto-lock Timers
+## 16. Session & Auto-lock Timers
 
 Two independent timers run in `AuthViewModel.viewModelScope`:
 
 **`autoLockJob`** — background lock timer (when app leaves foreground)
 - Cancelled when app comes back to foreground
 - On expiry: `lockVault(auto=true)`
-- Only starts if biometric is NOT enrolled; if biometric is enrolled, immediate AppLocked on background
+- Only starts if neither biometric NOR NFC is enrolled; if either quick-unlock method is enrolled and password was entered this session, `onAppBackground()` triggers immediate AppLocked instead
 
 **`sessionTimeoutJob`** — absolute session expiry (caps maximum session length)
 - Starts on successful password entry; NOT reset by biometric unlocks
@@ -508,7 +593,7 @@ Two independent timers run in `AuthViewModel.viewModelScope`:
 
 ---
 
-## 15. Code Map
+## 17. Code Map
 
 | Concern | File |
 |---------|------|
@@ -519,9 +604,13 @@ Two independent timers run in `AuthViewModel.viewModelScope`:
 | Auth state machine, setup, unlock, password change | `viewmodel/AuthViewModel.kt` |
 | vault.key JSON model | `model/VaultKeyBundle.kt` |
 | In-memory session holder | `VaultSession.kt` |
-| DataStore preferences (hash, salt, biometric creds) | `data/PreferencesManager.kt` |
+| DataStore preferences (hash, salt, biometric creds, offline key cache) | `data/PreferencesManager.kt` |
 | Drive REST API (upload, download, vault.key ops) | `drive/DriveApiClient.kt` |
 | Background upload, chunked protocol | `service/UploadForegroundService.kt` |
+| RAM LRU cache of encrypted file bytes | `cache/EncryptedFileCache.kt` |
+| Persistent encrypted-file disk cache + pinning | `cache/LocalVaultCache.kt` |
+| Encrypted folder-listing disk cache | `cache/FolderMetadataStore.kt` |
+| NFC tag unlock | `nfc/NfcTagManager.kt` |
 
 ---
 

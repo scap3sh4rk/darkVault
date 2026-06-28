@@ -110,6 +110,8 @@ fun DebugPanelScreen(navController: NavController) {
             SectionF(mgr, context)
             // Section G — Screenshot Toggle
             SectionG(context, scope)
+            // Section H — NFC diagnostics
+            SectionH(context, scope, mgr)
             Spacer(Modifier.height(32.dp))
         }
     }
@@ -413,6 +415,43 @@ private fun SectionG(context: Context, scope: kotlinx.coroutines.CoroutineScope)
                     androidx.compose.material3.TextButton(onClick = { showPasswordDialog = false }) { Text("Cancel") }
                 }
             )
+        }
+    }
+}
+
+// ── Section H — NFC Diagnostics ───────────────────────────────────────────────
+
+@Composable
+private fun SectionH(context: Context, scope: kotlinx.coroutines.CoroutineScope, mgr: DeveloperOptionsManager) {
+    val prefs = remember { com.darkvault.app.data.PreferencesManager(context) }
+    val enrolled by prefs.nfcEnabled.collectAsState(initial = false)
+    val lastId by mgr.nfcLastTagId.collectAsState()
+
+    // Read mode/tagType from DataStore when enrolled state changes
+    var mode by remember { mutableStateOf("—") }
+    var tagType by remember { mutableStateOf("—") }
+    LaunchedEffect(enrolled) {
+        if (enrolled) {
+            val creds = prefs.getNfcCredentials()
+            mode = creds?.mode ?: "—"
+            tagType = creds?.tagType ?: "—"
+        } else {
+            mode = "—"; tagType = "—"
+        }
+    }
+
+    ExpandableSection(title = "H — NFC Unlock") {
+        DiagRow("Enrolled", if (enrolled) "YES" else "NO", if (enrolled) Color(0xFF00FF88) else MaterialTheme.colorScheme.error)
+        DiagRow("Mode", mode)
+        DiagRow("Tag type", tagType)
+        DiagRow("Last tag UID prefix", lastId)
+        if (enrolled) {
+            DangerButton("Clear NFC credentials (debug)") {
+                scope.launch {
+                    prefs.clearNfcCredentials()
+                    mgr.onNfcCleared()
+                }
+            }
         }
     }
 }

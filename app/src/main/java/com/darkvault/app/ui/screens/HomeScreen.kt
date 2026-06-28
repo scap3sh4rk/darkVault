@@ -12,7 +12,10 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -92,6 +95,8 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -103,6 +108,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.foundation.ExperimentalFoundationApi
@@ -214,6 +221,10 @@ fun HomeScreen(
     var showUploadMenu by remember { mutableStateOf(false) }
     var showSortMenu by remember { mutableStateOf(false) }
     var showSearch by remember { mutableStateOf(false) }
+    val searchFocusRequester = remember { FocusRequester() }
+    LaunchedEffect(showSearch) {
+        if (showSearch) { delay(120); searchFocusRequester.requestFocus() }
+    }
     var showDeleteSelected by remember { mutableStateOf(false) }
     var previewFile by remember { mutableStateOf<VaultFile?>(null) }
     var showMoreMenu by remember { mutableStateOf(false) }
@@ -236,6 +247,7 @@ fun HomeScreen(
     val ring2 = remember { Animatable(0f) }
     val ring3 = remember { Animatable(0f) }
     val irisAlpha = remember { Animatable(1f) }
+    val titleReveal = remember { Animatable(0f) }
     LaunchedEffect(Unit) {
         delay(80L)
         launch { ring1.animateTo(1f, animTween(480, easing = FastOutSlowInEasing)) }
@@ -244,6 +256,8 @@ fun HomeScreen(
         delay(90L)
         launch { ring3.animateTo(1f, animTween(480, easing = FastOutSlowInEasing)) }
         delay(520L)
+        // iris fades out as the title wipes in — vault opening, name appearing
+        launch { titleReveal.animateTo(1f, animTween(700, easing = FastOutSlowInEasing)) }
         irisAlpha.animateTo(0f, animTween(260))
         irisVisible = false
     }
@@ -372,7 +386,16 @@ fun HomeScreen(
                                         modifier = Modifier.size(22.dp)
                                     )
                                     Spacer(Modifier.width(6.dp))
-                                    Text("darkVault", style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.primary)
+                                    Text(
+                                        "darkVault",
+                                        style = MaterialTheme.typography.titleLarge,
+                                        color = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.drawWithContent {
+                                            clipRect(right = size.width * titleReveal.value) {
+                                                this@drawWithContent.drawContent()
+                                            }
+                                        }
+                                    )
                                 }
                                 if (folderStack.size <= 1) {
                                     currentAccount?.email?.let { email ->
@@ -525,7 +548,11 @@ fun HomeScreen(
                 }
 
                 // Search bar
-                AnimatedVisibility(visible = showSearch, enter = expandVertically(), exit = shrinkVertically()) {
+                AnimatedVisibility(
+                    visible = showSearch,
+                    enter = expandVertically(tween(280, easing = FastOutSlowInEasing)) + fadeIn(tween(240, easing = FastOutSlowInEasing)),
+                    exit = shrinkVertically(tween(240)) + fadeOut(tween(200))
+                ) {
                     OutlinedTextField(
                         value = searchQuery,
                         onValueChange = { homeViewModel.searchQuery.value = it },
@@ -545,7 +572,7 @@ fun HomeScreen(
                             cursorColor = MaterialTheme.colorScheme.primary,
                             focusedLeadingIconColor = MaterialTheme.colorScheme.primary
                         ),
-                        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp)
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp).focusRequester(searchFocusRequester)
                     )
                 }
             }
@@ -696,8 +723,13 @@ fun HomeScreen(
                 )
             }
 
-            // Offline banner
-            AnimatedVisibility(visible = isOffline, enter = expandVertically(), exit = shrinkVertically()) {
+            // Offline banner — only when there is stale data to show; suppress on Error so the
+            // error message ("no cached data available") is not contradicted by "showing cached files"
+            AnimatedVisibility(
+                visible = isOffline && uiState is HomeUiState.Success,
+                enter = expandVertically(tween(280, easing = FastOutSlowInEasing)) + fadeIn(tween(240)),
+                exit = shrinkVertically(tween(240)) + fadeOut(tween(200))
+            ) {
                 androidx.compose.foundation.layout.Box(
                     modifier = androidx.compose.ui.Modifier
                         .fillMaxWidth()
@@ -770,7 +802,8 @@ fun HomeScreen(
                         // Task 7 — animated layout switch
                         AnimatedContent(
                             targetState = viewLayout,
-                            modifier = Modifier.weight(1f)
+                            modifier = Modifier.weight(1f),
+                            transitionSpec = { fadeIn(tween(200, easing = FastOutSlowInEasing)) togetherWith fadeOut(tween(150)) }
                         ) { layout ->
                             when (layout) {
                                 ViewLayout.LIST -> {
@@ -794,6 +827,7 @@ fun HomeScreen(
                                                     items(recentItems, key = { "recent_${it.id}" }) { file ->
                                                         RecentFileCard(
                                                             file = file,
+                                                            modifier = Modifier.animateItem(),
                                                             isSelected = file.id in selectedIds,
                                                             showThumbnail = showThumbnails,
                                                             thumbnailPassword = password,
@@ -836,6 +870,7 @@ fun HomeScreen(
                                             if (item.isFolder) {
                                                 VaultFolderCard(
                                                     folder = item,
+                                                    modifier = Modifier.animateItem(),
                                                     onOpen = { homeViewModel.openFolder(item) },
                                                     onDelete = { fileToDelete = item },
                                                     onMoreActions = { longPressFile = item },
@@ -857,6 +892,7 @@ fun HomeScreen(
                                                 }
                                                 VaultFileCard(
                                                     file = item,
+                                                    modifier = Modifier.animateItem(),
                                                     onDownload = {
                                                         val pwd = password; val acc = currentAccount
                                                         if (pwd != null && acc != null) homeViewModel.downloadAndDecrypt(item, pwd, acc)
@@ -908,6 +944,7 @@ fun HomeScreen(
                                                         items(recentItems, key = { "recent_${it.id}" }) { file ->
                                                             RecentFileCard(
                                                                 file = file,
+                                                                modifier = Modifier.animateItem(),
                                                                 isSelected = file.id in selectedIds,
                                                                 showThumbnail = showThumbnails,
                                                                 thumbnailPassword = password,
@@ -950,6 +987,7 @@ fun HomeScreen(
                                         items(displayItems, key = { it.id }) { item ->
                                             VaultGridItem(
                                                 item = item,
+                                                modifier = Modifier.animateItem(),
                                                 columns = columns,
                                                 isSelected = item.id in selectedIds,
                                                 isSelectionMode = isSelectionMode,

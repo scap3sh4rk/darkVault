@@ -2,6 +2,13 @@ package com.darkvault.app.ui.screens
 
 import androidx.biometric.BiometricPrompt
 import androidx.biometric.BiometricManager.Authenticators.BIOMETRIC_STRONG
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -11,6 +18,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
@@ -55,6 +63,7 @@ import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
@@ -62,6 +71,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -92,8 +102,13 @@ import com.darkvault.app.ui.components.StorageInfoCard
 import com.darkvault.app.ui.components.VaultTextField
 import android.content.Intent
 import android.net.Uri
+import com.darkvault.app.nfc.NfcTagEvent
+import com.darkvault.app.nfc.NfcTagManager
+import com.darkvault.app.nfc.NfcTagType
+import com.darkvault.app.ui.theme.AlertAmber
 import com.darkvault.app.ui.theme.AppFont
 import com.darkvault.app.ui.theme.CyanPrimary
+import com.darkvault.app.ui.theme.SecureGreen
 import com.darkvault.app.ui.theme.VaultBackground
 import com.darkvault.app.ui.theme.VaultError
 import com.darkvault.app.ui.theme.VaultOutline
@@ -105,6 +120,8 @@ import com.google.android.gms.auth.api.signin.GoogleSignInAccount
 import com.google.android.gms.auth.api.signin.GoogleSignInOptions
 import com.google.android.gms.common.api.Scope
 import android.os.Build
+import androidx.activity.compose.BackHandler
+import androidx.compose.ui.text.input.ImeAction
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
@@ -174,6 +191,9 @@ fun SettingsScreen(
     }
 
     val biometricEnabled by authViewModel.biometricEnabled.collectAsState()
+    val nfcEnabled by authViewModel.nfcEnabled.collectAsState()
+    val nfcHardwarePresent = remember { NfcTagManager.isHardwarePresent(context) }
+    val nfcAvailable = remember { NfcTagManager.isAvailable(context) }
     val autoLockMinutes by authViewModel.autoLockMinutes.collectAsState()
     val sessionTimeoutMinutes by authViewModel.sessionTimeoutMinutes.collectAsState()
     val imagePreview by prefs.imagePreviewEnabled.collectAsState(initial = true)
@@ -197,6 +217,81 @@ fun SettingsScreen(
     var cacheCapExpanded by remember { mutableStateOf(false) }
 
     val biometricAvailable = remember { BiometricHelper.isAvailable(context) }
+
+    // NFC enrollment dialog state — step machine: scan → confirm_write → disclaimer → choose_mode
+    var showNfcEnrollDialog by remember { mutableStateOf(false) }
+    var nfcEnrollStep by remember { mutableStateOf("scan") }
+    var nfcEnrollTagEvent by remember { mutableStateOf<NfcTagEvent?>(null) }
+    var nfcEnrollForceReadOnly by remember { mutableStateOf(false) }
+    var nfcDisclaimerChecked by remember { mutableStateOf(false) }
+    var nfcDisclaimerCountdown by remember { mutableStateOf(5) }
+    var nfcEnrollMode by remember { mutableStateOf("tap_only") }
+    var nfcEnrollPin by remember { mutableStateOf("") }
+    var nfcEnrollError by remember { mutableStateOf<String?>(null) }
+    var nfcEnrollLoading by remember { mutableStateOf(false) }
+    var showNfcRemoveDialog by remember { mutableStateOf(false) }
+    var nfcRemovePassword by remember { mutableStateOf("") }
+    var nfcRemoveError by remember { mutableStateOf<String?>(null) }
+
+    fun resetNfcEnrollDialog() {
+        showNfcEnrollDialog = false
+        nfcEnrollStep = "scan"
+        nfcEnrollTagEvent = null
+        nfcEnrollForceReadOnly = false
+        nfcDisclaimerChecked = false
+        nfcDisclaimerCountdown = 5
+        nfcEnrollMode = "tap_only"
+        nfcEnrollPin = ""
+        nfcEnrollError = null
+        nfcEnrollLoading = false
+    }
+
+    // Collect NFC tags for initial type detection and final enrollment write
+    LaunchedEffect(showNfcEnrollDialog, nfcEnrollStep) {
+        if (!showNfcEnrollDialog) return@LaunchedEffect
+        when (nfcEnrollStep) {
+            "scan" -> NfcTagManager.tagFlow.collect { event ->
+                if (nfcEnrollStep != "scan") return@collect
+                when (event.type) {
+                    NfcTagType.WRITABLE -> { nfcEnrollTagEvent = event; nfcEnrollStep = "confirm_write" }
+                    NfcTagType.READONLY -> { nfcEnrollTagEvent = event; nfcEnrollStep = "choose_mode" }
+                    NfcTagType.UNKNOWN -> nfcEnrollError = "Unsupported tag type — try a different card"
+                }
+            }
+            // Card must be physically present for writeSecret / readCardIdentifier — re-tap here
+            "tap_to_enroll" -> NfcTagManager.tagFlow.collect { event ->
+                if (nfcEnrollStep != "tap_to_enroll") return@collect
+                nfcEnrollLoading = true
+                val result = withContext(Dispatchers.IO) {
+                    authViewModel.enrollNfc(
+                        tag = event.tag,
+                        mode = nfcEnrollMode,
+                        pin = if (nfcEnrollMode == "tap_pin") nfcEnrollPin else null,
+                        forceReadOnly = nfcEnrollForceReadOnly
+                    )
+                }
+                nfcEnrollLoading = false
+                when (result) {
+                    is AuthViewModel.NfcEnrollResult.Success -> {
+                        resetNfcEnrollDialog()
+                        scope.launch { snackbarHost.showSnackbar("NFC unlock enrolled") }
+                    }
+                    is AuthViewModel.NfcEnrollResult.Error -> {
+                        nfcEnrollError = result.message
+                        nfcEnrollStep = "choose_mode"
+                    }
+                }
+            }
+        }
+    }
+    // Countdown timer for the write disclaimer — Accept is locked for 5 s
+    LaunchedEffect(nfcEnrollStep) {
+        if (nfcEnrollStep != "disclaimer") return@LaunchedEffect
+        nfcDisclaimerChecked = false
+        nfcDisclaimerCountdown = 5
+        repeat(5) { delay(1000); nfcDisclaimerCountdown-- }
+    }
+
     var autoLockExpanded by remember { mutableStateOf(false) }
     var sessionTimeoutExpanded by remember { mutableStateOf(false) }
     var themeExpanded by remember { mutableStateOf(false) }
@@ -250,7 +345,8 @@ fun SettingsScreen(
     var changePwdNew by remember { mutableStateOf("") }
     var changePwdConfirm by remember { mutableStateOf("") }
     var changePwdError by remember { mutableStateOf<String?>(null) }
-    var changePwdLoading by remember { mutableStateOf(false) }
+    // Source of truth for loading state is the ViewModel (survives navigation)
+    val changePwdLoading by authViewModel.passwordChangeInFlight.collectAsState()
 
     fun resetChangePwdDialog() {
         showChangePasswordDialog = false
@@ -258,10 +354,29 @@ fun SettingsScreen(
         changePwdNew = ""
         changePwdConfirm = ""
         changePwdError = null
-        changePwdLoading = false
     }
 
-    val devOptionsEnabled by prefs.devOptionsEnabled.collectAsState(initial = true)
+    // Swallow back press while Drive re-key is in progress — cancelling mid-write leaves
+    // Drive and local credentials inconsistent.
+    BackHandler(enabled = changePwdLoading) { /* intentionally blocked */ }
+
+    // Receive success/error from viewModelScope launch
+    LaunchedEffect(Unit) {
+        authViewModel.passwordChangeEvent.collect { result ->
+            when (result) {
+                is AuthViewModel.PasswordChangeResult.Success -> {
+                    resetChangePwdDialog()
+                    snackbarHost.showSnackbar("Password changed. Re-enter your new password to continue.")
+                    authViewModel.lockAfterPasswordChange()
+                }
+                is AuthViewModel.PasswordChangeResult.Error -> {
+                    changePwdError = result.message
+                }
+            }
+        }
+    }
+
+    val devOptionsEnabled by prefs.devOptionsEnabled.collectAsState(initial = false)
 
     // Biometric prompt for enrollment
     val biometricPrompt = remember(activity) {
@@ -575,6 +690,26 @@ fun SettingsScreen(
                         )
                     )
                 }
+
+                HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f))
+
+                // NFC unlock row — status only; enrollment and removal are in Developer options
+                val nfcSubtitle = when {
+                    !nfcHardwarePresent -> "Not available on this device"
+                    !nfcAvailable -> "Enable NFC in system settings to use this feature"
+                    nfcEnabled -> "Enrolled — tap card or tag to unlock"
+                    else -> "Enable Developer options to set up NFC unlock"
+                }
+                val nfcIconTint = when {
+                    !nfcHardwarePresent || !nfcAvailable -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
+                    nfcEnabled -> SecureGreen
+                    else -> MaterialTheme.colorScheme.onSurfaceVariant
+                }
+                SettingRow(
+                    icon = { Icon(Icons.Outlined.Security, null, tint = nfcIconTint, modifier = Modifier.size(22.dp)) },
+                    title = "NFC unlock",
+                    subtitle = nfcSubtitle
+                ) {}
 
                 HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f))
 
@@ -911,54 +1046,83 @@ fun SettingsScreen(
                 }
             }
 
-            // ── DEVELOPER section (DEBUG only) ─────────────────────────────────
+            // ── DEVELOPER section ──────────────────────────────────────────────
 
-            if (BuildConfig.DEBUG) {
-                Spacer(Modifier.height(16.dp))
+            Spacer(Modifier.height(16.dp))
 
-                SectionHeader("Developer")
+            SectionHeader("Developer")
 
-                SettingsCard {
-                    HorizontalDivider(thickness = 1.dp, color = MaterialTheme.colorScheme.primary.copy(alpha = 0.6f))
+            SettingsCard {
+                HorizontalDivider(thickness = 1.dp, color = MaterialTheme.colorScheme.primary.copy(alpha = 0.6f))
 
-                    // Kill switch toggle — fingerprint required to change state
-                    SettingRow(
-                        icon = {
-                            Icon(
-                                Icons.Outlined.Security,
-                                null,
-                                tint = if (devOptionsEnabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.size(22.dp)
-                            )
-                        },
-                        title = "Developer mode",
-                        subtitle = if (devOptionsEnabled) "On" else "Off"
-                    ) {
-                        Switch(
-                            checked = devOptionsEnabled,
-                            onCheckedChange = {
-                                scope.launch { prefs.setDevOptionsEnabled(!devOptionsEnabled) }
-                            },
-                            colors = SwitchDefaults.colors(
-                                checkedThumbColor = MaterialTheme.colorScheme.primary,
-                                checkedTrackColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.3f),
-                                uncheckedThumbColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                                uncheckedTrackColor = MaterialTheme.colorScheme.outline
-                            )
+                SettingRow(
+                    icon = {
+                        Icon(
+                            Icons.Outlined.Security,
+                            null,
+                            tint = if (devOptionsEnabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(22.dp)
                         )
-                    }
+                    },
+                    title = "Developer mode",
+                    subtitle = if (devOptionsEnabled) "On" else "Off"
+                ) {
+                    Switch(
+                        checked = devOptionsEnabled,
+                        onCheckedChange = {
+                            scope.launch { prefs.setDevOptionsEnabled(!devOptionsEnabled) }
+                        },
+                        colors = SwitchDefaults.colors(
+                            checkedThumbColor = MaterialTheme.colorScheme.primary,
+                            checkedTrackColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.3f),
+                            uncheckedThumbColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                            uncheckedTrackColor = MaterialTheme.colorScheme.outline
+                        )
+                    )
+                }
 
-                    // Dev options rows — only visible when developer mode is ON
-                    if (devOptionsEnabled) {
+                AnimatedVisibility(
+                    visible = devOptionsEnabled,
+                    enter = expandVertically(tween(300, easing = FastOutSlowInEasing)) + fadeIn(tween(250, easing = FastOutSlowInEasing)),
+                    exit = shrinkVertically(tween(250)) + fadeOut(tween(200))
+                ) {
+                    Column {
                         HorizontalDivider(thickness = 0.5.dp, color = MaterialTheme.colorScheme.outline)
 
+                        // NFC enrollment — always shown when dev mode is on
+                        val devNfcSubtitle = when {
+                            !nfcHardwarePresent -> "NFC hardware not detected on this device"
+                            !nfcAvailable -> "Enable NFC in system settings first"
+                            nfcEnabled -> "Enrolled — tap card or tag to unlock"
+                            else -> "Tap only (quick) or Tap + PIN (two-factor)"
+                        }
                         SettingRow(
-                            icon = { Icon(Icons.Outlined.BugReport, null, tint = VaultError, modifier = Modifier.size(22.dp)) },
-                            title = "Developer options",
-                            subtitle = "Diagnostics, fault injection, log viewer"
+                            icon = { Icon(Icons.Outlined.Security, null, tint = if (nfcEnabled) SecureGreen else MaterialTheme.colorScheme.primary, modifier = Modifier.size(22.dp)) },
+                            title = "NFC unlock",
+                            subtitle = devNfcSubtitle
                         ) {
-                            IconButton(onClick = onNavigateToDebugPanel) {
-                                Icon(Icons.AutoMirrored.Outlined.ArrowForward, null, tint = MaterialTheme.colorScheme.primary)
+                            when {
+                                !nfcHardwarePresent || !nfcAvailable -> { /* no action */ }
+                                nfcEnabled -> TextButton(onClick = { showNfcRemoveDialog = true }) {
+                                    Text("Remove", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.labelMedium)
+                                }
+                                else -> TextButton(onClick = { showNfcEnrollDialog = true }) {
+                                    Text("Set up", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelMedium)
+                                }
+                            }
+                        }
+
+                        HorizontalDivider(thickness = 0.5.dp, color = MaterialTheme.colorScheme.outline)
+
+                        if (BuildConfig.DEBUG) {
+                            SettingRow(
+                                icon = { Icon(Icons.Outlined.BugReport, null, tint = VaultError, modifier = Modifier.size(22.dp)) },
+                                title = "Developer options",
+                                subtitle = "Diagnostics, fault injection, log viewer"
+                            ) {
+                                IconButton(onClick = onNavigateToDebugPanel) {
+                                    Icon(Icons.AutoMirrored.Outlined.ArrowForward, null, tint = MaterialTheme.colorScheme.primary)
+                                }
                             }
                         }
                     }
@@ -971,14 +1135,42 @@ fun SettingsScreen(
 
             if (showChangePasswordDialog) {
                 AlertDialog(
-                    onDismissRequest = { resetChangePwdDialog() },
+                    // Blocked while Drive re-key is in progress — prevents the interruptible
+                    // state where Drive and local credentials diverge.
+                    onDismissRequest = { if (!changePwdLoading) resetChangePwdDialog() },
                     containerColor = MaterialTheme.colorScheme.surfaceVariant,
                     title = { Text("Change Password", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface) },
                     text = {
                         Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                            VaultTextField(value = changePwdCurrent, onValueChange = { changePwdCurrent = it; changePwdError = null }, label = "Current password", isPassword = true, modifier = Modifier.fillMaxWidth())
-                            VaultTextField(value = changePwdNew, onValueChange = { changePwdNew = it; changePwdError = null }, label = "New password", isPassword = true, modifier = Modifier.fillMaxWidth())
-                            VaultTextField(value = changePwdConfirm, onValueChange = { changePwdConfirm = it; changePwdError = null }, label = "Confirm new password", isPassword = true, modifier = Modifier.fillMaxWidth())
+                            VaultTextField(value = changePwdCurrent, onValueChange = { changePwdCurrent = it; changePwdError = null }, label = "Current password", isPassword = true, imeAction = ImeAction.Next, modifier = Modifier.fillMaxWidth())
+                            VaultTextField(value = changePwdNew, onValueChange = { changePwdNew = it; changePwdError = null }, label = "New password", isPassword = true, imeAction = ImeAction.Next, modifier = Modifier.fillMaxWidth())
+                            VaultTextField(
+                                value = changePwdConfirm,
+                                onValueChange = { changePwdConfirm = it; changePwdError = null },
+                                label = "Confirm new password",
+                                isPassword = true,
+                                imeAction = ImeAction.Done,
+                                onImeAction = {
+                                    if (!changePwdLoading) {
+                                        when {
+                                            changePwdCurrent.isBlank() -> changePwdError = "Enter current password"
+                                            changePwdNew.length < 8   -> changePwdError = "New password must be at least 8 characters"
+                                            changePwdNew != changePwdConfirm -> changePwdError = "Passwords do not match"
+                                            else -> scope.launch {
+                                                val acc = GoogleSignIn.getLastSignedInAccount(context)
+                                                val folderId = prefs.vaultKeyFolderId.first()
+                                                authViewModel.launchPasswordChange(changePwdCurrent, changePwdNew, acc, folderId)
+                                            }
+                                        }
+                                    }
+                                },
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                            if (changePwdLoading) {
+                                Text("Updating vault key on Drive — do not close the app…",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
                             changePwdError?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
                         }
                     },
@@ -989,31 +1181,18 @@ fun SettingsScreen(
                                 changePwdNew.length < 8 -> { changePwdError = "New password must be at least 8 characters"; return@TextButton }
                                 changePwdNew != changePwdConfirm -> { changePwdError = "Passwords do not match"; return@TextButton }
                             }
-                            changePwdLoading = true
                             scope.launch {
                                 val acc = GoogleSignIn.getLastSignedInAccount(context)
                                 val folderId = prefs.vaultKeyFolderId.first()
-                                val result = authViewModel.changePassword(changePwdCurrent, changePwdNew, acc, folderId)
-                                changePwdLoading = false
-                                when (result) {
-                                    is AuthViewModel.PasswordChangeResult.Success -> {
-                                        resetChangePwdDialog()
-                                        // Show confirmation before tearing down the session so
-                                        // the snackbar is visible while the screen is still active.
-                                        snackbarHost.showSnackbar("Password changed. Re-enter your new password to continue.")
-                                        // Full session wipe — clears memory, Keystore key, and
-                                        // drives navigation to Unlock via authState change.
-                                        authViewModel.lockAfterPasswordChange()
-                                    }
-                                    is AuthViewModel.PasswordChangeResult.Error -> changePwdError = result.message
-                                }
+                                // Run in viewModelScope — result arrives via passwordChangeEvent
+                                authViewModel.launchPasswordChange(changePwdCurrent, changePwdNew, acc, folderId)
                             }
                         }) {
                             if (changePwdLoading) CircularProgressIndicator(modifier = Modifier.size(16.dp), color = MaterialTheme.colorScheme.primary, strokeWidth = 2.dp)
                             else Text("Change", color = MaterialTheme.colorScheme.primary)
                         }
                     },
-                    dismissButton = { TextButton(onClick = { resetChangePwdDialog() }) { Text("Cancel") } }
+                    dismissButton = { TextButton(enabled = !changePwdLoading, onClick = { resetChangePwdDialog() }) { Text("Cancel") } }
                 )
             }
 
@@ -1025,7 +1204,25 @@ fun SettingsScreen(
                     text = {
                         Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                             Text("All local vault credentials will be cleared. Enter your master password to confirm.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            VaultTextField(value = switchAccountPassword, onValueChange = { switchAccountPassword = it; switchAccountError = null }, label = "Master password", isPassword = true, modifier = Modifier.fillMaxWidth())
+                            VaultTextField(
+                                value = switchAccountPassword,
+                                onValueChange = { switchAccountPassword = it; switchAccountError = null },
+                                label = "Master password",
+                                isPassword = true,
+                                imeAction = ImeAction.Done,
+                                onImeAction = {
+                                    if (!switchAccountLoading && switchAccountAttempts < switchAccountMaxAttempts && switchAccountPassword.isNotBlank()) {
+                                        switchAccountLoading = true
+                                        scope.launch {
+                                            val stored = prefs.getPasswordHashAndSalt()
+                                            val valid = stored != null && withContext(Dispatchers.Default) { CryptoManager.verifyPassword(switchAccountPassword, stored.first, stored.second) }
+                                            if (valid) { resetSwitchDialog(); googleClient.signOut().addOnCompleteListener { authViewModel.signOut() } }
+                                            else { switchAccountAttempts++; switchAccountError = if (switchAccountAttempts >= switchAccountMaxAttempts) "Too many attempts. Try again later." else "Incorrect password"; switchAccountLoading = false }
+                                        }
+                                    }
+                                },
+                                modifier = Modifier.fillMaxWidth()
+                            )
                             switchAccountError?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
                         }
                     },
@@ -1065,7 +1262,27 @@ fun SettingsScreen(
                     text = {
                         Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                             Text("A new recovery key will be generated and the old one invalidated. Enter your master password to continue.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            VaultTextField(value = rotateKeyPassword, onValueChange = { rotateKeyPassword = it; rotateKeyError = null }, label = "Master password", isPassword = true, modifier = Modifier.fillMaxWidth())
+                            VaultTextField(
+                                value = rotateKeyPassword,
+                                onValueChange = { rotateKeyPassword = it; rotateKeyError = null },
+                                label = "Master password",
+                                isPassword = true,
+                                imeAction = ImeAction.Done,
+                                onImeAction = {
+                                    if (!rotateKeyLoading && rotateKeyPassword.isNotBlank()) {
+                                        rotateKeyLoading = true
+                                        scope.launch {
+                                            val acc = currentAccount; val folderId = prefs.vaultKeyFolderId.first()
+                                            if (acc == null || folderId == null) { rotateKeyError = "Not connected to Drive"; rotateKeyLoading = false; return@launch }
+                                            when (val result = authViewModel.rotateRecoveryKey(rotateKeyPassword, acc, folderId)) {
+                                                is AuthViewModel.RecoveryKeyRotationResult.Success -> { resetRotateDialog(); rotatedKeyToShow = result.newFormattedKey }
+                                                is AuthViewModel.RecoveryKeyRotationResult.Error   -> { rotateKeyError = result.message; rotateKeyLoading = false }
+                                            }
+                                        }
+                                    }
+                                },
+                                modifier = Modifier.fillMaxWidth()
+                            )
                             rotateKeyError?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
                         }
                     },
@@ -1137,6 +1354,272 @@ fun SettingsScreen(
                         }) { Text("Clear", color = MaterialTheme.colorScheme.error) }
                     },
                     dismissButton = { TextButton(onClick = { showClearCacheDialog = false }) { Text("Cancel") } }
+                )
+            }
+
+            // ── NFC Enrollment Dialog (4-step) ─────────────────────────────────────
+            // Steps: scan → confirm_write (writable only) → disclaimer → choose_mode
+            if (showNfcEnrollDialog) {
+                AlertDialog(
+                    onDismissRequest = { if (!nfcEnrollLoading) resetNfcEnrollDialog() },
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                    title = {
+                        Text(
+                            when (nfcEnrollStep) {
+                                "confirm_write"  -> "Writable Card Detected"
+                                "disclaimer"     -> "Before Writing to Your Card"
+                                "choose_mode"    -> "Choose Unlock Mode"
+                                "tap_to_enroll"  -> "Tap Your Card"
+                                else             -> "Set Up NFC Unlock"
+                            },
+                            style = MaterialTheme.typography.titleMedium,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                    },
+                    text = {
+                        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                            when (nfcEnrollStep) {
+
+                                // ── Step 1: detect card type ──────────────────────
+                                "scan" -> {
+                                    Row(
+                                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp, color = CyanPrimary)
+                                        Text("Hold your card or tag near the NFC sensor…", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurface)
+                                    }
+                                    nfcEnrollError?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
+                                }
+
+                                // ── Step 5: re-tap to actually write / read ────────
+                                "tap_to_enroll" -> {
+                                    Row(
+                                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp, color = CyanPrimary)
+                                        Text(
+                                            if (nfcEnrollLoading) "Writing to card…"
+                                            else "Tap your card or tag again to complete enrollment…",
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            color = MaterialTheme.colorScheme.onSurface
+                                        )
+                                    }
+                                    nfcEnrollError?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
+                                }
+
+                                // ── Step 2: writable card — ask permission ────────
+                                "confirm_write" -> {
+                                    Text(
+                                        "This card supports writing. darkVault can write a unique random secret onto it — more secure than relying on the card's public identifier alone.",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurface
+                                    )
+                                    Text(
+                                        "⚠  If this card is used as a college ID, office badge, transit card, hotel key, or any card with another purpose — writing to it may interfere with those functions.",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = AlertAmber
+                                    )
+                                }
+
+                                // ── Step 3: write disclaimer + checkbox + countdown ─
+                                "disclaimer" -> {
+                                    Column(
+                                        modifier = Modifier.heightIn(max = 180.dp).verticalScroll(rememberScrollState()),
+                                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                                    ) {
+                                        Text(
+                                            "darkVault will write a 32-byte random secret to an NDEF record on this card.",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurface,
+                                            fontWeight = FontWeight.Medium
+                                        )
+                                        Text(
+                                            "What this means:\n" +
+                                                "• Any existing NDEF data on this card will be permanently overwritten.\n" +
+                                                "• On memory-limited tags (NTAG213: 137 B, NTAG215: 504 B) the darkVault secret occupies the available space.",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                        Text(
+                                            "Risks:\n" +
+                                                "• College IDs, office badges, transit cards, hotel keys, and gym cards often rely on NDEF or contactless data. Writing may render them unusable for their original purpose.\n" +
+                                                "• If write-protect is already active, enrollment fails safely — your card stays unchanged.\n" +
+                                                "• In rare cases a card may become corrupted during the write.",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = AlertAmber
+                                        )
+                                        Text(
+                                            "Responsibility: darkVault and its developers provide this feature with no warranty. You are solely responsible for any consequences including loss of access, replacement costs, or damage. Only use cards or tags dedicated to darkVault. Blank NTAG213 / NTAG215 tags are ideal.",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                                        Checkbox(checked = nfcDisclaimerChecked, onCheckedChange = { nfcDisclaimerChecked = it })
+                                        Text(
+                                            "I understand that writing to this card may affect its other functions and I accept full responsibility.",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurface
+                                        )
+                                    }
+                                }
+
+                                // ── Step 4: choose unlock mode ────────────────────
+                                else -> {
+                                    val cardLabel = when {
+                                        nfcEnrollTagEvent?.type == NfcTagType.READONLY -> "Read-only card — card identifier used"
+                                        nfcEnrollForceReadOnly -> "Writable card — using read-only mode"
+                                        else -> "Writable card — secret key written"
+                                    }
+                                    Text(cardLabel, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    Text("Unlock mode", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                        TextButton(
+                                            onClick = { nfcEnrollMode = "tap_only" },
+                                            colors = androidx.compose.material3.ButtonDefaults.textButtonColors(
+                                                contentColor = if (nfcEnrollMode == "tap_only") AlertAmber else MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                        ) { Text("Quick Access") }
+                                        TextButton(
+                                            onClick = { nfcEnrollMode = "tap_pin" },
+                                            colors = androidx.compose.material3.ButtonDefaults.textButtonColors(
+                                                contentColor = if (nfcEnrollMode == "tap_pin") SecureGreen else MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                        ) { Text("NFC + PIN") }
+                                    }
+                                    if (nfcEnrollMode == "tap_only") {
+                                        Text(
+                                            "Quick Access: losing this card means anyone who finds it can unlock your vault on this device.",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = AlertAmber
+                                        )
+                                    } else {
+                                        Text(
+                                            "NFC + PIN: both the physical card and PIN are required. Genuinely two-factor.",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = SecureGreen
+                                        )
+                                        VaultTextField(
+                                            value = nfcEnrollPin,
+                                            onValueChange = { if (it.all { c -> c.isDigit() } && it.length <= 8) nfcEnrollPin = it },
+                                            label = "NFC PIN (4–8 digits)",
+                                            isPassword = true,
+                                            keyboardType = androidx.compose.ui.text.input.KeyboardType.NumberPassword,
+                                            imeAction = ImeAction.Done,
+                                            onImeAction = {
+                                                if (nfcEnrollPin.length >= 4) { nfcEnrollError = null; nfcEnrollStep = "tap_to_enroll" }
+                                            },
+                                            modifier = Modifier.fillMaxWidth()
+                                        )
+                                    }
+                                    nfcEnrollError?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
+                                    if (nfcEnrollLoading) {
+                                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                                            CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
+                                            Text("Enrolling…", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    confirmButton = {
+                        when (nfcEnrollStep) {
+                            "scan", "tap_to_enroll" -> { /* no confirm — waiting for tap */ }
+                            "confirm_write" -> TextButton(onClick = { nfcEnrollStep = "disclaimer" }) {
+                                Text("Write to Card →", color = MaterialTheme.colorScheme.primary)
+                            }
+                            "disclaimer" -> TextButton(
+                                enabled = nfcDisclaimerChecked && nfcDisclaimerCountdown == 0,
+                                onClick = { nfcEnrollStep = "choose_mode" }
+                            ) {
+                                Text(
+                                    if (nfcDisclaimerCountdown > 0) "Accept (${nfcDisclaimerCountdown}s)" else "Accept",
+                                    color = if (nfcDisclaimerChecked && nfcDisclaimerCountdown == 0)
+                                        MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                            else -> TextButton( // choose_mode → tap_to_enroll
+                                enabled = !nfcEnrollLoading && (nfcEnrollMode == "tap_only" || nfcEnrollPin.length >= 4),
+                                onClick = { nfcEnrollError = null; nfcEnrollStep = "tap_to_enroll" }
+                            ) { Text("Next →", color = MaterialTheme.colorScheme.primary) }
+                        }
+                    },
+                    dismissButton = {
+                        when (nfcEnrollStep) {
+                            "scan" -> TextButton(onClick = { resetNfcEnrollDialog() }) { Text("Cancel") }
+                            "tap_to_enroll" -> TextButton(
+                                enabled = !nfcEnrollLoading,
+                                onClick = { nfcEnrollStep = "choose_mode" }
+                            ) { Text("Back") }
+                            "confirm_write", "disclaimer" -> Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                TextButton(onClick = { resetNfcEnrollDialog() }) { Text("Cancel") }
+                                TextButton(onClick = { nfcEnrollForceReadOnly = true; nfcEnrollStep = "choose_mode" }) {
+                                    Text("Read Only", color = CyanPrimary)
+                                }
+                            }
+                            else -> TextButton( // choose_mode → back
+                                enabled = !nfcEnrollLoading,
+                                onClick = {
+                                    if (nfcEnrollTagEvent?.type == NfcTagType.WRITABLE) {
+                                        nfcEnrollForceReadOnly = false
+                                        nfcEnrollStep = "confirm_write"
+                                    } else {
+                                        resetNfcEnrollDialog()
+                                    }
+                                }
+                            ) { Text(if (nfcEnrollTagEvent?.type == NfcTagType.WRITABLE) "Back" else "Cancel") }
+                        }
+                    }
+                )
+            }
+
+            // ── NFC Remove Dialog ──────────────────────────────────────────────────
+            if (showNfcRemoveDialog) {
+                AlertDialog(
+                    onDismissRequest = { showNfcRemoveDialog = false; nfcRemovePassword = ""; nfcRemoveError = null },
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                    title = { Text("Remove NFC Unlock?", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface) },
+                    text = {
+                        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                            Text("Enter your master password to confirm removal.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            VaultTextField(
+                                value = nfcRemovePassword,
+                                onValueChange = { nfcRemovePassword = it; nfcRemoveError = null },
+                                label = "Master password",
+                                isPassword = true,
+                                imeAction = ImeAction.Done,
+                                onImeAction = {
+                                    if (nfcRemovePassword.isNotBlank()) {
+                                        scope.launch {
+                                            if (authViewModel.verifyPasswordOnly(nfcRemovePassword)) { authViewModel.disableNfc(); nfcRemovePassword = ""; showNfcRemoveDialog = false }
+                                            else nfcRemoveError = "Incorrect password"
+                                        }
+                                    }
+                                },
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                            nfcRemoveError?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
+                        }
+                    },
+                    confirmButton = {
+                        TextButton(onClick = {
+                            if (nfcRemovePassword.isBlank()) { nfcRemoveError = "Enter your master password"; return@TextButton }
+                            scope.launch {
+                                if (authViewModel.verifyPasswordOnly(nfcRemovePassword)) {
+                                    authViewModel.disableNfc()
+                                    showNfcRemoveDialog = false
+                                    nfcRemovePassword = ""
+                                    snackbarHost.showSnackbar("NFC unlock removed")
+                                } else {
+                                    nfcRemoveError = "Incorrect password"
+                                }
+                            }
+                        }) { Text("Remove", color = MaterialTheme.colorScheme.error) }
+                    },
+                    dismissButton = { TextButton(onClick = { showNfcRemoveDialog = false; nfcRemovePassword = ""; nfcRemoveError = null }) { Text("Cancel") } }
                 )
             }
 

@@ -13,20 +13,31 @@ import com.darkvault.app.data.PreferencesManager
 import com.darkvault.app.drive.DriveApiClient
 import com.darkvault.app.drive.VaultKeyFull
 import com.darkvault.app.model.VaultKeyBundle
+import com.darkvault.app.nfc.NfcKeyHelper
+import com.darkvault.app.nfc.NfcTagEvent
+import com.darkvault.app.nfc.NfcTagManager
+import com.darkvault.app.nfc.NfcTagType
 import com.google.android.gms.auth.UserRecoverableAuthException
 import com.google.android.gms.auth.api.signin.GoogleSignIn
 import com.google.android.gms.auth.api.signin.GoogleSignInAccount
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import java.security.SecureRandom
+import java.util.Arrays
 import javax.crypto.Cipher
 
 private const val TAG = "AuthViewModel"
@@ -53,6 +64,14 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
 
     private val prefs = PreferencesManager(application)
 
+    init {
+        viewModelScope.launch {
+            NfcTagManager.tagFlow.collect { event ->
+                if (nfcEnabled.value) handleNfcTag(event)
+            }
+        }
+    }
+
     /** Emits current diagnostic snapshot to DeveloperOptionsManager in debug builds. */
     private fun emitDebugDiagnostics(autoLockFireAt: Long = 0L) {
         if (!com.darkvault.app.BuildConfig.DEBUG) return
@@ -71,6 +90,10 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
 
     private val _authState = MutableStateFlow<AuthState>(AuthState.Init)
     val authState: StateFlow<AuthState> = _authState
+
+    private val _isOffline = MutableStateFlow(false)
+    /** True when the last vault check / unlock attempt fell back to local state due to no network. */
+    val isOffline: StateFlow<Boolean> = _isOffline.asStateFlow()
 
     @Volatile private var _pendingFolderId: String? = null
     @Volatile private var _pendingAccount: GoogleSignInAccount? = null
@@ -142,6 +165,7 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
                 _pendingFolderId = folderId
 
                 val vaultKeyExists = client.downloadVaultKey(folderId) != null
+                _isOffline.value = false
                 if (vaultKeyExists) {
                     prefs.setHasVaultKey(folderId)
                     _authState.value = AuthState.Unlock
@@ -161,6 +185,7 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
                 }
             } catch (e: Exception) {
                 Log.w(TAG, "Vault check failed (offline?) — using local state", e)
+                _isOffline.value = true
                 _pendingFolderId = prefs.vaultKeyFolderId.first()
                 val setupDone = prefs.isSetupDone.first()
                 _authState.value = if (setupDone) AuthState.Unlock else AuthState.Setup
@@ -187,7 +212,7 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
      * On cancellation, call [navigateToSignIn] to land on the sign-in screen.
      */
     suspend fun clearLocalDataForSwitch() = withContext(Dispatchers.IO) {
-        prefs.clearAll()
+        prefs.clearAll()  // clearAll removes NFC keys too
         BiometricKeyManager.deleteKey()
         VaultSession.clearDek()
         VaultSession.signedInAccount = null
@@ -307,6 +332,21 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
     private val _biometricAutoLaunch = MutableStateFlow(false)
     val biometricAutoLaunch: StateFlow<Boolean> = _biometricAutoLaunch
 
+    val nfcEnabled: StateFlow<Boolean> = prefs.nfcEnabled.stateIn(
+        viewModelScope, SharingStarted.Eagerly, false
+    )
+    val nfcAvailableOnDevice: Boolean
+        get() = NfcTagManager.isAvailable(getApplication())
+
+    private val _nfcError = MutableStateFlow<String?>(null)
+    val nfcError: StateFlow<String?> = _nfcError
+
+    private val _nfcPinRequired = MutableStateFlow(false)
+    val nfcPinRequired: StateFlow<Boolean> = _nfcPinRequired
+
+    // Channel used to relay the PIN from the UI to the suspended handleNfcTag coroutine
+    private val _nfcPinChannel = Channel<String>(Channel.RENDEZVOUS)
+
     fun suppressNextLock() { _suppressNextLock = true }
 
     // ── Setup ─────────────────────────────────────────────────────────────
@@ -373,6 +413,8 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
                 }
 
                 VaultSession.dek = dek
+                prefs.cacheVaultKeyLocally(bundle.kekSalt, bundle.dekWrappedByKek)
+                _isOffline.value = false
                 if (com.darkvault.app.BuildConfig.DEBUG) {
                     com.darkvault.app.debug.DeveloperOptionsManager.onDekUnwrapped(bundle.kekSalt)
                     com.darkvault.app.debug.DeveloperOptionsManager.setVaultKeyPresent(true)
@@ -433,7 +475,10 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
                         _isLoading.value = false
                         return@launch
                     }
-                    UnlockAttemptResult.NETWORK_FALLBACK -> { /* fall through to local hash */ }
+                    UnlockAttemptResult.NETWORK_FALLBACK -> {
+                        _isOffline.value = true
+                        /* fall through to local hash */
+                    }
                 }
             }
 
@@ -443,6 +488,19 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
                 CryptoManager.verifyPassword(password, stored.first, stored.second)
             }
             if (valid) {
+                // Restore DEK from locally cached vault key bundle so offline files can be decrypted
+                val cached = withContext(Dispatchers.IO) { prefs.getCachedVaultKey() }
+                if (cached != null) {
+                    val (kekSalt, wrappedDek) = cached
+                    val kek = CryptoManager.deriveKey(password, kekSalt).encoded
+                    try {
+                        VaultSession.dek = VaultKeyManager.unwrapDek(wrappedDek, kek)
+                    } catch (e: Exception) {
+                        Log.w(TAG, "Offline DEK restore failed — cached bundle invalid or password changed", e)
+                    } finally {
+                        java.util.Arrays.fill(kek, 0)
+                    }
+                }
                 prefs.clearFailedAttempts()
                 _sessionPasswordEntered = true
                 _biometricAutoLaunch.value = false
@@ -587,6 +645,221 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    // ── NFC unlock enrollment & handling ──────────────────────────────────
+
+    sealed class NfcEnrollResult {
+        object Success : NfcEnrollResult()
+        data class Error(val message: String) : NfcEnrollResult()
+    }
+
+    /**
+     * Enrolls an NFC tag for vault unlock. Call on Dispatchers.IO.
+     * For writable tags: generates a 32-byte secret and writes it to the tag.
+     * For readonly tags (bank cards): reads card identifier via PPSE APDU (not just UID).
+     * Wraps both the DEK and the master password with the NFC-derived KEK.
+     */
+    suspend fun enrollNfc(
+        tag: android.nfc.Tag,
+        mode: String,
+        pin: String?,
+        forceReadOnly: Boolean = false
+    ): NfcEnrollResult = withContext(Dispatchers.IO) {
+        val dek = VaultSession.dek ?: return@withContext NfcEnrollResult.Error("Vault is locked — unlock first")
+        val password = _masterPassword.value ?: return@withContext NfcEnrollResult.Error("Session expired")
+
+        val tagType = if (forceReadOnly) NfcTagType.READONLY else NfcTagManager.classifyTag(tag)
+        if (tagType == NfcTagType.UNKNOWN) return@withContext NfcEnrollResult.Error("Unsupported NFC tag type")
+
+        val bindingSalt = ByteArray(32).also { SecureRandom().nextBytes(it) }
+        var nfcSecret: ByteArray? = null
+
+        try {
+            nfcSecret = when (tagType) {
+                NfcTagType.WRITABLE -> {
+                    val secret = ByteArray(32).also { SecureRandom().nextBytes(it) }
+                    if (!NfcTagManager.writeSecret(tag, secret)) {
+                        return@withContext NfcEnrollResult.Error("Failed to write secret to NFC tag. Is it writable?")
+                    }
+                    secret
+                }
+                NfcTagType.READONLY -> {
+                    NfcTagManager.readCardIdentifier(tag)
+                        ?: return@withContext NfcEnrollResult.Error("Failed to read card identifier")
+                }
+                NfcTagType.UNKNOWN -> return@withContext NfcEnrollResult.Error("Unsupported NFC tag")
+            }
+
+            val nfcKek = if (mode == "tap_pin" && !pin.isNullOrBlank()) {
+                val pinBytes = pin.toByteArray(Charsets.UTF_8)
+                try {
+                    NfcKeyHelper.deriveKekWithPin(nfcSecret!!, bindingSalt, pinBytes)
+                } finally {
+                    Arrays.fill(pinBytes, 0)
+                }
+            } else {
+                NfcKeyHelper.deriveKek(nfcSecret!!, bindingSalt)
+            }
+
+            try {
+                val passwordBytes = password.toByteArray(Charsets.UTF_8)
+                val (iv, ct) = try {
+                    NfcKeyHelper.encryptBlob(passwordBytes, nfcKek)
+                } finally {
+                    Arrays.fill(passwordBytes, 0)
+                }
+                val wrappedDek = VaultKeyManager.wrapDek(dek, nfcKek)
+
+                prefs.saveNfcCredentials(
+                    mode = mode,
+                    tagType = tagType.name.lowercase(),
+                    bindingSalt = bindingSalt,
+                    iv = iv,
+                    ct = ct,
+                    wrappedDek = wrappedDek
+                )
+
+                if (com.darkvault.app.BuildConfig.DEBUG) {
+                    com.darkvault.app.debug.DeveloperOptionsManager.onNfcEnrolled(tagType.name, mode)
+                }
+
+                NfcEnrollResult.Success
+            } finally {
+                Arrays.fill(nfcKek, 0)
+            }
+        } finally {
+            nfcSecret?.let { Arrays.fill(it, 0) }
+            Arrays.fill(bindingSalt, 0)
+        }
+    }
+
+    fun disableNfc() {
+        viewModelScope.launch { prefs.clearNfcCredentials() }
+        if (com.darkvault.app.BuildConfig.DEBUG) {
+            com.darkvault.app.debug.DeveloperOptionsManager.onNfcCleared()
+        }
+    }
+
+    fun clearNfcError() { _nfcError.value = null }
+
+    /** Called by the UI to submit the PIN when tap+PIN mode prompts for it. */
+    fun submitNfcPin(pin: String) {
+        viewModelScope.launch { _nfcPinChannel.send(pin) }
+    }
+
+    /** Called by the UI if the user dismisses the PIN dialog without entering. */
+    fun cancelNfcPin() {
+        _nfcPinRequired.value = false
+        // Send sentinel to immediately unblock the suspended receive() rather than waiting 60s
+        viewModelScope.launch { _nfcPinChannel.send("") }
+    }
+
+    private suspend fun handleNfcTag(event: NfcTagEvent) {
+        val state = _authState.value
+        if (state != AuthState.AppLocked && state != AuthState.Unlock) return
+
+        val now = System.currentTimeMillis()
+        val lockout = prefs.lockoutUntilMs.first()
+        if (now < lockout) {
+            val secs = (lockout - now + 999) / 1000
+            _nfcError.value = "Too many failed attempts. Try again in ${secs}s."
+            return
+        }
+
+        val creds = prefs.getNfcCredentials() ?: return
+
+        // Read the secret while the tag is still physically present — BEFORE any dialog.
+        // For tap+PIN the card is removed before the user finishes typing the PIN; reading
+        // after would always fail with a communication error.
+        val secret: ByteArray = withContext(Dispatchers.IO) {
+            // Dispatch on enrolled type, not physical type — a writable card can be enrolled as
+            // "readonly" (forceReadOnly). Wrong-card detection is via AEAD failure.
+            val wrongTag = when (creds.tagType) {
+                "writable" -> event.type != NfcTagType.WRITABLE
+                "readonly" -> event.type == NfcTagType.UNKNOWN  // allow WRITABLE or READONLY
+                else -> true
+            }
+            if (wrongTag) {
+                recordFailedAttemptAndError()
+                _nfcError.value = "Wrong tag — tap the card or tag you enrolled"
+                return@withContext null
+            }
+            when (creds.tagType) {
+                "writable" -> NfcTagManager.readSecret(event.tag)
+                    ?: run { _nfcError.value = "Could not read tag — hold it still and try again"; null }
+                else -> NfcTagManager.readCardIdentifier(event.tag)
+                    ?: run { _nfcError.value = "Could not read card — hold it still and try again"; null }
+            }
+        } ?: return
+
+        var pinBytes: ByteArray? = null
+        try {
+            if (creds.mode == "tap_pin") {
+                _nfcPinRequired.value = true
+                val pinStr = withTimeoutOrNull(60_000L) { _nfcPinChannel.receive() }
+                _nfcPinRequired.value = false
+                // null = 60s timeout; "" = user cancelled via cancelNfcPin()
+                if (pinStr.isNullOrEmpty()) return
+                pinBytes = pinStr.toByteArray(Charsets.UTF_8)
+            }
+
+            withContext(Dispatchers.IO) {
+                val nfcKek = try {
+                    if (creds.mode == "tap_pin" && pinBytes != null) {
+                        NfcKeyHelper.deriveKekWithPin(secret, creds.bindingSalt, pinBytes)
+                    } else {
+                        NfcKeyHelper.deriveKek(secret, creds.bindingSalt)
+                    }
+                } finally {
+                    Arrays.fill(secret, 0)
+                }
+
+                try {
+                    if (state == AuthState.Unlock) {
+                        val dek = try {
+                            VaultKeyManager.unwrapDek(creds.wrappedDek, nfcKek)
+                        } catch (e: javax.crypto.AEADBadTagException) {
+                            recordFailedAttemptAndError()
+                            _nfcError.value = "Incorrect PIN or wrong tag — try again"
+                            return@withContext
+                        }
+                        VaultSession.dek = dek
+                    }
+
+                    val passwordBytes = try {
+                        NfcKeyHelper.decryptBlob(creds.iv, creds.ct, nfcKek)
+                    } catch (e: javax.crypto.AEADBadTagException) {
+                        if (state == AuthState.Unlock) VaultSession.clearDek()
+                        recordFailedAttemptAndError()
+                        _nfcError.value = "Incorrect PIN or wrong tag — try again"
+                        return@withContext
+                    }
+
+                    val recoveredPassword = try {
+                        String(passwordBytes, Charsets.UTF_8)
+                    } finally {
+                        Arrays.fill(passwordBytes, 0)
+                    }
+
+                    prefs.clearFailedAttempts()
+                    _biometricAutoLaunch.value = false
+                    // resetSessionTimer=false if AppLocked: session clock keeps running
+                    setActiveSession(recoveredPassword, resetSessionTimer = state == AuthState.Unlock)
+                    _authState.value = AuthState.Home
+
+                    if (com.darkvault.app.BuildConfig.DEBUG) {
+                        val uidPrefix = event.tag.id.take(4).joinToString("") { "%02X".format(it) }
+                        com.darkvault.app.debug.DeveloperOptionsManager.onNfcTagDetected(event.type.name, uidPrefix)
+                        emitDebugDiagnostics()
+                    }
+                } finally {
+                    Arrays.fill(nfcKek, 0)
+                }
+            }
+        } finally {
+            pinBytes?.let { Arrays.fill(it, 0) }
+        }
+    }
+
     // ── Lock / auto-lock ──────────────────────────────────────────────────
 
     /**
@@ -598,12 +871,11 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
      */
     fun lockVault(auto: Boolean = false) {
         autoLockJob?.cancel()
-        if (auto && _sessionPasswordEntered && biometricEnabled.value
-            && BiometricHelper.isAvailable(getApplication())
-            && BiometricKeyManager.keyExists()
-        ) {
+        val canBiometric = biometricEnabled.value && BiometricHelper.isAvailable(getApplication()) && BiometricKeyManager.keyExists()
+        val canNfc = nfcEnabled.value && NfcTagManager.isAvailable(getApplication())
+        if (auto && _sessionPasswordEntered && (canBiometric || canNfc)) {
             // App-level lock: keep DEK + password in memory, only gate the UI
-            _biometricAutoLaunch.value = true
+            _biometricAutoLaunch.value = canBiometric
             _authState.value = AuthState.AppLocked
             return
         }
@@ -672,12 +944,14 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
             return
         }
         if (_authState.value != AuthState.Home) return
-        // Immediate app-level lock when biometric is configured and password entered this session
-        if (_sessionPasswordEntered && biometricEnabled.value) {
+        // Immediate app-level lock when biometric OR nfc is enrolled and password entered this session
+        val canQuickLock = biometricEnabled.value ||
+            (nfcEnabled.value && NfcTagManager.isAvailable(getApplication()))
+        if (_sessionPasswordEntered && canQuickLock) {
             lockVault(auto = true)
             return
         }
-        // No biometric: timed full vault lock
+        // No quick-unlock method: timed full vault lock
         val minutes = autoLockMinutes.value
         if (minutes <= 0) return
         autoLockJob?.cancel()
@@ -718,6 +992,34 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
         data class Error(val message: String) : PasswordChangeResult()
     }
 
+    // Drive re-key is in-flight — UI must block navigation until this clears.
+    private val _passwordChangeInFlight = MutableStateFlow(false)
+    val passwordChangeInFlight: StateFlow<Boolean> = _passwordChangeInFlight.asStateFlow()
+
+    private val _passwordChangeEvent = MutableSharedFlow<PasswordChangeResult>(extraBufferCapacity = 1)
+    val passwordChangeEvent: SharedFlow<PasswordChangeResult> = _passwordChangeEvent.asSharedFlow()
+
+    /**
+     * Launches [changePassword] on [viewModelScope] so the Drive re-key survives navigation
+     * away from the settings screen. Result is emitted to [passwordChangeEvent].
+     */
+    fun launchPasswordChange(
+        currentPassword: String,
+        newPassword: String,
+        account: com.google.android.gms.auth.api.signin.GoogleSignInAccount?,
+        folderId: String?
+    ) {
+        if (_passwordChangeInFlight.value) return
+        viewModelScope.launch {
+            _passwordChangeInFlight.value = true
+            try {
+                _passwordChangeEvent.emit(changePassword(currentPassword, newPassword, account, folderId))
+            } finally {
+                _passwordChangeInFlight.value = false
+            }
+        }
+    }
+
     suspend fun changePassword(
         currentPassword: String,
         newPassword: String,
@@ -756,16 +1058,20 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
                     java.util.Arrays.fill(currentKek, 0)
                 }
 
-                // Fix: LOW-001 — use nextBytes() instead of generateSeed() for cryptographic material
                 val newKekSalt = ByteArray(16).also { SecureRandom().nextBytes(it) }
                 val newKek = CryptoManager.deriveKey(newPassword, newKekSalt).encoded
+                // Zero newKek in finally so it's cleared even if wrapDek throws
+                val wrappedByNewKek = try {
+                    VaultKeyManager.wrapDek(dek, newKek)
+                } finally {
+                    java.util.Arrays.fill(newKek, 0)
+                }
                 val newBundle = VaultKeyBundle(
                     version = 1,
                     kekSalt = newKekSalt,
-                    dekWrappedByKek = VaultKeyManager.wrapDek(dek, newKek),
+                    dekWrappedByKek = wrappedByNewKek,
                     dekWrappedByRecovery = oldBundle.dekWrappedByRecovery
                 )
-                java.util.Arrays.fill(newKek, 0)
 
                 val updated = client.updateVaultKeyInPlace(newBundle.toJson(), full.fileId, full.modifiedTime)
                 if (updated) {
@@ -785,8 +1091,9 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
         val (newHash, newSalt) = CryptoManager.hashPassword(newPassword)
         prefs.savePasswordHash(newHash, newSalt)
         prefs.clearFailedAttempts()
-        // Clear biometric DataStore credentials (old encrypted-password blob is now stale)
+        // Clear secondary unlock credentials — old encrypted-password blobs are now stale
         prefs.clearBiometricCredentials()
+        prefs.clearNfcCredentials()
         // Atomically wipe in-memory secrets before returning — caller must call
         // lockAfterPasswordChange() to finish the ViewModel-level teardown on Main.
         VaultSession.clearDek()
@@ -818,16 +1125,19 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
                     return@withContext PasswordChangeResult.Error(lastError)
                 }
 
-                // Fix: LOW-001 — use nextBytes() instead of generateSeed() for cryptographic material
                 val newKekSalt = ByteArray(16).also { SecureRandom().nextBytes(it) }
                 val newKek = CryptoManager.deriveKey(newPassword, newKekSalt).encoded
+                val wrappedByNewKek = try {
+                    VaultKeyManager.wrapDek(dek, newKek)
+                } finally {
+                    java.util.Arrays.fill(newKek, 0)
+                }
                 val newBundle = VaultKeyBundle(
                     version = 1,
                     kekSalt = newKekSalt,
-                    dekWrappedByKek = VaultKeyManager.wrapDek(dek, newKek),
+                    dekWrappedByKek = wrappedByNewKek,
                     dekWrappedByRecovery = bundle.dekWrappedByRecovery
                 )
-                java.util.Arrays.fill(newKek, 0)
 
                 val updated = client.updateVaultKeyInPlace(newBundle.toJson(), full.fileId, full.modifiedTime)
                 if (updated) {
@@ -836,6 +1146,13 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
                     prefs.savePasswordHash(newHash, newSalt)
                     prefs.setHasVaultKey(folderId)
                     prefs.clearFailedAttempts()
+                    // Secondary unlock blobs contain the old password — clear before setting new session
+                    prefs.clearBiometricCredentials()
+                    prefs.clearNfcCredentials()
+                    BiometricKeyManager.deleteKey()
+                    if (com.darkvault.app.BuildConfig.DEBUG) {
+                        com.darkvault.app.debug.DeveloperOptionsManager.onNfcCleared()
+                    }
                     VaultSession.dek = dek
                     _sessionPasswordEntered = true
                     setActiveSession(newPassword)
@@ -884,13 +1201,18 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
                     java.util.Arrays.fill(kek, 0)
                 }
                 val newRecoveryKeyBytes = VaultKeyManager.generateRecoveryKey()
+                // Zero dek in finally so it's cleared even if wrapDek throws
+                val wrappedByNewRecovery = try {
+                    VaultKeyManager.wrapDek(dek, newRecoveryKeyBytes)
+                } finally {
+                    java.util.Arrays.fill(dek, 0)
+                }
                 val newBundle = VaultKeyBundle(
                     version = 1,
                     kekSalt = bundle.kekSalt,
                     dekWrappedByKek = bundle.dekWrappedByKek,
-                    dekWrappedByRecovery = VaultKeyManager.wrapDek(dek, newRecoveryKeyBytes)
+                    dekWrappedByRecovery = wrappedByNewRecovery
                 )
-                java.util.Arrays.fill(dek, 0)
                 val updated = client.updateVaultKeyInPlace(newBundle.toJson(), full.fileId, full.modifiedTime)
                 if (updated) {
                     val formattedKey = VaultKeyManager.formatRecoveryKey(newRecoveryKeyBytes)

@@ -35,5 +35,8 @@ object DeveloperOptionsManager {
     fun onDekWrapped() = Unit
     fun onDekCleared() = Unit
     fun setVaultKeyPresent(present: Boolean) = Unit
+    fun onNfcEnrolled(tagType: String, mode: String) = Unit
+    fun onNfcTagDetected(tagType: String, uidPrefix: String) = Unit
+    fun onNfcCleared() = Unit
     fun resetAll() = Unit
 }
