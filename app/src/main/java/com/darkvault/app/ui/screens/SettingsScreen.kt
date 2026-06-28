@@ -854,13 +854,25 @@ fun SettingsScreen(
                 HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f))
 
                 // Storage quota
+                val si = homeViewModel?.storageInfo?.collectAsState()?.value
+                val isCalculating = homeViewModel?.isCalculatingStorage?.collectAsState()?.value ?: false
                 SettingRow(
                     icon = { Icon(Icons.Outlined.Storage, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(22.dp)) },
                     title = "Storage quota",
-                    subtitle = ""
-                ) {}
+                    subtitle = if (si == null) "Tap Calculate to measure vault size" else ""
+                ) {
+                    if (isCalculating) {
+                        CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+                    } else {
+                        TextButton(
+                            onClick = { homeViewModel?.calculateVaultSize(currentAccount ?: return@TextButton) },
+                            enabled = currentAccount != null
+                        ) {
+                            Text("Calculate", style = MaterialTheme.typography.labelMedium)
+                        }
+                    }
+                }
 
-                val si = homeViewModel?.storageInfo?.collectAsState()?.value
                 si?.let { info ->
                     StorageInfoCard(
                         usedByVault = info.usedByVaultBytes,

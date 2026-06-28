@@ -13,5 +13,5 @@
          follow the device, so the backed-up ciphertext would be unreadable anyway. -->
     <exclude domain="file" path="vault_cache/"/>
     <exclude domain="file" path="folder_meta/"/>
-    <exclude domain="cache" path="encrypt_staging/"/>
+    <!-- cacheDir/encrypt_staging/ is excluded automatically — cacheDir is never backed up -->
 </full-backup-content>
