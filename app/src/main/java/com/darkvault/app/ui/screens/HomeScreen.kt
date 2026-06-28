@@ -723,9 +723,10 @@ fun HomeScreen(
                 )
             }
 
-            // Offline banner
+            // Offline banner — only when there is stale data to show; suppress on Error so the
+            // error message ("no cached data available") is not contradicted by "showing cached files"
             AnimatedVisibility(
-                visible = isOffline,
+                visible = isOffline && uiState is HomeUiState.Success,
                 enter = expandVertically(tween(280, easing = FastOutSlowInEasing)) + fadeIn(tween(240)),
                 exit = shrinkVertically(tween(240)) + fadeOut(tween(200))
             ) {
