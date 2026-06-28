@@ -37,6 +37,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.AccountCircle
+import androidx.compose.material.icons.outlined.CloudOff
 import androidx.compose.material.icons.outlined.Fingerprint
 import androidx.compose.material.icons.outlined.Nfc
 import androidx.compose.material3.AlertDialog
@@ -109,6 +110,7 @@ fun UnlockScreen(viewModel: AuthViewModel) {
     val nfcEnabled        by viewModel.nfcEnabled.collectAsState()
     val nfcPinRequired    by viewModel.nfcPinRequired.collectAsState()
     val nfcError          by viewModel.nfcError.collectAsState()
+    val isOffline         by viewModel.isOffline.collectAsState()
 
     val context  = LocalContext.current
     val activity = context as FragmentActivity
@@ -348,7 +350,8 @@ fun UnlockScreen(viewModel: AuthViewModel) {
                 switchSignInError    = switchSignInError,
                 nfcEnabled           = nfcEnabled && nfcAvailable,
                 nfcError             = nfcError,
-                onClearNfcError      = { viewModel.clearNfcError() }
+                onClearNfcError      = { viewModel.clearNfcError() },
+                isOffline            = isOffline
             )
         }
 
@@ -698,7 +701,8 @@ private fun FullUnlockContent(
     switchSignInError: String?,
     nfcEnabled: Boolean = false,
     nfcError: String? = null,
-    onClearNfcError: () -> Unit = {}
+    onClearNfcError: () -> Unit = {},
+    isOffline: Boolean = false
 ) {
     val nfcAnim = rememberInfiniteTransition(label = "nfc_banner_anim")
     val nfcPulse by nfcAnim.animateFloat(
@@ -784,6 +788,32 @@ private fun FullUnlockContent(
             }
         } else {
             Spacer(modifier = Modifier.height(28.dp))
+        }
+
+        if (isOffline) {
+            Spacer(modifier = Modifier.height(12.dp))
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(MaterialTheme.colorScheme.surfaceVariant)
+                    .border(1.dp, MaterialTheme.colorScheme.outline.copy(0.3f), RoundedCornerShape(8.dp))
+                    .padding(horizontal = 12.dp, vertical = 10.dp)
+            ) {
+                Icon(
+                    Icons.Outlined.CloudOff,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(0.6f),
+                    modifier = Modifier.size(16.dp)
+                )
+                Text(
+                    "No internet — login to view your offline files",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(0.7f)
+                )
+            }
         }
 
         VaultTextField(

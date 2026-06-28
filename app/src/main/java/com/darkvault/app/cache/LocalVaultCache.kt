@@ -53,6 +53,14 @@ object LocalVaultCache {
             val entry = idx[fileId] ?: return@withContext null
 
             if (entry.modifiedTime != modifiedTime) {
+                // ponytail: entries stored during upload have modifiedTime="" because Drive hasn't
+                // assigned a timestamp yet. Adopt the real timestamp on first access instead of
+                // evicting — the bytes are correct (just encrypted right now during upload).
+                if (entry.modifiedTime.isEmpty() && modifiedTime.isNotEmpty()) {
+                    idx[fileId] = entry.copy(modifiedTime = modifiedTime)
+                    saveIndex(dir, idx)
+                    return@withContext vaultFile.readBytes()
+                }
                 vaultFile.delete()
                 idx.remove(fileId)
                 saveIndex(dir, idx)
@@ -139,6 +147,17 @@ object LocalVaultCache {
             val idx = loadIndex(dir)
             idx[fileId]?.let { idx[fileId] = it.copy(isPinned = pinned) }
             saveIndex(dir, idx)
+        }
+    }
+
+    /** Removes a single file from the cache. Used after permanent deletion from Drive. */
+    suspend fun evict(context: Context, fileId: String) = mutex.withLock {
+        withContext(Dispatchers.IO) {
+            val dir = dir(context)
+            File(dir, "$fileId.vault").delete()
+            File(dir, "$fileId.meta").delete()
+            val idx = loadIndex(dir)
+            if (idx.remove(fileId) != null) saveIndex(dir, idx)
         }
     }
 

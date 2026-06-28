@@ -91,6 +91,10 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
     private val _authState = MutableStateFlow<AuthState>(AuthState.Init)
     val authState: StateFlow<AuthState> = _authState
 
+    private val _isOffline = MutableStateFlow(false)
+    /** True when the last vault check / unlock attempt fell back to local state due to no network. */
+    val isOffline: StateFlow<Boolean> = _isOffline.asStateFlow()
+
     @Volatile private var _pendingFolderId: String? = null
     @Volatile private var _pendingAccount: GoogleSignInAccount? = null
 
@@ -161,6 +165,7 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
                 _pendingFolderId = folderId
 
                 val vaultKeyExists = client.downloadVaultKey(folderId) != null
+                _isOffline.value = false
                 if (vaultKeyExists) {
                     prefs.setHasVaultKey(folderId)
                     _authState.value = AuthState.Unlock
@@ -180,6 +185,7 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
                 }
             } catch (e: Exception) {
                 Log.w(TAG, "Vault check failed (offline?) — using local state", e)
+                _isOffline.value = true
                 _pendingFolderId = prefs.vaultKeyFolderId.first()
                 val setupDone = prefs.isSetupDone.first()
                 _authState.value = if (setupDone) AuthState.Unlock else AuthState.Setup
@@ -407,6 +413,8 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
                 }
 
                 VaultSession.dek = dek
+                prefs.cacheVaultKeyLocally(bundle.kekSalt, bundle.dekWrappedByKek)
+                _isOffline.value = false
                 if (com.darkvault.app.BuildConfig.DEBUG) {
                     com.darkvault.app.debug.DeveloperOptionsManager.onDekUnwrapped(bundle.kekSalt)
                     com.darkvault.app.debug.DeveloperOptionsManager.setVaultKeyPresent(true)
@@ -467,7 +475,10 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
                         _isLoading.value = false
                         return@launch
                     }
-                    UnlockAttemptResult.NETWORK_FALLBACK -> { /* fall through to local hash */ }
+                    UnlockAttemptResult.NETWORK_FALLBACK -> {
+                        _isOffline.value = true
+                        /* fall through to local hash */
+                    }
                 }
             }
 
@@ -477,6 +488,19 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
                 CryptoManager.verifyPassword(password, stored.first, stored.second)
             }
             if (valid) {
+                // Restore DEK from locally cached vault key bundle so offline files can be decrypted
+                val cached = withContext(Dispatchers.IO) { prefs.getCachedVaultKey() }
+                if (cached != null) {
+                    val (kekSalt, wrappedDek) = cached
+                    val kek = CryptoManager.deriveKey(password, kekSalt).encoded
+                    try {
+                        VaultSession.dek = VaultKeyManager.unwrapDek(wrappedDek, kek)
+                    } catch (e: Exception) {
+                        Log.w(TAG, "Offline DEK restore failed — cached bundle invalid or password changed", e)
+                    } finally {
+                        java.util.Arrays.fill(kek, 0)
+                    }
+                }
                 prefs.clearFailedAttempts()
                 _sessionPasswordEntered = true
                 _biometricAutoLaunch.value = false

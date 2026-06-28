@@ -51,6 +51,10 @@ class PreferencesManager(private val context: Context) {
         // Local vault cache cap in MB (default 500)
         private val KEY_CACHE_CAP_MB = intPreferencesKey("cache_cap_mb")
 
+        // Offline DEK recovery: kekSalt + dekWrappedByKek from the last successful online unlock
+        private val KEY_CACHED_KEK_SALT = stringPreferencesKey("cached_kek_salt")
+        private val KEY_CACHED_WRAPPED_DEK = stringPreferencesKey("cached_wrapped_dek")
+
         // NFC unlock
         private val KEY_NFC_ENABLED = booleanPreferencesKey("nfc_enabled")
         private val KEY_NFC_MODE = stringPreferencesKey("nfc_mode")           // "tap_only" | "tap_pin"
@@ -226,6 +230,22 @@ class PreferencesManager(private val context: Context) {
 
     suspend fun setCacheCap(mb: Int) {
         context.dataStore.edit { it[KEY_CACHE_CAP_MB] = mb.coerceIn(100, 10_000) }
+    }
+
+    // ── Offline DEK recovery ──────────────────────────────────────────────────
+
+    suspend fun cacheVaultKeyLocally(kekSalt: ByteArray, dekWrappedByKek: ByteArray) {
+        context.dataStore.edit {
+            it[KEY_CACHED_KEK_SALT] = Base64.encodeToString(kekSalt, Base64.DEFAULT)
+            it[KEY_CACHED_WRAPPED_DEK] = Base64.encodeToString(dekWrappedByKek, Base64.DEFAULT)
+        }
+    }
+
+    suspend fun getCachedVaultKey(): Pair<ByteArray, ByteArray>? {
+        val prefs = context.dataStore.data.first()
+        val kekSalt = prefs[KEY_CACHED_KEK_SALT]?.let { Base64.decode(it, Base64.DEFAULT) } ?: return null
+        val wrappedDek = prefs[KEY_CACHED_WRAPPED_DEK]?.let { Base64.decode(it, Base64.DEFAULT) } ?: return null
+        return kekSalt to wrappedDek
     }
 
     // ── NFC unlock ────────────────────────────────────────────────────────────

@@ -262,6 +262,17 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             _uiState.value = HomeUiState.Loading
 
+            // Eagerly populate folderStack from the saved folder ID so that
+            // (a) stale-while-revalidate works on cold start, and
+            // (b) the FolderMetadataStore disk fallback in onFailure has a non-null folderId
+            //     even when the Drive call throws before we reach the assignment below.
+            if (_folderStack.value.isEmpty()) {
+                val savedId = cachedFolderId ?: withContext(Dispatchers.IO) { prefs.vaultFolderId.first() }
+                if (savedId != null) {
+                    _folderStack.value = listOf(FolderEntry(savedId, "darkVault"))
+                }
+            }
+
             // Stale-while-revalidate: serve last-known listing from FolderMetadataStore instantly
             val dek = VaultSession.dek
             if (dek != null && _folderStack.value.isNotEmpty()) {
@@ -813,8 +824,14 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                 DriveApiClient(getApplication(), account).trashFile(file.id)
             }.onSuccess {
                 _operationState.value = OperationState.Done("\"${file.originalName}\" moved to trash")
-                _rawItems.value = _rawItems.value.filter { it.id != file.id }
-                _uiState.value = HomeUiState.Success(_rawItems.value)
+                val filtered = _rawItems.value.filter { it.id != file.id }
+                _rawItems.value = filtered
+                _uiState.value = HomeUiState.Success(filtered)
+                // Keep LocalVaultCache — trashed files can be restored; remove from folderCache only
+                _folderStack.value.lastOrNull()?.id?.let { folderId ->
+                    folderCache[folderId] = folderCache[folderId]?.filter { it.id != file.id } ?: emptyList()
+                }
+                refreshOfflineFiles()
             }.onFailure { e ->
                 _operationState.value = OperationState.Failed(e.message ?: "Trash failed")
             }
@@ -829,8 +846,17 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                 DriveApiClient(getApplication(), account).deleteFile(file.id)
             }.onSuccess {
                 _operationState.value = OperationState.Done("\"${file.originalName}\" permanently deleted")
-                _rawItems.value = _rawItems.value.filter { it.id != file.id }
-                _uiState.value = HomeUiState.Success(_rawItems.value)
+                val filtered = _rawItems.value.filter { it.id != file.id }
+                _rawItems.value = filtered
+                _uiState.value = HomeUiState.Success(filtered)
+                _folderStack.value.lastOrNull()?.id?.let { folderId ->
+                    folderCache[folderId] = folderCache[folderId]?.filter { it.id != file.id } ?: emptyList()
+                }
+                // Evict from local cache — permanently deleted files must not remain accessible offline
+                viewModelScope.launch(Dispatchers.IO) {
+                    LocalVaultCache.evict(getApplication(), file.id)
+                    refreshOfflineFiles()
+                }
             }.onFailure { e ->
                 _operationState.value = OperationState.Failed(e.message ?: "Delete failed")
             }
@@ -865,7 +891,11 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             }
             _rawItems.value = _rawItems.value.filter { it.id !in ids }
             _uiState.value = HomeUiState.Success(_rawItems.value)
+            _folderStack.value.lastOrNull()?.id?.let { folderId ->
+                folderCache[folderId] = folderCache[folderId]?.filter { it.id !in ids } ?: emptyList()
+            }
             _operationState.value = OperationState.Done("$trashed item(s) moved to trash")
+            refreshOfflineFiles()
         }
     }
 
@@ -887,8 +917,8 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
 
     fun clearOperationState() { _operationState.value = OperationState.Idle }
 
-    /** Resets all Drive-related state when signing out or switching accounts. */
-    fun clearDriveState() {
+    /** Resets all in-memory Drive state. Safe to call on every cold start — does NOT touch disk. */
+    fun resetInMemoryState() {
         cachedAccount = null
         cachedFolderId = null
         folderCache.clear()
@@ -905,11 +935,18 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         filterType.value = FilterType.ALL
         _operationState.value = OperationState.Idle
         _trashedItems.value = emptyList()
-        // Clear all local caches on sign-out — next user must not see previous user's data
+        EncryptedFileCache.clear()
+    }
+
+    /** Full wipe: in-memory + disk caches. Only call on sign-out — never on cold start. */
+    fun clearDriveState() {
+        resetInMemoryState()
+        // ponytail: LocalVaultCache and FolderMetadataStore are only wiped on true sign-out
+        // so the next user cannot see previous user's data. NOT called on cold start — that
+        // would delete pinned offline files the user hasn't signed out of.
         viewModelScope.launch(Dispatchers.IO) {
             LocalVaultCache.clear(getApplication())
             FolderMetadataStore.clear(getApplication())
-            EncryptedFileCache.clear()
         }
     }
 

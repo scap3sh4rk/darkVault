@@ -80,11 +80,14 @@ fun DarkVaultNavGraph(authViewModel: AuthViewModel) {
     LaunchedEffect(Unit) { authViewModel.initializeAuth() }
 
     LaunchedEffect(authState) {
-        // Clear all per-user Drive state on sign-out (SignIn) and account switch (CheckingVault).
-        // This prevents the previous user's folder stack, offline list, and cached metadata
-        // from being visible to — or used by — the next signed-in account.
-        if (authState is AuthState.SignIn || authState is AuthState.CheckingVault) {
-            homeViewModel.clearDriveState()
+        when (authState) {
+            // True sign-out: wipe disk caches so the next account starts clean.
+            is AuthState.SignIn -> homeViewModel.clearDriveState()
+            // Cold start / vault check: reset in-memory Drive state only.
+            // LocalVaultCache and FolderMetadataStore must NOT be cleared here —
+            // they hold pinned offline files that must survive across restarts.
+            is AuthState.CheckingVault -> homeViewModel.resetInMemoryState()
+            else -> Unit
         }
         val targetRoute = when (authState) {
             is AuthState.Init,
