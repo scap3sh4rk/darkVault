@@ -8,8 +8,14 @@
 <data-extraction-rules>
     <cloud-backup>
         <exclude domain="file" path="datastore/"/>
+        <exclude domain="file" path="vault_cache/"/>
+        <exclude domain="file" path="folder_meta/"/>
+        <!-- cacheDir is never backed up; encrypt_staging/ exclusion is implicit -->
     </cloud-backup>
     <device-transfer>
         <exclude domain="file" path="datastore/"/>
+        <exclude domain="file" path="vault_cache/"/>
+        <exclude domain="file" path="folder_meta/"/>
+        <!-- cacheDir is never backed up; encrypt_staging/ exclusion is implicit -->
     </device-transfer>
 </data-extraction-rules>

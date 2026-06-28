@@ -8,7 +8,8 @@ data class VaultFile(
     val size: Long,               // Encrypted size on Drive (0 for folders)
     val createdTime: String,      // ISO 8601
     val modifiedTime: String = "",
-    val isFolder: Boolean = false
+    val isFolder: Boolean = false,
+    val thumbnailFileId: String? = null  // Drive ID of the companion _thumb.vault file, if any
 )
 
 data class StorageInfo(

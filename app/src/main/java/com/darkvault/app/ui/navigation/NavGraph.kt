@@ -22,6 +22,7 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.darkvault.app.BuildConfig
 import com.darkvault.app.ui.screens.HomeScreen
+import com.darkvault.app.ui.screens.OfflineFilesScreen
 import com.darkvault.app.ui.screens.SetupScreen
 import com.darkvault.app.ui.screens.SettingsScreen
 import com.darkvault.app.ui.screens.SignInScreen
@@ -38,6 +39,7 @@ private const val ROUTE_UNLOCK   = "unlock"
 private const val ROUTE_HOME     = "home"
 private const val ROUTE_SETTINGS = "settings"
 private const val ROUTE_TRASH    = "trash"
+private const val ROUTE_OFFLINE  = "offline"
 
 // ── Transition presets ─────────────────────────────────────────────────────────
 
@@ -78,6 +80,12 @@ fun DarkVaultNavGraph(authViewModel: AuthViewModel) {
     LaunchedEffect(Unit) { authViewModel.initializeAuth() }
 
     LaunchedEffect(authState) {
+        // Clear all per-user Drive state on sign-out (SignIn) and account switch (CheckingVault).
+        // This prevents the previous user's folder stack, offline list, and cached metadata
+        // from being visible to — or used by — the next signed-in account.
+        if (authState is AuthState.SignIn || authState is AuthState.CheckingVault) {
+            homeViewModel.clearDriveState()
+        }
         val targetRoute = when (authState) {
             is AuthState.Init,
             is AuthState.CheckingVault,
@@ -129,10 +137,11 @@ fun DarkVaultNavGraph(authViewModel: AuthViewModel) {
             exitTransition  = { depthExit }
         ) {
             HomeScreen(
-                authViewModel         = authViewModel,
-                homeViewModel         = homeViewModel,
-                onNavigateToSettings  = { navController.navigate(ROUTE_SETTINGS) },
-                onNavigateToTrash     = { navController.navigate(ROUTE_TRASH) },
+                authViewModel          = authViewModel,
+                homeViewModel          = homeViewModel,
+                onNavigateToSettings   = { navController.navigate(ROUTE_SETTINGS) },
+                onNavigateToTrash      = { navController.navigate(ROUTE_TRASH) },
+                onNavigateToOffline    = { navController.navigate(ROUTE_OFFLINE) },
                 onNavigateToDebugPanel = {
                     if (BuildConfig.DEBUG) navController.navigate("debug_panel")
                 }
@@ -169,6 +178,25 @@ fun DarkVaultNavGraph(authViewModel: AuthViewModel) {
             TrashScreen(
                 homeViewModel = homeViewModel,
                 onBack        = { navController.popBackStack() }
+            )
+        }
+
+        composable(
+            ROUTE_OFFLINE,
+            enterTransition = { slideUpEnter },
+            exitTransition  = { slideDownExit }
+        ) {
+            val password       by authViewModel.masterPassword.collectAsState()
+            val currentAccount  = remember { GoogleSignIn.getLastSignedInAccount(context) }
+            OfflineFilesScreen(
+                homeViewModel  = homeViewModel,
+                password       = password,
+                account        = currentAccount,
+                onBack         = { navController.popBackStack() },
+                onDownloadFile = { file ->
+                    val pwd = password; val acc = currentAccount
+                    if (pwd != null && acc != null) homeViewModel.downloadAndDecrypt(file, pwd, acc)
+                }
             )
         }
 

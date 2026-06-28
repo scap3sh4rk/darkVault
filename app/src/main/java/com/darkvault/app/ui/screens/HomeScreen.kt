@@ -173,6 +173,7 @@ fun HomeScreen(
     homeViewModel: HomeViewModel,
     onNavigateToSettings: () -> Unit,
     onNavigateToTrash: () -> Unit = {},
+    onNavigateToOffline: () -> Unit = {},
     onNavigateToDebugPanel: () -> Unit = {}
 ) {
     val context = LocalContext.current
@@ -198,6 +199,7 @@ fun HomeScreen(
     val pendingConflict by homeViewModel.pendingConflict.collectAsState()
     val uploadIsPaused by homeViewModel.uploadIsPaused.collectAsState()
     val canGoBack by homeViewModel.canGoBack.collectAsState()
+    val isOffline by homeViewModel.isOffline.collectAsState()
     // Task 4 — thumbnail gating flags
     val thumbnailsEnabled by homeViewModel.thumbnailsEnabled.collectAsState()
     val imagePreviewEnabled by homeViewModel.imagePreviewEnabled.collectAsState()
@@ -216,6 +218,7 @@ fun HomeScreen(
     var previewFile by remember { mutableStateOf<VaultFile?>(null) }
     var showMoreMenu by remember { mutableStateOf(false) }
     var longPressFile by remember { mutableStateOf<VaultFile?>(null) }
+    var longPressFilePinned by remember { mutableStateOf(false) }
     var showFileInfo by remember { mutableStateOf<VaultFile?>(null) }
     var showRenameDialog by remember { mutableStateOf<VaultFile?>(null) }
     var renameText by remember { mutableStateOf("") }
@@ -290,6 +293,13 @@ fun HomeScreen(
             }
             else -> Unit
         }
+    }
+
+    LaunchedEffect(longPressFile) {
+        val f = longPressFile
+        longPressFilePinned = if (f != null && !f.isFolder)
+            com.darkvault.app.cache.LocalVaultCache.isPinned(context, f.id)
+        else false
     }
 
     // Recovery key first-time display
@@ -479,6 +489,14 @@ fun HomeScreen(
                                         onClick = {
                                             showMoreMenu = false
                                             onNavigateToTrash()
+                                        }
+                                    )
+                                    DropdownMenuItem(
+                                        text = { Text("Offline files") },
+                                        leadingIcon = { Icon(Icons.Outlined.Download, null) },
+                                        onClick = {
+                                            showMoreMenu = false
+                                            onNavigateToOffline()
                                         }
                                     )
                                     DropdownMenuItem(
@@ -676,6 +694,33 @@ fun HomeScreen(
                     color = MaterialTheme.colorScheme.outline,
                     modifier = Modifier.padding(horizontal = 16.dp, vertical = 2.dp)
                 )
+            }
+
+            // Offline banner
+            AnimatedVisibility(visible = isOffline, enter = expandVertically(), exit = shrinkVertically()) {
+                androidx.compose.foundation.layout.Box(
+                    modifier = androidx.compose.ui.Modifier
+                        .fillMaxWidth()
+                        .background(
+                            androidx.compose.ui.graphics.Color(0xFFF59E0B).copy(alpha = 0.15f),
+                            androidx.compose.foundation.shape.RoundedCornerShape(0.dp)
+                        )
+                        .padding(horizontal = 16.dp, vertical = 8.dp)
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Icon(
+                            Icons.Outlined.Download,
+                            contentDescription = null,
+                            tint = androidx.compose.ui.graphics.Color(0xFFF59E0B),
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Text(
+                            "You're offline — showing cached files",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = androidx.compose.ui.graphics.Color(0xFFF59E0B)
+                        )
+                    }
+                }
             }
 
             val isRefreshing = uiState is HomeUiState.Loading
@@ -1237,6 +1282,24 @@ fun HomeScreen(
                             },
                             modifier = Modifier.fillMaxWidth()
                         ) { Text("Download", color = MaterialTheme.colorScheme.primary) }
+                        TextButton(
+                            onClick = {
+                                val newPinned = !longPressFilePinned
+                                homeViewModel.setOfflinePinned(file.id, newPinned)
+                                longPressFile = null
+                                scope.launch {
+                                    snackbarHostState.showSnackbar(
+                                        if (newPinned) "Saving for offline…" else "Removed from offline storage"
+                                    )
+                                }
+                            },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text(
+                                if (longPressFilePinned) "Remove from Offline" else "Make Available Offline",
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                        }
                     }
                     TextButton(
                         onClick = { showFileInfo = file; longPressFile = null },
@@ -1432,7 +1495,7 @@ private fun BreadcrumbRow(
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun VaultGridItem(
+internal fun VaultGridItem(
     item: VaultFile,
     columns: Int,
     isSelected: Boolean,
@@ -1612,7 +1675,7 @@ private fun RecentFileCard(
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun ImagePreviewDialog(
+internal fun ImagePreviewDialog(
     file: VaultFile,
     homeViewModel: HomeViewModel,
     password: String?,
@@ -1806,7 +1869,7 @@ private fun InfoRow(label: String, value: String) {
 
 // ── MIME helpers ──────────────────────────────────────────────────────────────
 
-private fun isTextMime(mime: String): Boolean =
+internal fun isTextMime(mime: String): Boolean =
     mime.startsWith("text/") ||
     mime in setOf(
         "application/json", "application/xml", "application/xhtml+xml",
@@ -1817,9 +1880,9 @@ private fun isTextMime(mime: String): Boolean =
         "application/ld+json", "application/manifest+json"
     )
 
-private enum class PreviewKind { IMAGE, VIDEO, AUDIO, PDF, TEXT, NONE }
+internal enum class PreviewKind { IMAGE, VIDEO, AUDIO, PDF, TEXT, NONE }
 
-private fun previewKind(mime: String): PreviewKind = when {
+internal fun previewKind(mime: String): PreviewKind = when {
     HomeViewModel.isImageMime(mime) -> PreviewKind.IMAGE
     mime.startsWith("video/") -> PreviewKind.VIDEO
     mime.startsWith("audio/") -> PreviewKind.AUDIO
@@ -1831,7 +1894,7 @@ private fun previewKind(mime: String): PreviewKind = when {
 // ── Text preview dialog ───────────────────────────────────────────────────────
 
 @Composable
-private fun TextPreviewDialog(
+internal fun TextPreviewDialog(
     file: VaultFile,
     homeViewModel: HomeViewModel,
     password: String?,
