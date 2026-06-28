@@ -12,7 +12,10 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -531,7 +534,11 @@ fun HomeScreen(
                 }
 
                 // Search bar
-                AnimatedVisibility(visible = showSearch, enter = expandVertically(), exit = shrinkVertically()) {
+                AnimatedVisibility(
+                    visible = showSearch,
+                    enter = expandVertically(tween(280, easing = FastOutSlowInEasing)) + fadeIn(tween(240, easing = FastOutSlowInEasing)),
+                    exit = shrinkVertically(tween(240)) + fadeOut(tween(200))
+                ) {
                     OutlinedTextField(
                         value = searchQuery,
                         onValueChange = { homeViewModel.searchQuery.value = it },
@@ -703,7 +710,11 @@ fun HomeScreen(
             }
 
             // Offline banner
-            AnimatedVisibility(visible = isOffline, enter = expandVertically(), exit = shrinkVertically()) {
+            AnimatedVisibility(
+                visible = isOffline,
+                enter = expandVertically(tween(280, easing = FastOutSlowInEasing)) + fadeIn(tween(240)),
+                exit = shrinkVertically(tween(240)) + fadeOut(tween(200))
+            ) {
                 androidx.compose.foundation.layout.Box(
                     modifier = androidx.compose.ui.Modifier
                         .fillMaxWidth()
@@ -776,7 +787,8 @@ fun HomeScreen(
                         // Task 7 — animated layout switch
                         AnimatedContent(
                             targetState = viewLayout,
-                            modifier = Modifier.weight(1f)
+                            modifier = Modifier.weight(1f),
+                            transitionSpec = { fadeIn(tween(200, easing = FastOutSlowInEasing)) togetherWith fadeOut(tween(150)) }
                         ) { layout ->
                             when (layout) {
                                 ViewLayout.LIST -> {
@@ -800,6 +812,7 @@ fun HomeScreen(
                                                     items(recentItems, key = { "recent_${it.id}" }) { file ->
                                                         RecentFileCard(
                                                             file = file,
+                                                            modifier = Modifier.animateItem(),
                                                             isSelected = file.id in selectedIds,
                                                             showThumbnail = showThumbnails,
                                                             thumbnailPassword = password,
@@ -842,6 +855,7 @@ fun HomeScreen(
                                             if (item.isFolder) {
                                                 VaultFolderCard(
                                                     folder = item,
+                                                    modifier = Modifier.animateItem(),
                                                     onOpen = { homeViewModel.openFolder(item) },
                                                     onDelete = { fileToDelete = item },
                                                     onMoreActions = { longPressFile = item },
@@ -863,6 +877,7 @@ fun HomeScreen(
                                                 }
                                                 VaultFileCard(
                                                     file = item,
+                                                    modifier = Modifier.animateItem(),
                                                     onDownload = {
                                                         val pwd = password; val acc = currentAccount
                                                         if (pwd != null && acc != null) homeViewModel.downloadAndDecrypt(item, pwd, acc)
@@ -914,6 +929,7 @@ fun HomeScreen(
                                                         items(recentItems, key = { "recent_${it.id}" }) { file ->
                                                             RecentFileCard(
                                                                 file = file,
+                                                                modifier = Modifier.animateItem(),
                                                                 isSelected = file.id in selectedIds,
                                                                 showThumbnail = showThumbnails,
                                                                 thumbnailPassword = password,
@@ -956,6 +972,7 @@ fun HomeScreen(
                                         items(displayItems, key = { it.id }) { item ->
                                             VaultGridItem(
                                                 item = item,
+                                                modifier = Modifier.animateItem(),
                                                 columns = columns,
                                                 isSelected = item.id in selectedIds,
                                                 isSelectionMode = isSelectionMode,

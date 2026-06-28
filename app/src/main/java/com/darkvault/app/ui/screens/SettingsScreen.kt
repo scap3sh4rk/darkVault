@@ -2,6 +2,13 @@ package com.darkvault.app.ui.screens
 
 import androidx.biometric.BiometricPrompt
 import androidx.biometric.BiometricManager.Authenticators.BIOMETRIC_STRONG
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -1074,7 +1081,11 @@ fun SettingsScreen(
                     )
                 }
 
-                if (devOptionsEnabled) {
+                AnimatedVisibility(
+                    visible = devOptionsEnabled,
+                    enter = expandVertically(tween(300, easing = FastOutSlowInEasing)) + fadeIn(tween(250, easing = FastOutSlowInEasing)),
+                    exit = shrinkVertically(tween(250)) + fadeOut(tween(200))
+                ) {
                     HorizontalDivider(thickness = 0.5.dp, color = MaterialTheme.colorScheme.outline)
 
                     // NFC enrollment — always shown when dev mode is on

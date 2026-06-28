@@ -237,7 +237,7 @@ fun CyberButton(
     )
     val shadowAlpha by animateFloatAsState(
         targetValue = if (isPressed && enabled) 0.55f else if (enabled) 0.3f else 0f,
-        animationSpec = tween(90), label = "btn_shadow"
+        animationSpec = tween(150), label = "btn_shadow"
     )
     val shadowElev by animateFloatAsState(
         targetValue = if (!enabled || isLoading) 0f else if (isPressed) 2f else 10f,
@@ -330,7 +330,7 @@ fun VaultLogo(modifier: Modifier = Modifier) {
     )
     val midRotation by anim.animateFloat(
         initialValue = 0f, targetValue = 360f,
-        animationSpec = infiniteRepeatable(tween(22000, easing = LinearEasing)),
+        animationSpec = infiniteRepeatable(tween(14000, easing = LinearEasing)),
         label = "mid_rotate"
     )
     val innerAlpha by anim.animateFloat(
@@ -476,7 +476,7 @@ fun VaultFileCard(
     val breatheAnim = rememberInfiniteTransition(label = "card_breathe")
     val borderBreath by breatheAnim.animateFloat(
         initialValue = 0.18f, targetValue = 0.32f,
-        animationSpec = infiniteRepeatable(tween(3800, easing = LinearEasing), RepeatMode.Reverse),
+        animationSpec = infiniteRepeatable(tween(3500, easing = LinearEasing), RepeatMode.Reverse),
         label = "border_breath"
     )
     val tiltDeg by animateFloatAsState(
@@ -620,7 +620,7 @@ fun VaultFolderCard(
     val breatheAnim = rememberInfiniteTransition(label = "folder_breathe")
     val borderBreath by breatheAnim.animateFloat(
         initialValue = 0.25f, targetValue = 0.45f,
-        animationSpec = infiniteRepeatable(tween(3200, easing = LinearEasing), RepeatMode.Reverse),
+        animationSpec = infiniteRepeatable(tween(3500, easing = LinearEasing), RepeatMode.Reverse),
         label = "folder_border"
     )
     val tiltDeg by animateFloatAsState(
