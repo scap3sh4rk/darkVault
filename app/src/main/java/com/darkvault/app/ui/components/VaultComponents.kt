@@ -45,6 +45,7 @@ import androidx.compose.material.icons.outlined.Folder
 import androidx.compose.material.icons.outlined.FolderOpen
 import androidx.compose.material.icons.outlined.Image
 import androidx.compose.material.icons.automirrored.outlined.InsertDriveFile
+import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.outlined.LockOpen
 import androidx.compose.material.icons.outlined.Visibility
@@ -90,6 +91,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
@@ -126,7 +128,9 @@ fun VaultTextField(
     isError: Boolean = false,
     errorMessage: String? = null,
     leadingIcon: ImageVector? = null,
-    keyboardType: KeyboardType = KeyboardType.Text
+    keyboardType: KeyboardType = KeyboardType.Text,
+    imeAction: ImeAction = ImeAction.Default,
+    onImeAction: () -> Unit = {}
 ) {
     var isFocused by remember { mutableStateOf(false) }
     var passwordVisible by remember { mutableStateOf(false) }
@@ -164,7 +168,13 @@ fun VaultTextField(
                 singleLine = true,
                 visualTransformation = if (isPassword && !passwordVisible) PasswordVisualTransformation()
                                        else VisualTransformation.None,
-                keyboardOptions = KeyboardOptions(keyboardType = keyboardType),
+                keyboardOptions = KeyboardOptions(keyboardType = keyboardType, imeAction = imeAction),
+                keyboardActions = KeyboardActions(
+                    onDone   = { onImeAction() },
+                    onNext   = { onImeAction() },
+                    onSearch = { onImeAction() },
+                    onGo     = { onImeAction() }
+                ),
                 leadingIcon = leadingIcon?.let { { Icon(it, contentDescription = null) } },
                 trailingIcon = if (isPassword) {
                     {

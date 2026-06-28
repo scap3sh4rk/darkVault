@@ -70,6 +70,7 @@ import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.semantics.disabled
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -132,6 +133,12 @@ fun UnlockScreen(viewModel: AuthViewModel) {
                         label = "PIN",
                         isPassword = true,
                         keyboardType = KeyboardType.NumberPassword,
+                        imeAction = ImeAction.Done,
+                        onImeAction = {
+                            if (nfcPinInput.isNotBlank()) {
+                                val pin = nfcPinInput; nfcPinInput = ""; viewModel.submitNfcPin(pin)
+                            }
+                        },
                         modifier = Modifier.fillMaxWidth()
                     )
                 }
@@ -397,6 +404,7 @@ fun UnlockScreen(viewModel: AuthViewModel) {
                         value = recoveryKey,
                         onValueChange = { recoveryKey = it; recoveryError = null },
                         label = "Recovery key (XXXX-XXXX-... format)",
+                        imeAction = ImeAction.Next,
                         modifier = Modifier.fillMaxWidth()
                     )
                     VaultTextField(
@@ -404,6 +412,7 @@ fun UnlockScreen(viewModel: AuthViewModel) {
                         onValueChange = { recoveryNewPwd = it; recoveryError = null },
                         label = "New master password",
                         isPassword = true,
+                        imeAction = ImeAction.Next,
                         modifier = Modifier.fillMaxWidth()
                     )
                     VaultTextField(
@@ -411,6 +420,30 @@ fun UnlockScreen(viewModel: AuthViewModel) {
                         onValueChange = { recoveryConfirmPwd = it; recoveryError = null },
                         label = "Confirm new password",
                         isPassword = true,
+                        imeAction = ImeAction.Done,
+                        onImeAction = {
+                            when {
+                                recoveryKey.isBlank()    -> recoveryError = "Enter your recovery key"
+                                recoveryNewPwd.length < 8 -> recoveryError = "Password must be at least 8 characters"
+                                recoveryNewPwd != recoveryConfirmPwd -> recoveryError = "Passwords do not match"
+                                else -> {
+                                    @Suppress("DEPRECATION")
+                                    val account = GoogleSignIn.getLastSignedInAccount(context)
+                                    if (account == null) { recoveryError = "Not signed in to Google."; return@VaultTextField }
+                                    recoveryLoading = true
+                                    scope.launch {
+                                        val folderId = prefs.vaultKeyFolderId.first()
+                                        if (folderId == null) { recoveryError = "No vault folder found."; recoveryLoading = false; return@launch }
+                                        val result = viewModel.recoverWithRecoveryKey(recoveryKey.trim(), recoveryNewPwd, account, folderId)
+                                        recoveryLoading = false
+                                        when (result) {
+                                            is AuthViewModel.PasswordChangeResult.Success -> resetRecoveryDialog()
+                                            is AuthViewModel.PasswordChangeResult.Error -> recoveryError = result.message
+                                        }
+                                    }
+                                }
+                            }
+                        },
                         modifier = Modifier.fillMaxWidth()
                     )
                     recoveryError?.let {
@@ -484,6 +517,11 @@ private fun AppLockedContent(
         initialValue = 0.40f, targetValue = 0.75f,
         animationSpec = infiniteRepeatable(tween(1800, easing = FastOutSlowInEasing), RepeatMode.Reverse),
         label = "inner_pulse"
+    )
+    val nfcPulse by anim.animateFloat(
+        initialValue = 0.20f, targetValue = 0.65f,
+        animationSpec = infiniteRepeatable(tween(1400, easing = FastOutSlowInEasing), RepeatMode.Reverse),
+        label = "nfc_pulse"
     )
 
     Column(
@@ -593,9 +631,11 @@ private fun AppLockedContent(
                     horizontalArrangement = Arrangement.Center,
                     modifier = Modifier
                         .background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(8.dp))
-                        .border(1.dp, CyanPrimary.copy(alpha = 0.3f), RoundedCornerShape(8.dp))
+                        .border(1.dp, CyanPrimary.copy(alpha = nfcPulse), RoundedCornerShape(8.dp))
                         .padding(horizontal = 20.dp, vertical = 10.dp)
                 ) {
+                    Icon(Icons.Outlined.Nfc, contentDescription = null, tint = CyanPrimary.copy(nfcPulse + 0.1f), modifier = Modifier.size(16.dp))
+                    Spacer(Modifier.width(8.dp))
                     Text(
                         "TAP NFC CARD TO UNLOCK",
                         style = MaterialTheme.typography.labelSmall.copy(letterSpacing = 1.5.sp),
@@ -648,6 +688,12 @@ private fun FullUnlockContent(
     nfcError: String? = null,
     onClearNfcError: () -> Unit = {}
 ) {
+    val nfcAnim = rememberInfiniteTransition(label = "nfc_banner_anim")
+    val nfcPulse by nfcAnim.animateFloat(
+        initialValue = 0.20f, targetValue = 0.65f,
+        animationSpec = infiniteRepeatable(tween(1400, easing = FastOutSlowInEasing), RepeatMode.Reverse),
+        label = "nfc_banner_pulse"
+    )
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         modifier = Modifier
@@ -733,6 +779,8 @@ private fun FullUnlockContent(
                 }
                 else -> authError
             },
+            imeAction = ImeAction.Done,
+            onImeAction = onUnlock,
             modifier = Modifier.fillMaxWidth()
         )
 
@@ -773,13 +821,13 @@ private fun FullUnlockContent(
                 modifier = Modifier
                     .fillMaxWidth()
                     .background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(8.dp))
-                    .border(1.dp, CyanPrimary.copy(alpha = 0.3f), RoundedCornerShape(8.dp))
+                    .border(1.dp, CyanPrimary.copy(alpha = nfcPulse), RoundedCornerShape(8.dp))
                     .padding(horizontal = 16.dp, vertical = 12.dp)
             ) {
                 Icon(
                     Icons.Outlined.Nfc,
                     contentDescription = null,
-                    tint = CyanPrimary.copy(0.8f),
+                    tint = CyanPrimary.copy(nfcPulse + 0.1f),
                     modifier = Modifier.size(20.dp)
                 )
                 Spacer(Modifier.width(10.dp))

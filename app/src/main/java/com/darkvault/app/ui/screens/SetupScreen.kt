@@ -36,6 +36,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.darkvault.app.ui.components.CyberButton
@@ -157,6 +158,7 @@ fun SetupScreen(viewModel: AuthViewModel) {
                 isPassword = true,
                 isError = passwordError != null,
                 errorMessage = passwordError,
+                imeAction = ImeAction.Next,
                 modifier = Modifier.fillMaxWidth()
             )
 
@@ -196,6 +198,8 @@ fun SetupScreen(viewModel: AuthViewModel) {
                 isPassword = true,
                 isError = confirmError != null,
                 errorMessage = confirmError,
+                imeAction = ImeAction.Done,
+                onImeAction = { if (validate()) viewModel.setup(password) },
                 modifier = Modifier.fillMaxWidth()
             )
 

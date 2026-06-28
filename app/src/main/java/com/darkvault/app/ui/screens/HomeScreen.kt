@@ -92,6 +92,8 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -214,6 +216,10 @@ fun HomeScreen(
     var showUploadMenu by remember { mutableStateOf(false) }
     var showSortMenu by remember { mutableStateOf(false) }
     var showSearch by remember { mutableStateOf(false) }
+    val searchFocusRequester = remember { FocusRequester() }
+    LaunchedEffect(showSearch) {
+        if (showSearch) { delay(120); searchFocusRequester.requestFocus() }
+    }
     var showDeleteSelected by remember { mutableStateOf(false) }
     var previewFile by remember { mutableStateOf<VaultFile?>(null) }
     var showMoreMenu by remember { mutableStateOf(false) }
@@ -545,7 +551,7 @@ fun HomeScreen(
                             cursorColor = MaterialTheme.colorScheme.primary,
                             focusedLeadingIconColor = MaterialTheme.colorScheme.primary
                         ),
-                        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp)
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp).focusRequester(searchFocusRequester)
                     )
                 }
             }

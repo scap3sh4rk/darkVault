@@ -114,6 +114,7 @@ import com.google.android.gms.auth.api.signin.GoogleSignInOptions
 import com.google.android.gms.common.api.Scope
 import android.os.Build
 import androidx.activity.compose.BackHandler
+import androidx.compose.ui.text.input.ImeAction
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
@@ -1128,9 +1129,30 @@ fun SettingsScreen(
                     title = { Text("Change Password", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface) },
                     text = {
                         Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                            VaultTextField(value = changePwdCurrent, onValueChange = { changePwdCurrent = it; changePwdError = null }, label = "Current password", isPassword = true, modifier = Modifier.fillMaxWidth())
-                            VaultTextField(value = changePwdNew, onValueChange = { changePwdNew = it; changePwdError = null }, label = "New password", isPassword = true, modifier = Modifier.fillMaxWidth())
-                            VaultTextField(value = changePwdConfirm, onValueChange = { changePwdConfirm = it; changePwdError = null }, label = "Confirm new password", isPassword = true, modifier = Modifier.fillMaxWidth())
+                            VaultTextField(value = changePwdCurrent, onValueChange = { changePwdCurrent = it; changePwdError = null }, label = "Current password", isPassword = true, imeAction = ImeAction.Next, modifier = Modifier.fillMaxWidth())
+                            VaultTextField(value = changePwdNew, onValueChange = { changePwdNew = it; changePwdError = null }, label = "New password", isPassword = true, imeAction = ImeAction.Next, modifier = Modifier.fillMaxWidth())
+                            VaultTextField(
+                                value = changePwdConfirm,
+                                onValueChange = { changePwdConfirm = it; changePwdError = null },
+                                label = "Confirm new password",
+                                isPassword = true,
+                                imeAction = ImeAction.Done,
+                                onImeAction = {
+                                    if (!changePwdLoading) {
+                                        when {
+                                            changePwdCurrent.isBlank() -> changePwdError = "Enter current password"
+                                            changePwdNew.length < 8   -> changePwdError = "New password must be at least 8 characters"
+                                            changePwdNew != changePwdConfirm -> changePwdError = "Passwords do not match"
+                                            else -> scope.launch {
+                                                val acc = GoogleSignIn.getLastSignedInAccount(context)
+                                                val folderId = prefs.vaultKeyFolderId.first()
+                                                authViewModel.launchPasswordChange(changePwdCurrent, changePwdNew, acc, folderId)
+                                            }
+                                        }
+                                    }
+                                },
+                                modifier = Modifier.fillMaxWidth()
+                            )
                             if (changePwdLoading) {
                                 Text("Updating vault key on Drive — do not close the app…",
                                     style = MaterialTheme.typography.bodySmall,
@@ -1169,7 +1191,25 @@ fun SettingsScreen(
                     text = {
                         Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                             Text("All local vault credentials will be cleared. Enter your master password to confirm.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            VaultTextField(value = switchAccountPassword, onValueChange = { switchAccountPassword = it; switchAccountError = null }, label = "Master password", isPassword = true, modifier = Modifier.fillMaxWidth())
+                            VaultTextField(
+                                value = switchAccountPassword,
+                                onValueChange = { switchAccountPassword = it; switchAccountError = null },
+                                label = "Master password",
+                                isPassword = true,
+                                imeAction = ImeAction.Done,
+                                onImeAction = {
+                                    if (!switchAccountLoading && switchAccountAttempts < switchAccountMaxAttempts && switchAccountPassword.isNotBlank()) {
+                                        switchAccountLoading = true
+                                        scope.launch {
+                                            val stored = prefs.getPasswordHashAndSalt()
+                                            val valid = stored != null && withContext(Dispatchers.Default) { CryptoManager.verifyPassword(switchAccountPassword, stored.first, stored.second) }
+                                            if (valid) { resetSwitchDialog(); googleClient.signOut().addOnCompleteListener { authViewModel.signOut() } }
+                                            else { switchAccountAttempts++; switchAccountError = if (switchAccountAttempts >= switchAccountMaxAttempts) "Too many attempts. Try again later." else "Incorrect password"; switchAccountLoading = false }
+                                        }
+                                    }
+                                },
+                                modifier = Modifier.fillMaxWidth()
+                            )
                             switchAccountError?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
                         }
                     },
@@ -1209,7 +1249,27 @@ fun SettingsScreen(
                     text = {
                         Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                             Text("A new recovery key will be generated and the old one invalidated. Enter your master password to continue.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            VaultTextField(value = rotateKeyPassword, onValueChange = { rotateKeyPassword = it; rotateKeyError = null }, label = "Master password", isPassword = true, modifier = Modifier.fillMaxWidth())
+                            VaultTextField(
+                                value = rotateKeyPassword,
+                                onValueChange = { rotateKeyPassword = it; rotateKeyError = null },
+                                label = "Master password",
+                                isPassword = true,
+                                imeAction = ImeAction.Done,
+                                onImeAction = {
+                                    if (!rotateKeyLoading && rotateKeyPassword.isNotBlank()) {
+                                        rotateKeyLoading = true
+                                        scope.launch {
+                                            val acc = currentAccount; val folderId = prefs.vaultKeyFolderId.first()
+                                            if (acc == null || folderId == null) { rotateKeyError = "Not connected to Drive"; rotateKeyLoading = false; return@launch }
+                                            when (val result = authViewModel.rotateRecoveryKey(rotateKeyPassword, acc, folderId)) {
+                                                is AuthViewModel.RecoveryKeyRotationResult.Success -> { resetRotateDialog(); rotatedKeyToShow = result.newFormattedKey }
+                                                is AuthViewModel.RecoveryKeyRotationResult.Error   -> { rotateKeyError = result.message; rotateKeyLoading = false }
+                                            }
+                                        }
+                                    }
+                                },
+                                modifier = Modifier.fillMaxWidth()
+                            )
                             rotateKeyError?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
                         }
                     },
@@ -1434,6 +1494,10 @@ fun SettingsScreen(
                                             label = "NFC PIN (4–8 digits)",
                                             isPassword = true,
                                             keyboardType = androidx.compose.ui.text.input.KeyboardType.NumberPassword,
+                                            imeAction = ImeAction.Done,
+                                            onImeAction = {
+                                                if (nfcEnrollPin.length >= 4) { nfcEnrollError = null; nfcEnrollStep = "tap_to_enroll" }
+                                            },
                                             modifier = Modifier.fillMaxWidth()
                                         )
                                     }
@@ -1508,7 +1572,22 @@ fun SettingsScreen(
                     text = {
                         Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                             Text("Enter your master password to confirm removal.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            VaultTextField(value = nfcRemovePassword, onValueChange = { nfcRemovePassword = it; nfcRemoveError = null }, label = "Master password", isPassword = true, modifier = Modifier.fillMaxWidth())
+                            VaultTextField(
+                                value = nfcRemovePassword,
+                                onValueChange = { nfcRemovePassword = it; nfcRemoveError = null },
+                                label = "Master password",
+                                isPassword = true,
+                                imeAction = ImeAction.Done,
+                                onImeAction = {
+                                    if (nfcRemovePassword.isNotBlank()) {
+                                        scope.launch {
+                                            if (authViewModel.verifyPasswordOnly(nfcRemovePassword)) { authViewModel.disableNfc(); nfcRemovePassword = ""; showNfcRemoveDialog = false }
+                                            else nfcRemoveError = "Incorrect password"
+                                        }
+                                    }
+                                },
+                                modifier = Modifier.fillMaxWidth()
+                            )
                             nfcRemoveError?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
                         }
                     },
