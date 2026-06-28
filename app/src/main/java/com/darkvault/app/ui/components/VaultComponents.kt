@@ -444,10 +444,10 @@ fun VaultLogo(modifier: Modifier = Modifier) {
         ) {
             Canvas(Modifier.size(4.dp)) { drawCircle(SecureGreen.copy(dotAlpha)) }
             Text(
-                "SECURE CLOUD STORAGE",
+                "YOUR FILES, YOUR KEYS, YOUR CONTROL",
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.primary.copy(0.55f),
-                letterSpacing = 3.sp
+                letterSpacing = 1.sp
             )
             Canvas(Modifier.size(4.dp)) { drawCircle(SecureGreen.copy(dotAlpha)) }
         }

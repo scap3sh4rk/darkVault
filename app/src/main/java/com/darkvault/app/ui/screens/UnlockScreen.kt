@@ -17,6 +17,7 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -78,12 +79,13 @@ import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import androidx.fragment.app.FragmentActivity
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.ui.res.painterResource
+import com.darkvault.app.R
 import com.darkvault.app.crypto.BiometricHelper
 import com.darkvault.app.crypto.BiometricKeyManager
 import com.darkvault.app.data.PreferencesManager
 import com.darkvault.app.nfc.NfcTagManager
 import com.darkvault.app.ui.components.CyberButton
-import com.darkvault.app.ui.components.VaultLogo
 import com.darkvault.app.ui.components.VaultTextField
 import com.darkvault.app.ui.theme.CyanPrimary
 import com.darkvault.app.ui.theme.GlassHighlight
@@ -532,7 +534,11 @@ private fun AppLockedContent(
     ) {
         Spacer(modifier = Modifier.weight(0.28f))
 
-        VaultLogo()
+        Image(
+            painter = painterResource(id = R.drawable.icon),
+            contentDescription = "darkVault",
+            modifier = Modifier.size(96.dp)
+        )
 
         Spacer(modifier = Modifier.height(48.dp))
 
@@ -702,7 +708,11 @@ private fun FullUnlockContent(
     ) {
         Spacer(modifier = Modifier.weight(0.38f))
 
-        VaultLogo()
+        Image(
+            painter = painterResource(id = R.drawable.icon),
+            contentDescription = "darkVault",
+            modifier = Modifier.size(96.dp)
+        )
 
         Spacer(modifier = Modifier.height(52.dp))
 
