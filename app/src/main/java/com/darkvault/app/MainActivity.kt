@@ -98,15 +98,15 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    override fun onPause() {
-        super.onPause()
+    override fun onStop() {
+        super.onStop()
         authViewModel.onAppBackground()
     }
 
-    override fun onResume() {
-        super.onResume()
+    override fun onStart() {
+        super.onStart()
         authViewModel.onAppForeground()
     }
 
-    private fun observeAppLifecycle() { /* handled via onPause/onResume */ }
+    private fun observeAppLifecycle() { /* handled via onStop/onStart */ }
 }
