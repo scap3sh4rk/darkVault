@@ -568,6 +568,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#nfc-unlock" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        NFC unlock
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#auto-lock" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -575,6 +586,67 @@
       
     </span>
   </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#offline-access" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Offline access
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Offline access">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#how-to-pin-a-file" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        How to pin a file
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#how-offline-unlock-works" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        How offline unlock works
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#what-works-offline" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What works offline
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#what-does-not-work-offline" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What does NOT work offline
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
   
 </li>
       
@@ -837,6 +909,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#nfc-unlock" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        NFC unlock
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#auto-lock" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -844,6 +927,67 @@
       
     </span>
   </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#offline-access" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Offline access
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Offline access">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#how-to-pin-a-file" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        How to pin a file
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#how-offline-unlock-works" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        How offline unlock works
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#what-works-offline" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What works offline
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#what-does-not-work-offline" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What does NOT work offline
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
   
 </li>
       
@@ -951,11 +1095,46 @@
 <li>If you add a new fingerprint to your phone, the biometric unlock is automatically invalidated for security</li>
 </ul>
 <hr />
+<h2 id="nfc-unlock">NFC unlock<a class="headerlink" href="#nfc-unlock" title="Permanent link">&para;</a></h2>
+<p>If your phone has NFC, you can enroll an NFC card or tag as an unlock key in Settings.</p>
+<p><strong>Two types of cards work:</strong></p>
+<ul>
+<li><strong>Blank NFC tags</strong> — the app writes a secret key to the tag. Tap to unlock.</li>
+<li><strong>Bank cards, transit cards, official NFC cards</strong> — no setup needed on the card. The app reads a hardware fingerprint from the card and uses it as your credential. <strong>Nothing is ever written to your bank card.</strong></li>
+</ul>
+<p><strong>What gets stored on your phone:</strong> A cryptographic hash derived from the card — not the card's actual data. This hash is encrypted and cannot be used to recover your card details.</p>
+<p>Treat a physical NFC card the same way you would treat your house keys — if you lose it, re-enroll a different card in Settings.</p>
+<hr />
 <h2 id="auto-lock">Auto-lock<a class="headerlink" href="#auto-lock" title="Permanent link">&para;</a></h2>
 <p>darkVault automatically locks when you leave the app. You can configure how long it waits before locking in Settings (1, 5, 15, or 30 minutes, or immediately).</p>
 <p>When locked:
-- If biometric is enabled: the app shows a fingerprint prompt. Your encryption key stays safely in memory, guarded by your fingerprint.
-- If biometric is disabled: your encryption key is wiped from memory. You must enter your master password again.</p>
+- If biometric or NFC unlock is enabled: the app immediately enters a locked screen when you switch away. Your encryption key stays safely in memory, guarded by your fingerprint or NFC tag.
+- If neither is enabled: your encryption key is wiped from memory after the auto-lock timer expires. You must enter your master password again.</p>
+<hr />
+<h2 id="offline-access">Offline access<a class="headerlink" href="#offline-access" title="Permanent link">&para;</a></h2>
+<p>You can mark individual files as <strong>available offline</strong> so they are accessible without an internet connection.</p>
+<h3 id="how-to-pin-a-file">How to pin a file<a class="headerlink" href="#how-to-pin-a-file" title="Permanent link">&para;</a></h3>
+<p>Long-press any file in the home screen and select <strong>"Make available offline"</strong>. darkVault downloads and stores the encrypted file on your device. A pin icon appears on the file thumbnail.</p>
+<h3 id="how-offline-unlock-works">How offline unlock works<a class="headerlink" href="#how-offline-unlock-works" title="Permanent link">&para;</a></h3>
+<p>After you unlock successfully online at least once, darkVault stores a small encrypted bundle on your device. The next time you unlock without internet:</p>
+<ol>
+<li>Your password is checked against the locally stored hash</li>
+<li>Your encryption key (DEK) is reconstructed from the cached bundle using your password</li>
+<li>Pinned files are decrypted and displayed normally</li>
+</ol>
+<p>Nothing that could decrypt your files is stored in plain form — the bundle is ciphertext that requires your master password to use.</p>
+<h3 id="what-works-offline">What works offline<a class="headerlink" href="#what-works-offline" title="Permanent link">&para;</a></h3>
+<ul>
+<li>Unlocking with your master password</li>
+<li>Viewing pinned files</li>
+<li>Browsing the cached folder listing</li>
+</ul>
+<h3 id="what-does-not-work-offline">What does NOT work offline<a class="headerlink" href="#what-does-not-work-offline" title="Permanent link">&para;</a></h3>
+<ul>
+<li>Uploading files</li>
+<li>Viewing non-pinned files</li>
+<li>Password change, recovery key rotation</li>
+</ul>
 <hr />
 <h2 id="what-happens-in-different-scenarios">What happens in different scenarios<a class="headerlink" href="#what-happens-in-different-scenarios" title="Permanent link">&para;</a></h2>
 <table>
@@ -1001,6 +1180,11 @@
 <td>Both master password AND Recovery Key are lost</td>
 <td>✅ Files safe</td>
 <td>❌ Permanent data loss</td>
+</tr>
+<tr>
+<td>No internet connection</td>
+<td>✅ Yes</td>
+<td>✅ Pinned files accessible offline</td>
 </tr>
 </tbody>
 </table>

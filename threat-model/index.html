@@ -661,10 +661,21 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#t10-biometric-spoofing" class="md-nav__link">
+  <a href="#t10-local-vault-key-cache-exfiltrated" class="md-nav__link">
     <span class="md-ellipsis">
       
-        T10 — Biometric Spoofing
+        T10 — Local Vault Key Cache Exfiltrated
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#t11-biometric-spoofing" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        T11 — Biometric Spoofing
       
     </span>
   </a>
@@ -942,10 +953,21 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#t10-biometric-spoofing" class="md-nav__link">
+  <a href="#t10-local-vault-key-cache-exfiltrated" class="md-nav__link">
     <span class="md-ellipsis">
       
-        T10 — Biometric Spoofing
+        T10 — Local Vault Key Cache Exfiltrated
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#t11-biometric-spoofing" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        T11 — Biometric Spoofing
       
     </span>
   </a>
@@ -1070,7 +1092,17 @@
 </tr>
 <tr>
 <td>DataStore preferences</td>
-<td>PBKDF2 hash, salt, biometric blob</td>
+<td>PBKDF2 hash, salt, biometric blob, offline vault key cache</td>
+<td>Medium</td>
+</tr>
+<tr>
+<td>Offline vault key cache</td>
+<td><code>cached_kek_salt</code> + <code>cached_wrapped_dek</code> — wrapped DEK ciphertext in DataStore; useless without master password</td>
+<td>Medium</td>
+</tr>
+<tr>
+<td>Encrypted disk cache</td>
+<td><code>vault_cache/</code> and <code>folder_meta/</code> — AES-GCM encrypted file bytes and folder listings</td>
 <td>Medium</td>
 </tr>
 <tr>
@@ -1095,21 +1127,30 @@
 </span><span id="__span-0-10"><a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a>│   ┌──────────────────────────────────────────────────────────┐  │
 </span><span id="__span-0-11"><a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a>│   │  DataStore (app-private, OS-enforced)                    │  │
 </span><span id="__span-0-12"><a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a>│   │  PBKDF2 hash+salt, encrypted biometric blob, vault ID    │  │
-</span><span id="__span-0-13"><a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a>│   └──────────────────────────────────────────────────────────┘  │
-</span><span id="__span-0-14"><a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a>└──────────────────────────────────────────────────────────────────┘
-</span><span id="__span-0-15"><a id="__codelineno-0-15" name="__codelineno-0-15" href="#__codelineno-0-15"></a>         │  HTTPS (TLS 1.2+)
-</span><span id="__span-0-16"><a id="__codelineno-0-16" name="__codelineno-0-16" href="#__codelineno-0-16"></a>         ▼
-</span><span id="__span-0-17"><a id="__codelineno-0-17" name="__codelineno-0-17" href="#__codelineno-0-17"></a>┌──────────────────────────────────────────────────────────────────┐
-</span><span id="__span-0-18"><a id="__codelineno-0-18" name="__codelineno-0-18" href="#__codelineno-0-18"></a>│  UNTRUSTED: Google Drive                                         │
-</span><span id="__span-0-19"><a id="__codelineno-0-19" name="__codelineno-0-19" href="#__codelineno-0-19"></a>│                                                                  │
-</span><span id="__span-0-20"><a id="__codelineno-0-20" name="__codelineno-0-20" href="#__codelineno-0-20"></a>│   vault.key     — wrapped DEK (attacker gets this in Drive hack) │
-</span><span id="__span-0-21"><a id="__codelineno-0-21" name="__codelineno-0-21" href="#__codelineno-0-21"></a>│   *.vault files — AES-256-GCM ciphertext (unreadable without DEK)│
-</span><span id="__span-0-22"><a id="__codelineno-0-22" name="__codelineno-0-22" href="#__codelineno-0-22"></a>└──────────────────────────────────────────────────────────────────┘
-</span><span id="__span-0-23"><a id="__codelineno-0-23" name="__codelineno-0-23" href="#__codelineno-0-23"></a>         │
-</span><span id="__span-0-24"><a id="__codelineno-0-24" name="__codelineno-0-24" href="#__codelineno-0-24"></a>         ▼
-</span><span id="__span-0-25"><a id="__codelineno-0-25" name="__codelineno-0-25" href="#__codelineno-0-25"></a>┌──────────────────────────────────────────────────────────────────┐
-</span><span id="__span-0-26"><a id="__codelineno-0-26" name="__codelineno-0-26" href="#__codelineno-0-26"></a>│  UNTRUSTED: Network / Google infrastructure                      │
-</span><span id="__span-0-27"><a id="__codelineno-0-27" name="__codelineno-0-27" href="#__codelineno-0-27"></a>└──────────────────────────────────────────────────────────────────┘
+</span><span id="__span-0-13"><a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a>│   │  cached_kek_salt + cached_wrapped_dek (offline key cache)│  │
+</span><span id="__span-0-14"><a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a>│   │  ↑ ciphertext only — master password required to use     │  │
+</span><span id="__span-0-15"><a id="__codelineno-0-15" name="__codelineno-0-15" href="#__codelineno-0-15"></a>│   └──────────────────────────────────────────────────────────┘  │
+</span><span id="__span-0-16"><a id="__codelineno-0-16" name="__codelineno-0-16" href="#__codelineno-0-16"></a>│                                                                  │
+</span><span id="__span-0-17"><a id="__codelineno-0-17" name="__codelineno-0-17" href="#__codelineno-0-17"></a>│   ┌──────────────────────────────────────────────────────────┐  │
+</span><span id="__span-0-18"><a id="__codelineno-0-18" name="__codelineno-0-18" href="#__codelineno-0-18"></a>│   │  filesDir (app-private, OS-enforced)                     │  │
+</span><span id="__span-0-19"><a id="__codelineno-0-19" name="__codelineno-0-19" href="#__codelineno-0-19"></a>│   │  vault_cache/ — AES-GCM encrypted file bytes (pinned)    │  │
+</span><span id="__span-0-20"><a id="__codelineno-0-20" name="__codelineno-0-20" href="#__codelineno-0-20"></a>│   │  folder_meta/ — AES-GCM encrypted folder listings        │  │
+</span><span id="__span-0-21"><a id="__codelineno-0-21" name="__codelineno-0-21" href="#__codelineno-0-21"></a>│   │  Both excluded from Android Backup                       │  │
+</span><span id="__span-0-22"><a id="__codelineno-0-22" name="__codelineno-0-22" href="#__codelineno-0-22"></a>│   └──────────────────────────────────────────────────────────┘  │
+</span><span id="__span-0-23"><a id="__codelineno-0-23" name="__codelineno-0-23" href="#__codelineno-0-23"></a>└──────────────────────────────────────────────────────────────────┘
+</span><span id="__span-0-24"><a id="__codelineno-0-24" name="__codelineno-0-24" href="#__codelineno-0-24"></a>         │  HTTPS (TLS 1.2+)
+</span><span id="__span-0-25"><a id="__codelineno-0-25" name="__codelineno-0-25" href="#__codelineno-0-25"></a>         ▼
+</span><span id="__span-0-26"><a id="__codelineno-0-26" name="__codelineno-0-26" href="#__codelineno-0-26"></a>┌──────────────────────────────────────────────────────────────────┐
+</span><span id="__span-0-27"><a id="__codelineno-0-27" name="__codelineno-0-27" href="#__codelineno-0-27"></a>│  UNTRUSTED: Google Drive                                         │
+</span><span id="__span-0-28"><a id="__codelineno-0-28" name="__codelineno-0-28" href="#__codelineno-0-28"></a>│                                                                  │
+</span><span id="__span-0-29"><a id="__codelineno-0-29" name="__codelineno-0-29" href="#__codelineno-0-29"></a>│   vault.key     — wrapped DEK (attacker gets this in Drive hack) │
+</span><span id="__span-0-30"><a id="__codelineno-0-30" name="__codelineno-0-30" href="#__codelineno-0-30"></a>│   *.vault files — AES-256-GCM ciphertext (unreadable without DEK)│
+</span><span id="__span-0-31"><a id="__codelineno-0-31" name="__codelineno-0-31" href="#__codelineno-0-31"></a>└──────────────────────────────────────────────────────────────────┘
+</span><span id="__span-0-32"><a id="__codelineno-0-32" name="__codelineno-0-32" href="#__codelineno-0-32"></a>         │
+</span><span id="__span-0-33"><a id="__codelineno-0-33" name="__codelineno-0-33" href="#__codelineno-0-33"></a>         ▼
+</span><span id="__span-0-34"><a id="__codelineno-0-34" name="__codelineno-0-34" href="#__codelineno-0-34"></a>┌──────────────────────────────────────────────────────────────────┐
+</span><span id="__span-0-35"><a id="__codelineno-0-35" name="__codelineno-0-35" href="#__codelineno-0-35"></a>│  UNTRUSTED: Network / Google infrastructure                      │
+</span><span id="__span-0-36"><a id="__codelineno-0-36" name="__codelineno-0-36" href="#__codelineno-0-36"></a>└──────────────────────────────────────────────────────────────────┘
 </span></code></pre></div>
 <hr />
 <h2 id="3-threat-analysis">3. Threat Analysis<a class="headerlink" href="#3-threat-analysis" title="Permanent link">&para;</a></h2>
@@ -1193,7 +1234,18 @@
 <p><strong>Analysis:</strong> Recovery Key is 256 random bits. There is no KDF involved — the Recovery Key is used directly as the AES-GCM wrapping key. Brute-forcing 256-bit key space is computationally infeasible (2²⁵⁶ attempts).</p>
 <p><strong>Outcome:</strong> Not practically attackable.</p>
 <hr />
-<h3 id="t10-biometric-spoofing">T10 — Biometric Spoofing<a class="headerlink" href="#t10-biometric-spoofing" title="Permanent link">&para;</a></h3>
+<h3 id="t10-local-vault-key-cache-exfiltrated">T10 — Local Vault Key Cache Exfiltrated<a class="headerlink" href="#t10-local-vault-key-cache-exfiltrated" title="Permanent link">&para;</a></h3>
+<p><strong>Scenario:</strong> Attacker reads the app's DataStore (e.g., via root or backup extraction) and obtains <code>cached_kek_salt</code> and <code>cached_wrapped_dek</code>.</p>
+<p><strong>What the attacker has:</strong>
+- <code>kekSalt</code> (16 bytes)
+- <code>dekWrappedByKek</code> (60 bytes of AES-GCM ciphertext)</p>
+<p><strong>What the attacker must do to read files:</strong>
+This is structurally identical to <strong>T1</strong> (Drive compromise). The bundle has the same format as <code>vault.key</code>. The attacker must brute-force the master password to re-derive the KEK and unwrap the DEK.</p>
+<p><strong>Key difference from T1:</strong> The attacker does NOT need access to the user's Google Drive account — the bundle is on the local device. However, the cryptographic hardness is identical.</p>
+<p><strong>Mitigation:</strong> PBKDF2 at 100,000 iterations. App-private DataStore (OS sandbox). Android FDE at rest.</p>
+<p><strong>Residual risk:</strong> Root / sandbox escape exposes the bundle. Same brute-force constraint as T1 applies.</p>
+<hr />
+<h3 id="t11-biometric-spoofing">T11 — Biometric Spoofing<a class="headerlink" href="#t11-biometric-spoofing" title="Permanent link">&para;</a></h3>
 <p><strong>Scenario:</strong> Attacker uses a fake fingerprint or face scan to bypass biometric unlock.</p>
 <p><strong>Mitigation:</strong> darkVault uses <code>BiometricPrompt</code> with a <code>CryptoObject</code> — the Keystore cipher is only unlocked by a successful biometric authentication at the hardware/TEE level. Android's <code>BIOMETRIC_STRONG</code> class (API 30+) is required. Software-only biometric implementations are excluded.</p>
 <p><strong>Residual risk:</strong> Sufficiently high-quality spoofed biometrics (state actor level) could bypass the TEE. Accepted trade-off.</p>
@@ -1302,11 +1354,13 @@
 </span><span id="__span-3-8"><a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a>│ Device theft (locked)  │ STRONG            │ DEK zeroed from RAM    │
 </span><span id="__span-3-9"><a id="__codelineno-3-9" name="__codelineno-3-9" href="#__codelineno-3-9"></a>│ Device theft (AppLock) │ MODERATE          │ DEK in RAM, biometric  │
 </span><span id="__span-3-10"><a id="__codelineno-3-10" name="__codelineno-3-10" href="#__codelineno-3-10"></a>│                        │                   │ gates access           │
-</span><span id="__span-3-11"><a id="__codelineno-3-11" name="__codelineno-3-11" href="#__codelineno-3-11"></a>│ Forgotten password     │ MODERATE          │ Recovery Key required  │
-</span><span id="__span-3-12"><a id="__codelineno-3-12" name="__codelineno-3-12" href="#__codelineno-3-12"></a>│ Vault.key deletion     │ NONE              │ Permanent loss         │
-</span><span id="__span-3-13"><a id="__codelineno-3-13" name="__codelineno-3-13" href="#__codelineno-3-13"></a>│ Rooted device          │ NONE              │ Out of scope           │
-</span><span id="__span-3-14"><a id="__codelineno-3-14" name="__codelineno-3-14" href="#__codelineno-3-14"></a>│ Metadata (file names)  │ NONE              │ Plaintext in Drive     │
-</span><span id="__span-3-15"><a id="__codelineno-3-15" name="__codelineno-3-15" href="#__codelineno-3-15"></a>└────────────────────────┴───────────────────┴────────────────────────┘
+</span><span id="__span-3-11"><a id="__codelineno-3-11" name="__codelineno-3-11" href="#__codelineno-3-11"></a>│ Local cache exfiltrated│ STRONG            │ Same as Drive breach;  │
+</span><span id="__span-3-12"><a id="__codelineno-3-12" name="__codelineno-3-12" href="#__codelineno-3-12"></a>│ (DataStore / filesDir) │                   │ requires pw brute-force│
+</span><span id="__span-3-13"><a id="__codelineno-3-13" name="__codelineno-3-13" href="#__codelineno-3-13"></a>│ Forgotten password     │ MODERATE          │ Recovery Key required  │
+</span><span id="__span-3-14"><a id="__codelineno-3-14" name="__codelineno-3-14" href="#__codelineno-3-14"></a>│ Vault.key deletion     │ NONE              │ Permanent loss         │
+</span><span id="__span-3-15"><a id="__codelineno-3-15" name="__codelineno-3-15" href="#__codelineno-3-15"></a>│ Rooted device          │ NONE              │ Out of scope           │
+</span><span id="__span-3-16"><a id="__codelineno-3-16" name="__codelineno-3-16" href="#__codelineno-3-16"></a>│ Metadata (file names)  │ NONE              │ Plaintext in Drive     │
+</span><span id="__span-3-17"><a id="__codelineno-3-17" name="__codelineno-3-17" href="#__codelineno-3-17"></a>└────────────────────────┴───────────────────┴────────────────────────┘
 </span></code></pre></div>
 <hr />
 <p><a href="../encryption/">← Encryption Architecture</a>  |  <a href="../faq/">FAQ →</a></p>

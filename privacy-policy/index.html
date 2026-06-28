@@ -573,7 +573,7 @@
 
 <h1 id="privacy-policy">Privacy Policy<a class="headerlink" href="#privacy-policy" title="Permanent link">&para;</a></h1>
 <p><strong>Effective Date:</strong> June 26, 2025
-<strong>Last Updated:</strong> June 26, 2025</p>
+<strong>Last Updated:</strong> June 28, 2026</p>
 <h1 id="1-overview">1. Overview<a class="headerlink" href="#1-overview" title="Permanent link">&para;</a></h1>
 <p>darkVault is a zero-knowledge encrypted file backup application for Android.</p>
 <p>Files are encrypted locally on your device using <strong>AES-256-GCM</strong> before being uploaded to your personal Google Drive account. The developer cannot access, read, or decrypt your files under any circumstances.</p>
@@ -587,6 +587,9 @@
 <li>A randomly generated cryptographic salt used for key derivation</li>
 <li>A vault setup completion flag</li>
 <li>Encrypted file metadata required for application functionality</li>
+<li>An offline vault key cache: a randomly generated cryptographic salt (<code>cached_kek_salt</code>) and your Data Encryption Key (DEK) in wrapped (ciphertext) form (<code>cached_wrapped_dek</code>). This cache enables offline access to your pinned files. The DEK ciphertext is useless without your Master Password — it is stored in exactly the same locked form as the copy on Google Drive and cannot be used to decrypt files without re-deriving the key using your password.</li>
+<li>If NFC unlock is enabled using a bank card, transit card, or similar ISO-DEP card: a one-way cryptographic hash (<code>SHA-256</code>) derived from the card's hardware identifier and its response to a standard EMV proximity query. This hash is stored encrypted in the Android Keystore-protected DataStore and is used solely for vault authentication. The actual card data is never stored. Nothing is written to the card — the card is only read from during enrollment and each unlock attempt.</li>
+<li>Encrypted copies of files you have marked as available offline, stored in AES-256-GCM encrypted form in the application's private file directory. These files are encrypted with the same key hierarchy used for Google Drive storage and cannot be read without your Master Password.</li>
 </ul>
 <h2 id="22-information-stored-in-your-google-drive">2.2 Information Stored in Your Google Drive<a class="headerlink" href="#22-information-stored-in-your-google-drive" title="Permanent link">&para;</a></h2>
 <p>Encrypted <code>.vault</code> files are uploaded to a dedicated <strong>darkVault</strong> folder within your own Google Drive account.</p>
@@ -621,7 +624,7 @@
 </tr>
 <tr>
 <td>Key Derivation</td>
-<td>PBKDF2WithHmacSHA256 using a unique random salt per user</td>
+<td>PBKDF2WithHmacSHA256 using a unique random salt per user, 100,000 iterations</td>
 </tr>
 <tr>
 <td>Master Password</td>
@@ -630,6 +633,14 @@
 <tr>
 <td>Encryption Keys</td>
 <td>Derived locally and held in memory only during an active session</td>
+</tr>
+<tr>
+<td>Offline Key Cache</td>
+<td>DEK stored only in wrapped (ciphertext) form; requires Master Password to unwrap</td>
+</tr>
+<tr>
+<td>Local File Cache</td>
+<td>Pinned files stored in AES-256-GCM encrypted form; excluded from Android Backup</td>
 </tr>
 </tbody>
 </table>
@@ -661,6 +672,8 @@
 <li>Master Password never stored in plaintext</li>
 <li>Password verification performed using a one-way cryptographic hash</li>
 <li>Encryption keys exist only in memory during an active unlocked session</li>
+<li>Offline key cache stores only ciphertext — the DEK is never written to disk in plaintext form</li>
+<li>Locally cached (pinned) files are stored in AES-256-GCM encrypted form and excluded from Android's automatic backup system</li>
 <li>Automatic vault lock when the application is backgrounded or terminated</li>
 <li><code>FLAG_SECURE</code> enabled on sensitive screens to prevent screenshots and recent-app previews</li>
 <li>HTTPS-only communication with Google Drive API endpoints</li>

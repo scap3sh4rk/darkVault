@@ -706,10 +706,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#13-biometric-credential-storage" class="md-nav__link">
+  <a href="#13-offline-vault-key-cache" class="md-nav__link">
     <span class="md-ellipsis">
       
-        13. Biometric Credential Storage
+        13. Offline Vault Key Cache
       
     </span>
   </a>
@@ -717,10 +717,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#14-session-auto-lock-timers" class="md-nav__link">
+  <a href="#14-three-tier-file-cache" class="md-nav__link">
     <span class="md-ellipsis">
       
-        14. Session &amp; Auto-lock Timers
+        14. Three-Tier File Cache
       
     </span>
   </a>
@@ -728,10 +728,32 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#15-code-map" class="md-nav__link">
+  <a href="#15-biometric-credential-storage" class="md-nav__link">
     <span class="md-ellipsis">
       
-        15. Code Map
+        15. Biometric Credential Storage
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#16-session-auto-lock-timers" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        16. Session &amp; Auto-lock Timers
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#17-code-map" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        17. Code Map
       
     </span>
   </a>
@@ -1059,10 +1081,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#13-biometric-credential-storage" class="md-nav__link">
+  <a href="#13-offline-vault-key-cache" class="md-nav__link">
     <span class="md-ellipsis">
       
-        13. Biometric Credential Storage
+        13. Offline Vault Key Cache
       
     </span>
   </a>
@@ -1070,10 +1092,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#14-session-auto-lock-timers" class="md-nav__link">
+  <a href="#14-three-tier-file-cache" class="md-nav__link">
     <span class="md-ellipsis">
       
-        14. Session &amp; Auto-lock Timers
+        14. Three-Tier File Cache
       
     </span>
   </a>
@@ -1081,10 +1103,32 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#15-code-map" class="md-nav__link">
+  <a href="#15-biometric-credential-storage" class="md-nav__link">
     <span class="md-ellipsis">
       
-        15. Code Map
+        15. Biometric Credential Storage
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#16-session-auto-lock-timers" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        16. Session &amp; Auto-lock Timers
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#17-code-map" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        17. Code Map
       
     </span>
   </a>
@@ -1415,10 +1459,21 @@
 </span><span id="__span-6-29"><a id="__codelineno-6-29" name="__codelineno-6-29" href="#__codelineno-6-29"></a>   mismatch          match
 </span><span id="__span-6-30"><a id="__codelineno-6-30" name="__codelineno-6-30" href="#__codelineno-6-30"></a>        │                │
 </span><span id="__span-6-31"><a id="__codelineno-6-31" name="__codelineno-6-31" href="#__codelineno-6-31"></a>        ▼                ▼
-</span><span id="__span-6-32"><a id="__codelineno-6-32" name="__codelineno-6-32" href="#__codelineno-6-32"></a> recordFailedAttempt   AuthState.Home
-</span><span id="__span-6-33"><a id="__codelineno-6-33" name="__codelineno-6-33" href="#__codelineno-6-33"></a> exponential backoff   (DEK not available offline —
-</span><span id="__span-6-34"><a id="__codelineno-6-34" name="__codelineno-6-34" href="#__codelineno-6-34"></a> (30s, 60s … 30 min)   file decrypt blocked until
-</span><span id="__span-6-35"><a id="__codelineno-6-35" name="__codelineno-6-35" href="#__codelineno-6-35"></a>                        back online)
+</span><span id="__span-6-32"><a id="__codelineno-6-32" name="__codelineno-6-32" href="#__codelineno-6-32"></a> recordFailedAttempt   getCachedVaultKey() from DataStore
+</span><span id="__span-6-33"><a id="__codelineno-6-33" name="__codelineno-6-33" href="#__codelineno-6-33"></a> exponential backoff       │
+</span><span id="__span-6-34"><a id="__codelineno-6-34" name="__codelineno-6-34" href="#__codelineno-6-34"></a> (30s, 60s … 30 min)   (kekSalt, dekWrappedByKek) found?
+</span><span id="__span-6-35"><a id="__codelineno-6-35" name="__codelineno-6-35" href="#__codelineno-6-35"></a>                        │                │
+</span><span id="__span-6-36"><a id="__codelineno-6-36" name="__codelineno-6-36" href="#__codelineno-6-36"></a>                       No               Yes
+</span><span id="__span-6-37"><a id="__codelineno-6-37" name="__codelineno-6-37" href="#__codelineno-6-37"></a>                        │                │
+</span><span id="__span-6-38"><a id="__codelineno-6-38" name="__codelineno-6-38" href="#__codelineno-6-38"></a>                        ▼                ▼
+</span><span id="__span-6-39"><a id="__codelineno-6-39" name="__codelineno-6-39" href="#__codelineno-6-39"></a>                  AuthState.Home   PBKDF2(password, kekSalt) → KEK
+</span><span id="__span-6-40"><a id="__codelineno-6-40" name="__codelineno-6-40" href="#__codelineno-6-40"></a>                  (DEK null —      AES-GCM unwrap dekWrappedByKek
+</span><span id="__span-6-41"><a id="__codelineno-6-41" name="__codelineno-6-41" href="#__codelineno-6-41"></a>                   online unlock    → DEK → VaultSession.dek
+</span><span id="__span-6-42"><a id="__codelineno-6-42" name="__codelineno-6-42" href="#__codelineno-6-42"></a>                   needed)          │
+</span><span id="__span-6-43"><a id="__codelineno-6-43" name="__codelineno-6-43" href="#__codelineno-6-43"></a>                                    ▼
+</span><span id="__span-6-44"><a id="__codelineno-6-44" name="__codelineno-6-44" href="#__codelineno-6-44"></a>                              AuthState.Home
+</span><span id="__span-6-45"><a id="__codelineno-6-45" name="__codelineno-6-45" href="#__codelineno-6-45"></a>                              (DEK in memory — pinned
+</span><span id="__span-6-46"><a id="__codelineno-6-46" name="__codelineno-6-46" href="#__codelineno-6-46"></a>                               files fully accessible)
 </span></code></pre></div>
 <p><strong>Exponential backoff schedule:</strong></p>
 <table>
@@ -1621,52 +1676,127 @@
 <hr />
 <h2 id="12-dek-lifecycle">12. DEK Lifecycle<a class="headerlink" href="#12-dek-lifecycle" title="Permanent link">&para;</a></h2>
 <div class="language-text highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a>Created:       AuthViewModel.createAndUploadDek()  — first launch (setup)
-</span><span id="__span-12-2"><a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a>Loaded:        AuthViewModel.tryUnlockWithVaultKey() — on each unlock with password
-</span><span id="__span-12-3"><a id="__codelineno-12-3" name="__codelineno-12-3" href="#__codelineno-12-3"></a>In memory:     VaultSession.dek (volatile ByteArray?)
-</span><span id="__span-12-4"><a id="__codelineno-12-4" name="__codelineno-12-4" href="#__codelineno-12-4"></a>Used by:       CryptoManager.encryptWithDek() / decryptWithDek()
-</span><span id="__span-12-5"><a id="__codelineno-12-5" name="__codelineno-12-5" href="#__codelineno-12-5"></a>               UploadForegroundService (accesses VaultSession.dek directly)
-</span><span id="__span-12-6"><a id="__codelineno-12-6" name="__codelineno-12-6" href="#__codelineno-12-6"></a>Zeroed:        VaultSession.clearDek() — Arrays.fill(dek, 0); dek = null
-</span><span id="__span-12-7"><a id="__codelineno-12-7" name="__codelineno-12-7" href="#__codelineno-12-7"></a>Cleared on:    lockVault(auto=false), signOut(), session timeout, process death
-</span><span id="__span-12-8"><a id="__codelineno-12-8" name="__codelineno-12-8" href="#__codelineno-12-8"></a>NOT cleared:   lockVault(auto=true) with biometric enabled → AppLocked state
-</span><span id="__span-12-9"><a id="__codelineno-12-9" name="__codelineno-12-9" href="#__codelineno-12-9"></a>               (DEK stays in RAM, fingerprint gates access)
+</span><span id="__span-12-2"><a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a>Loaded:        AuthViewModel.tryUnlockWithVaultKey() — on each online unlock with password
+</span><span id="__span-12-3"><a id="__codelineno-12-3" name="__codelineno-12-3" href="#__codelineno-12-3"></a>               AuthViewModel.unlock() offline path  — re-derived from cached vault key bundle
+</span><span id="__span-12-4"><a id="__codelineno-12-4" name="__codelineno-12-4" href="#__codelineno-12-4"></a>In memory:     VaultSession.dek (volatile ByteArray?)
+</span><span id="__span-12-5"><a id="__codelineno-12-5" name="__codelineno-12-5" href="#__codelineno-12-5"></a>Used by:       CryptoManager.encryptWithDek() / decryptWithDek()
+</span><span id="__span-12-6"><a id="__codelineno-12-6" name="__codelineno-12-6" href="#__codelineno-12-6"></a>               UploadForegroundService (accesses VaultSession.dek directly)
+</span><span id="__span-12-7"><a id="__codelineno-12-7" name="__codelineno-12-7" href="#__codelineno-12-7"></a>               LocalVaultCache.put() / getEncryptedBytes() (encrypts/decrypts disk cache)
+</span><span id="__span-12-8"><a id="__codelineno-12-8" name="__codelineno-12-8" href="#__codelineno-12-8"></a>               FolderMetadataStore.put() / get() (encrypts/decrypts folder listings)
+</span><span id="__span-12-9"><a id="__codelineno-12-9" name="__codelineno-12-9" href="#__codelineno-12-9"></a>Cached:        After every online unlock, kekSalt + dekWrappedByKek are written to
+</span><span id="__span-12-10"><a id="__codelineno-12-10" name="__codelineno-12-10" href="#__codelineno-12-10"></a>               DataStore (cached_kek_salt, cached_wrapped_dek). This is ciphertext —
+</span><span id="__span-12-11"><a id="__codelineno-12-11" name="__codelineno-12-11" href="#__codelineno-12-11"></a>               the DEK itself is never written to disk.
+</span><span id="__span-12-12"><a id="__codelineno-12-12" name="__codelineno-12-12" href="#__codelineno-12-12"></a>Zeroed:        VaultSession.clearDek() — Arrays.fill(dek, 0); dek = null
+</span><span id="__span-12-13"><a id="__codelineno-12-13" name="__codelineno-12-13" href="#__codelineno-12-13"></a>Cleared on:    lockVault(auto=false), signOut(), session timeout, process death
+</span><span id="__span-12-14"><a id="__codelineno-12-14" name="__codelineno-12-14" href="#__codelineno-12-14"></a>NOT cleared:   lockVault(auto=true) with biometric/NFC enrolled → AppLocked state
+</span><span id="__span-12-15"><a id="__codelineno-12-15" name="__codelineno-12-15" href="#__codelineno-12-15"></a>               (DEK stays in RAM, biometric/NFC gates access)
+</span><span id="__span-12-16"><a id="__codelineno-12-16" name="__codelineno-12-16" href="#__codelineno-12-16"></a>Cache cleared: Only on sign-out / account switch (clearDriveState).
+</span><span id="__span-12-17"><a id="__codelineno-12-17" name="__codelineno-12-17" href="#__codelineno-12-17"></a>               Cold start (CheckingVault) does NOT wipe the disk cache —
+</span><span id="__span-12-18"><a id="__codelineno-12-18" name="__codelineno-12-18" href="#__codelineno-12-18"></a>               it calls resetInMemoryState() which clears only in-memory state.
 </span></code></pre></div>
 <hr />
-<h2 id="13-biometric-credential-storage">13. Biometric Credential Storage<a class="headerlink" href="#13-biometric-credential-storage" title="Permanent link">&para;</a></h2>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a>Android Keystore (hardware-backed on API 30+)
-</span><span id="__span-13-2"><a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a>Key alias: darkvault_bio_v1
-</span><span id="__span-13-3"><a id="__codelineno-13-3" name="__codelineno-13-3" href="#__codelineno-13-3"></a>Flags: PURPOSE_ENCRYPT | PURPOSE_DECRYPT
-</span><span id="__span-13-4"><a id="__codelineno-13-4" name="__codelineno-13-4" href="#__codelineno-13-4"></a>       setUserAuthenticationRequired(true)
-</span><span id="__span-13-5"><a id="__codelineno-13-5" name="__codelineno-13-5" href="#__codelineno-13-5"></a>       setInvalidatedByBiometricEnrollment(true)
-</span><span id="__span-13-6"><a id="__codelineno-13-6" name="__codelineno-13-6" href="#__codelineno-13-6"></a>       API 30+: AUTH_BIOMETRIC_STRONG only
-</span><span id="__span-13-7"><a id="__codelineno-13-7" name="__codelineno-13-7" href="#__codelineno-13-7"></a>
-</span><span id="__span-13-8"><a id="__codelineno-13-8" name="__codelineno-13-8" href="#__codelineno-13-8"></a>DataStore (encrypted app-private storage)
-</span><span id="__span-13-9"><a id="__codelineno-13-9" name="__codelineno-13-9" href="#__codelineno-13-9"></a>Stores: IV (12 bytes) + AES-GCM(masterPassword.toByteArray()) using Keystore key
-</span><span id="__span-13-10"><a id="__codelineno-13-10" name="__codelineno-13-10" href="#__codelineno-13-10"></a>
-</span><span id="__span-13-11"><a id="__codelineno-13-11" name="__codelineno-13-11" href="#__codelineno-13-11"></a>Enrollment:
-</span><span id="__span-13-12"><a id="__codelineno-13-12" name="__codelineno-13-12" href="#__codelineno-13-12"></a>  BiometricKeyManager.getCipherForEncryption()
-</span><span id="__span-13-13"><a id="__codelineno-13-13" name="__codelineno-13-13" href="#__codelineno-13-13"></a>  → BiometricPrompt shows fingerprint dialog
-</span><span id="__span-13-14"><a id="__codelineno-13-14" name="__codelineno-13-14" href="#__codelineno-13-14"></a>  → cipher.doFinal(password.toByteArray()) → encrypted blob
-</span><span id="__span-13-15"><a id="__codelineno-13-15" name="__codelineno-13-15" href="#__codelineno-13-15"></a>  → prefs.saveBiometricCredentials(iv, encryptedBlob)
-</span><span id="__span-13-16"><a id="__codelineno-13-16" name="__codelineno-13-16" href="#__codelineno-13-16"></a>
-</span><span id="__span-13-17"><a id="__codelineno-13-17" name="__codelineno-13-17" href="#__codelineno-13-17"></a>Unlock:
-</span><span id="__span-13-18"><a id="__codelineno-13-18" name="__codelineno-13-18" href="#__codelineno-13-18"></a>  BiometricKeyManager.getCipherForDecryption(storedIV)
-</span><span id="__span-13-19"><a id="__codelineno-13-19" name="__codelineno-13-19" href="#__codelineno-13-19"></a>  → BiometricPrompt shows fingerprint dialog (CryptoObject)
-</span><span id="__span-13-20"><a id="__codelineno-13-20" name="__codelineno-13-20" href="#__codelineno-13-20"></a>  → cipher.doFinal(encryptedBlob) → password bytes → String
-</span><span id="__span-13-21"><a id="__codelineno-13-21" name="__codelineno-13-21" href="#__codelineno-13-21"></a>  → setActiveSession(password, resetSessionTimer = false)
+<h2 id="13-offline-vault-key-cache">13. Offline Vault Key Cache<a class="headerlink" href="#13-offline-vault-key-cache" title="Permanent link">&para;</a></h2>
+<p>To support offline unlock with DEK recovery, darkVault stores a minimal bundle in DataStore after every successful online unlock.</p>
+<p><strong>What is stored:</strong></p>
+<table>
+<thead>
+<tr>
+<th>DataStore key</th>
+<th>Content</th>
+<th>Can decrypt files alone?</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>cached_kek_salt</code></td>
+<td>16-byte PBKDF2 salt (base64)</td>
+<td>No — requires master password</td>
+</tr>
+<tr>
+<td><code>cached_wrapped_dek</code></td>
+<td>AES-GCM wrapped DEK (60 bytes, base64)</td>
+<td>No — requires master password</td>
+</tr>
+</tbody>
+</table>
+<p>The stored blob is identical in structure to <code>dekWrappedByKek</code> in <code>vault.key</code> on Drive. It is pure ciphertext — the master password is still required to re-derive the KEK and unwrap the DEK from it.</p>
+<p><strong>Offline unlock path (end to end):</strong></p>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a>1. User enters password (no network)
+</span><span id="__span-13-2"><a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a>2. CryptoManager.verifyPassword(password, storedHash, storedSalt) — local check
+</span><span id="__span-13-3"><a id="__codelineno-13-3" name="__codelineno-13-3" href="#__codelineno-13-3"></a>   → fail: record attempt, apply backoff
+</span><span id="__span-13-4"><a id="__codelineno-13-4" name="__codelineno-13-4" href="#__codelineno-13-4"></a>   → pass: continue
+</span><span id="__span-13-5"><a id="__codelineno-13-5" name="__codelineno-13-5" href="#__codelineno-13-5"></a>3. PreferencesManager.getCachedVaultKey() → (kekSalt, dekWrappedByKek)
+</span><span id="__span-13-6"><a id="__codelineno-13-6" name="__codelineno-13-6" href="#__codelineno-13-6"></a>   → not found: AuthState.Home with DEK=null (online unlock needed for file access)
+</span><span id="__span-13-7"><a id="__codelineno-13-7" name="__codelineno-13-7" href="#__codelineno-13-7"></a>   → found: continue
+</span><span id="__span-13-8"><a id="__codelineno-13-8" name="__codelineno-13-8" href="#__codelineno-13-8"></a>4. PBKDF2(password, kekSalt, 100k) → KEK
+</span><span id="__span-13-9"><a id="__codelineno-13-9" name="__codelineno-13-9" href="#__codelineno-13-9"></a>5. VaultKeyManager.unwrapDek(dekWrappedByKek, KEK)
+</span><span id="__span-13-10"><a id="__codelineno-13-10" name="__codelineno-13-10" href="#__codelineno-13-10"></a>   → AEADBadTagException: DEK restore fails silently (cache corrupt / password changed)
+</span><span id="__span-13-11"><a id="__codelineno-13-11" name="__codelineno-13-11" href="#__codelineno-13-11"></a>   → success: DEK → VaultSession.dek
+</span><span id="__span-13-12"><a id="__codelineno-13-12" name="__codelineno-13-12" href="#__codelineno-13-12"></a>6. Arrays.fill(KEK, 0) — zeroed in finally block
+</span><span id="__span-13-13"><a id="__codelineno-13-13" name="__codelineno-13-13" href="#__codelineno-13-13"></a>7. AuthState.Home — offline pinned files are fully accessible
+</span></code></pre></div>
+<p><strong>Security note:</strong> The cached bundle is cleared when the user signs out (<code>clearDriveState</code>). It is NOT cleared on cold start or account check (<code>CheckingVault</code> → <code>resetInMemoryState</code>) so that pinned files survive the app being cleared from recents.</p>
+<hr />
+<h2 id="14-three-tier-file-cache">14. Three-Tier File Cache<a class="headerlink" href="#14-three-tier-file-cache" title="Permanent link">&para;</a></h2>
+<p>All cached file data is encrypted with the session DEK before writing to disk. Plaintext is never persisted.</p>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a>Tier 1 — EncryptedFileCache (RAM)
+</span><span id="__span-14-2"><a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a>  64 MB LRU in-process cache. Keyed by (fileId, modifiedTime).
+</span><span id="__span-14-3"><a id="__codelineno-14-3" name="__codelineno-14-3" href="#__codelineno-14-3"></a>  Holds raw encrypted ByteArrays. Cleared on VaultSession.clearDek().
+</span><span id="__span-14-4"><a id="__codelineno-14-4" name="__codelineno-14-4" href="#__codelineno-14-4"></a>
+</span><span id="__span-14-5"><a id="__codelineno-14-5" name="__codelineno-14-5" href="#__codelineno-14-5"></a>Tier 2 — LocalVaultCache (disk: filesDir/vault_cache/)
+</span><span id="__span-14-6"><a id="__codelineno-14-6" name="__codelineno-14-6" href="#__codelineno-14-6"></a>  Persistent encrypted-file cache. LRU eviction respects isPinned flag.
+</span><span id="__span-14-7"><a id="__codelineno-14-7" name="__codelineno-14-7" href="#__codelineno-14-7"></a>  Index: .index.json (opaque IDs + sizes only — no filenames).
+</span><span id="__span-14-8"><a id="__codelineno-14-8" name="__codelineno-14-8" href="#__codelineno-14-8"></a>  Sidecar: &lt;fileId&gt;.meta — AES-GCM encrypted {fileId, modifiedTime, size}.
+</span><span id="__span-14-9"><a id="__codelineno-14-9" name="__codelineno-14-9" href="#__codelineno-14-9"></a>  Pinned files survive cache eviction and are accessible offline.
+</span><span id="__span-14-10"><a id="__codelineno-14-10" name="__codelineno-14-10" href="#__codelineno-14-10"></a>  evict(fileId) called on permanent Drive deletion.
+</span><span id="__span-14-11"><a id="__codelineno-14-11" name="__codelineno-14-11" href="#__codelineno-14-11"></a>  Upload-staged entries have modifiedTime=&quot;&quot; and adopt the real Drive
+</span><span id="__span-14-12"><a id="__codelineno-14-12" name="__codelineno-14-12" href="#__codelineno-14-12"></a>  timestamp on first access (avoids re-downloading freshly uploaded files).
+</span><span id="__span-14-13"><a id="__codelineno-14-13" name="__codelineno-14-13" href="#__codelineno-14-13"></a>
+</span><span id="__span-14-14"><a id="__codelineno-14-14" name="__codelineno-14-14" href="#__codelineno-14-14"></a>Tier 3 — FolderMetadataStore (disk: filesDir/folder_meta/)
+</span><span id="__span-14-15"><a id="__codelineno-14-15" name="__codelineno-14-15" href="#__codelineno-14-15"></a>  Encrypted folder-listing cache (one file per folder).
+</span><span id="__span-14-16"><a id="__codelineno-14-16" name="__codelineno-14-16" href="#__codelineno-14-16"></a>  Enables stale-while-revalidate: cached listing shown instantly on cold
+</span><span id="__span-14-17"><a id="__codelineno-14-17" name="__codelineno-14-17" href="#__codelineno-14-17"></a>  start while Drive refresh runs in background.
+</span><span id="__span-14-18"><a id="__codelineno-14-18" name="__codelineno-14-18" href="#__codelineno-14-18"></a>  allCachedFiles(dek) aggregates all listings — used to populate the
+</span><span id="__span-14-19"><a id="__codelineno-14-19" name="__codelineno-14-19" href="#__codelineno-14-19"></a>  offline file index when Drive is unreachable.
+</span></code></pre></div>
+<p>Both disk caches are excluded from Android Auto Backup and device-transfer (<code>backup_rules.xml</code>, <code>data_extraction_rules.xml</code>).</p>
+<hr />
+<h2 id="15-biometric-credential-storage">15. Biometric Credential Storage<a class="headerlink" href="#15-biometric-credential-storage" title="Permanent link">&para;</a></h2>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-15-1"><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a>Android Keystore (hardware-backed on API 30+)
+</span><span id="__span-15-2"><a id="__codelineno-15-2" name="__codelineno-15-2" href="#__codelineno-15-2"></a>Key alias: darkvault_bio_v1
+</span><span id="__span-15-3"><a id="__codelineno-15-3" name="__codelineno-15-3" href="#__codelineno-15-3"></a>Flags: PURPOSE_ENCRYPT | PURPOSE_DECRYPT
+</span><span id="__span-15-4"><a id="__codelineno-15-4" name="__codelineno-15-4" href="#__codelineno-15-4"></a>       setUserAuthenticationRequired(true)
+</span><span id="__span-15-5"><a id="__codelineno-15-5" name="__codelineno-15-5" href="#__codelineno-15-5"></a>       setInvalidatedByBiometricEnrollment(true)
+</span><span id="__span-15-6"><a id="__codelineno-15-6" name="__codelineno-15-6" href="#__codelineno-15-6"></a>       API 30+: AUTH_BIOMETRIC_STRONG only
+</span><span id="__span-15-7"><a id="__codelineno-15-7" name="__codelineno-15-7" href="#__codelineno-15-7"></a>
+</span><span id="__span-15-8"><a id="__codelineno-15-8" name="__codelineno-15-8" href="#__codelineno-15-8"></a>DataStore (encrypted app-private storage)
+</span><span id="__span-15-9"><a id="__codelineno-15-9" name="__codelineno-15-9" href="#__codelineno-15-9"></a>Stores: IV (12 bytes) + AES-GCM(masterPassword.toByteArray()) using Keystore key
+</span><span id="__span-15-10"><a id="__codelineno-15-10" name="__codelineno-15-10" href="#__codelineno-15-10"></a>
+</span><span id="__span-15-11"><a id="__codelineno-15-11" name="__codelineno-15-11" href="#__codelineno-15-11"></a>Enrollment:
+</span><span id="__span-15-12"><a id="__codelineno-15-12" name="__codelineno-15-12" href="#__codelineno-15-12"></a>  BiometricKeyManager.getCipherForEncryption()
+</span><span id="__span-15-13"><a id="__codelineno-15-13" name="__codelineno-15-13" href="#__codelineno-15-13"></a>  → BiometricPrompt shows fingerprint dialog
+</span><span id="__span-15-14"><a id="__codelineno-15-14" name="__codelineno-15-14" href="#__codelineno-15-14"></a>  → cipher.doFinal(password.toByteArray()) → encrypted blob
+</span><span id="__span-15-15"><a id="__codelineno-15-15" name="__codelineno-15-15" href="#__codelineno-15-15"></a>  → prefs.saveBiometricCredentials(iv, encryptedBlob)
+</span><span id="__span-15-16"><a id="__codelineno-15-16" name="__codelineno-15-16" href="#__codelineno-15-16"></a>
+</span><span id="__span-15-17"><a id="__codelineno-15-17" name="__codelineno-15-17" href="#__codelineno-15-17"></a>Unlock:
+</span><span id="__span-15-18"><a id="__codelineno-15-18" name="__codelineno-15-18" href="#__codelineno-15-18"></a>  BiometricKeyManager.getCipherForDecryption(storedIV)
+</span><span id="__span-15-19"><a id="__codelineno-15-19" name="__codelineno-15-19" href="#__codelineno-15-19"></a>  → BiometricPrompt shows fingerprint dialog (CryptoObject)
+</span><span id="__span-15-20"><a id="__codelineno-15-20" name="__codelineno-15-20" href="#__codelineno-15-20"></a>  → cipher.doFinal(encryptedBlob) → password bytes → String
+</span><span id="__span-15-21"><a id="__codelineno-15-21" name="__codelineno-15-21" href="#__codelineno-15-21"></a>  → setActiveSession(password, resetSessionTimer = false)
 </span></code></pre></div>
 <hr />
-<h2 id="14-session-auto-lock-timers">14. Session &amp; Auto-lock Timers<a class="headerlink" href="#14-session-auto-lock-timers" title="Permanent link">&para;</a></h2>
+<h2 id="16-session-auto-lock-timers">16. Session &amp; Auto-lock Timers<a class="headerlink" href="#16-session-auto-lock-timers" title="Permanent link">&para;</a></h2>
 <p>Two independent timers run in <code>AuthViewModel.viewModelScope</code>:</p>
 <p><strong><code>autoLockJob</code></strong> — background lock timer (when app leaves foreground)
 - Cancelled when app comes back to foreground
 - On expiry: <code>lockVault(auto=true)</code>
-- Only starts if biometric is NOT enrolled; if biometric is enrolled, immediate AppLocked on background</p>
+- Only starts if neither biometric NOR NFC is enrolled; if either quick-unlock method is enrolled and password was entered this session, <code>onAppBackground()</code> triggers immediate AppLocked instead</p>
 <p><strong><code>sessionTimeoutJob</code></strong> — absolute session expiry (caps maximum session length)
 - Starts on successful password entry; NOT reset by biometric unlocks
 - Default: 60 minutes (configurable in Settings)
 - On expiry: <code>lockSessionExpired()</code> → full vault lock even if in foreground</p>
 <hr />
-<h2 id="15-code-map">15. Code Map<a class="headerlink" href="#15-code-map" title="Permanent link">&para;</a></h2>
+<h2 id="17-code-map">17. Code Map<a class="headerlink" href="#17-code-map" title="Permanent link">&para;</a></h2>
 <table>
 <thead>
 <tr>
@@ -1704,7 +1834,7 @@
 <td><code>VaultSession.kt</code></td>
 </tr>
 <tr>
-<td>DataStore preferences (hash, salt, biometric creds)</td>
+<td>DataStore preferences (hash, salt, biometric creds, offline key cache)</td>
 <td><code>data/PreferencesManager.kt</code></td>
 </tr>
 <tr>
@@ -1714,6 +1844,22 @@
 <tr>
 <td>Background upload, chunked protocol</td>
 <td><code>service/UploadForegroundService.kt</code></td>
+</tr>
+<tr>
+<td>RAM LRU cache of encrypted file bytes</td>
+<td><code>cache/EncryptedFileCache.kt</code></td>
+</tr>
+<tr>
+<td>Persistent encrypted-file disk cache + pinning</td>
+<td><code>cache/LocalVaultCache.kt</code></td>
+</tr>
+<tr>
+<td>Encrypted folder-listing disk cache</td>
+<td><code>cache/FolderMetadataStore.kt</code></td>
+</tr>
+<tr>
+<td>NFC tag unlock</td>
+<td><code>nfc/NfcTagManager.kt</code></td>
 </tr>
 </tbody>
 </table>
