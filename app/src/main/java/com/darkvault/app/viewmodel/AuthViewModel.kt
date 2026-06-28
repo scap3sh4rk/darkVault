@@ -747,21 +747,23 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
         // For tap+PIN the card is removed before the user finishes typing the PIN; reading
         // after would always fail with a communication error.
         val secret: ByteArray = withContext(Dispatchers.IO) {
-            if (event.type.name.lowercase() != creds.tagType) {
+            // Dispatch on enrolled type, not physical type — a writable card can be enrolled as
+            // "readonly" (forceReadOnly). Wrong-card detection is via AEAD failure.
+            val wrongTag = when (creds.tagType) {
+                "writable" -> event.type != NfcTagType.WRITABLE
+                "readonly" -> event.type == NfcTagType.UNKNOWN  // allow WRITABLE or READONLY
+                else -> true
+            }
+            if (wrongTag) {
                 recordFailedAttemptAndError()
                 _nfcError.value = "Wrong tag — tap the card or tag you enrolled"
                 return@withContext null
             }
-            when (event.type) {
-                NfcTagType.WRITABLE -> NfcTagManager.readSecret(event.tag)
+            when (creds.tagType) {
+                "writable" -> NfcTagManager.readSecret(event.tag)
                     ?: run { _nfcError.value = "Could not read tag — hold it still and try again"; null }
-                NfcTagType.READONLY -> NfcTagManager.readCardIdentifier(event.tag)
+                else -> NfcTagManager.readCardIdentifier(event.tag)
                     ?: run { _nfcError.value = "Could not read card — hold it still and try again"; null }
-                NfcTagType.UNKNOWN -> {
-                    recordFailedAttemptAndError()
-                    _nfcError.value = "Unsupported NFC tag type"
-                    null
-                }
             }
         } ?: return
 

@@ -148,21 +148,30 @@ object NfcTagManager {
     }
 
     /**
-     * Derives a card identifier for readonly (bank card) tags.
-     * SHA-256(tag.id || PPSE_response_bytes) — not raw UID alone.
-     * The PPSE response contains stable card-specific data that requires the physical card to read.
-     * Falls back to SHA-256(tag.id || "readonly-fallback") if PPSE fails (e.g. non-EMV card).
+     * Derives a stable identifier from any tag for use as the NFC secret in readonly mode.
+     *
+     * IsoDep tags (bank/payment cards): SHA-256(UID || PPSE_response) — PPSE bytes require the
+     * physical card to obtain and are stable per card.
+     *
+     * Non-IsoDep tags (writable NFC tags enrolled as read-only): SHA-256(UID) — the UID is
+     * factory-locked on NTAG/Mifare tags and unique enough when combined with the 32-byte
+     * binding salt during PBKDF2 derivation.
+     *
      * Must run on Dispatchers.IO.
      */
     fun readCardIdentifier(tag: Tag): ByteArray? {
-        val isoDep = IsoDep.get(tag) ?: return null
+        val isoDep = IsoDep.get(tag)
+        if (isoDep == null) {
+            // Writable tag being used as read-only — identify by UID (factory-locked)
+            val uid = tag.id ?: return null
+            return MessageDigest.getInstance("SHA-256").digest(uid)
+        }
         return try {
             isoDep.connect()
             isoDep.timeout = 3_000
             val ppseResponse = try {
                 isoDep.transceive(PPSE_APDU)
             } catch (e: Exception) {
-                // Non-EMV card: hash UID with a fallback marker so it's still useful
                 "readonly-fallback".toByteArray(Charsets.UTF_8)
             }
             val digest = MessageDigest.getInstance("SHA-256")
