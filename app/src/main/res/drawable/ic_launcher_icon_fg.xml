@@ -1,4 +1,21 @@
 <?xml version="1.0" encoding="utf-8"?>
-<bitmap xmlns:android="http://schemas.android.com/apk/res/android"
-    android:src="@drawable/icon"
-    android:gravity="fill" />
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Dark rounded container — matches the styled box from the app's branding -->
+    <item
+        android:left="6dp"
+        android:right="6dp"
+        android:top="6dp"
+        android:bottom="6dp">
+        <shape android:shape="rectangle">
+            <corners android:radius="22dp" />
+            <solid android:color="#12121F" />
+        </shape>
+    </item>
+    <!-- Icon centered inside the container with breathing room -->
+    <item
+        android:left="22dp"
+        android:right="22dp"
+        android:top="22dp"
+        android:bottom="22dp"
+        android:drawable="@drawable/icon" />
+</layer-list>

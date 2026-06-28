@@ -72,6 +72,7 @@ import androidx.compose.ui.semantics.disabled
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -536,7 +537,16 @@ private fun AppLockedContent(
 
         UnlockIcon()
 
-        Spacer(modifier = Modifier.height(48.dp))
+        Spacer(modifier = Modifier.height(14.dp))
+
+        Text(
+            "YOUR FILES, YOUR KEYS, YOUR CONTROL",
+            style = MaterialTheme.typography.labelSmall.copy(letterSpacing = 1.sp),
+            color = MaterialTheme.colorScheme.primary.copy(0.50f),
+            textAlign = TextAlign.Center
+        )
+
+        Spacer(modifier = Modifier.height(28.dp))
 
         Text(
             "VAULT LOCKED",
@@ -706,7 +716,16 @@ private fun FullUnlockContent(
 
         UnlockIcon()
 
-        Spacer(modifier = Modifier.height(52.dp))
+        Spacer(modifier = Modifier.height(14.dp))
+
+        Text(
+            "YOUR FILES, YOUR KEYS, YOUR CONTROL",
+            style = MaterialTheme.typography.labelSmall.copy(letterSpacing = 1.sp),
+            color = MaterialTheme.colorScheme.primary.copy(0.50f),
+            textAlign = TextAlign.Center
+        )
+
+        Spacer(modifier = Modifier.height(28.dp))
 
         Text(
             "UNLOCK VAULT",
