@@ -349,10 +349,7 @@ fun VaultLogo(modifier: Modifier = Modifier) {
         label = "dot_alpha"
     )
 
-    // Theme-aware icon container colors
-    val iconContainerTop = MaterialTheme.colorScheme.surfaceVariant
-    val iconContainerBot = MaterialTheme.colorScheme.surface
-    val primary          = MaterialTheme.colorScheme.primary
+    val primary = MaterialTheme.colorScheme.primary
 
     Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = modifier) {
         Box(contentAlignment = Alignment.Center, modifier = Modifier.size(128.dp)) {
@@ -401,30 +398,11 @@ fun VaultLogo(modifier: Modifier = Modifier) {
                 )
             }
 
-            Box(
-                contentAlignment = Alignment.Center,
-                modifier = Modifier
-                    .size(54.dp)
-                    .shadow(12.dp, RoundedCornerShape(14.dp),
-                            ambientColor = primary.copy(0.22f), spotColor = primary.copy(0.12f))
-                    .clip(RoundedCornerShape(14.dp))
-                    .background(Brush.verticalGradient(listOf(iconContainerTop, iconContainerBot)))
-                    .drawBehind {
-                        drawLine(Color.White.copy(0.12f), Offset(8f, 1f), Offset(size.width - 8f, 1f), 1f)
-                    }
-                    .border(
-                        1.dp,
-                        Brush.verticalGradient(listOf(GlassHighlight, primary.copy(0.25f))),
-                        RoundedCornerShape(14.dp)
-                    )
-                    .padding(9.dp)
-            ) {
-                ComposeImage(
-                    painter = painterResource(R.drawable.icon),
-                    contentDescription = "darkVault",
-                    modifier = Modifier.fillMaxSize()
-                )
-            }
+            ComposeImage(
+                painter = painterResource(R.drawable.icon),
+                contentDescription = "darkVault",
+                modifier = Modifier.size(50.dp)
+            )
         }
 
         Spacer(Modifier.height(22.dp))

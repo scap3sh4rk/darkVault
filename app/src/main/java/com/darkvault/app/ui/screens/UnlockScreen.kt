@@ -534,11 +534,7 @@ private fun AppLockedContent(
     ) {
         Spacer(modifier = Modifier.weight(0.28f))
 
-        Image(
-            painter = painterResource(id = R.drawable.icon),
-            contentDescription = "darkVault",
-            modifier = Modifier.size(96.dp)
-        )
+        UnlockIcon()
 
         Spacer(modifier = Modifier.height(48.dp))
 
@@ -708,11 +704,7 @@ private fun FullUnlockContent(
     ) {
         Spacer(modifier = Modifier.weight(0.38f))
 
-        Image(
-            painter = painterResource(id = R.drawable.icon),
-            contentDescription = "darkVault",
-            modifier = Modifier.size(96.dp)
-        )
+        UnlockIcon()
 
         Spacer(modifier = Modifier.height(52.dp))
 
@@ -862,5 +854,61 @@ private fun FullUnlockContent(
         }
 
         Spacer(modifier = Modifier.weight(0.62f))
+    }
+}
+
+@Composable
+private fun UnlockIcon() {
+    val anim = rememberInfiniteTransition(label = "unlock_icon")
+    val outerAlpha by anim.animateFloat(
+        initialValue = 0.08f, targetValue = 0.22f,
+        animationSpec = infiniteRepeatable(tween(3500, easing = LinearEasing), RepeatMode.Reverse),
+        label = "outer_alpha"
+    )
+    val midRotation by anim.animateFloat(
+        initialValue = 0f, targetValue = 360f,
+        animationSpec = infiniteRepeatable(tween(14000, easing = LinearEasing)),
+        label = "mid_rotate"
+    )
+    val innerAlpha by anim.animateFloat(
+        initialValue = 0.35f, targetValue = 0.75f,
+        animationSpec = infiniteRepeatable(tween(2200, easing = FastOutSlowInEasing), RepeatMode.Reverse),
+        label = "inner_alpha"
+    )
+    val primary = MaterialTheme.colorScheme.primary
+
+    Box(contentAlignment = Alignment.Center, modifier = Modifier.size(128.dp)) {
+        // Outer pulsing ring
+        Canvas(Modifier.size(128.dp)) {
+            drawCircle(
+                color = primary.copy(outerAlpha),
+                radius = size.minDimension / 2f - 1f,
+                style = Stroke(1.dp.toPx())
+            )
+        }
+        // Rotating arcs
+        Canvas(Modifier.size(96.dp).graphicsLayer { rotationZ = midRotation }) {
+            listOf(0f, 90f, 180f, 270f).forEach { start ->
+                drawArc(
+                    color = primary.copy(0.30f),
+                    startAngle = start, sweepAngle = 55f, useCenter = false,
+                    style = Stroke(1.dp.toPx())
+                )
+            }
+        }
+        // Inner breathing ring
+        Canvas(Modifier.size(72.dp)) {
+            drawCircle(
+                color = primary.copy(innerAlpha),
+                radius = size.minDimension / 2f - 1f,
+                style = Stroke(1.dp.toPx())
+            )
+        }
+        // Icon — no background
+        Image(
+            painter = painterResource(id = R.drawable.icon),
+            contentDescription = "darkVault",
+            modifier = Modifier.size(52.dp)
+        )
     }
 }
